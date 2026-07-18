@@ -1,0 +1,310 @@
+{
+  "app": "PuruPuru PNGTuber",
+  "type": "purupuru-pngtuber-settings",
+  "version": 2,
+  "savedAt": "2026-07-18T05:30:38.014Z",
+  "avatarImageSize": {
+    "width": 1254,
+    "height": 1254
+  },
+  "state": {
+    "angleStrength": 78,
+    "faceWarp": 54,
+    "angleXDeform": 78,
+    "faceTurnDepth": 76,
+    "faceTurnVertical": 55,
+    "angleYDeform": 118,
+    "hairVisible": true,
+    "hairWarp": 34,
+    "hairSpring": 40,
+    "hairBundleStrength": 75,
+    "frontHairShadowStrength": 18,
+    "frontHairShadowDistance": 4,
+    "followSpeed": 25,
+    "rangeLeft": 52,
+    "rangeRight": 52,
+    "rangeUp": 18,
+    "rangeDown": 42,
+    "avatarSize": 88,
+    "avatarX": -158,
+    "avatarY": 78,
+    "breathStrength": 38,
+    "rollStrength": 7,
+    "pyokoStrength": 10,
+    "highlightEnabled": false,
+    "highlightStrength": 100,
+    "highlightFilmWobble": 50,
+    "highlightSize": 7,
+    "highlightAspect": 63,
+    "subHighlightEnabled": false,
+    "subHighlightSize": 3,
+    "subHighlightAspect": 100,
+    "subHighlightFilmWobble": 25,
+    "highlightAlphaOnBlink": true,
+    "tearLensEnabled": false,
+    "tearLensStrength": 80,
+    "tearLensRadiusX": 46,
+    "tearLensRadiusY": 21,
+    "tearLensRotationLeft": 0,
+    "tearLensRotationRight": 0,
+    "frontHairShadowEnabled": true,
+    "bgColor": "#FFF8EE",
+    "hairColor": "#2C292C",
+    "hairTintLightness": 0,
+    "hairTintEnabled": false,
+    "showMesh": false,
+    "editLayer": "face",
+    "editKey": "center",
+    "autoBlink": true,
+    "mouseFollowEnabled": true,
+    "idleMotionEnabled": true,
+    "diagonalFaceWarpEnabled": true,
+    "wobbleSeed": 0.18,
+    "micGain": 220,
+    "mouthHalf": 8,
+    "mouthFull": 22,
+    "mouthRelease": 18,
+    "mouthCrossfadeMs": 0
+  },
+  "outputSettings": {
+    "obsPreset": "standard"
+  },
+  "faceCenterSetup": {
+    "version": 1,
+    "center": {
+      "x": 630,
+      "y": 560
+    }
+  },
+  "eyeSetup": {
+    "version": 2,
+    "centers": [
+      {
+        "x": 520,
+        "y": 570
+      },
+      {
+        "x": 718,
+        "y": 510
+      }
+    ],
+    "radius": {
+      "x": 55,
+      "y": 34
+    },
+    "rotationLeft": -7,
+    "rotationRight": -7
+  },
+  "faceDepthSetup": {
+    "version": 1,
+    "anchors": {
+      "leftEye": {
+        "x": 520,
+        "y": 570
+      },
+      "rightEye": {
+        "x": 718,
+        "y": 510
+      },
+      "nose": {
+        "x": 580,
+        "y": 620
+      },
+      "mouth": {
+        "x": 645,
+        "y": 690
+      },
+      "chin": {
+        "x": 655,
+        "y": 770
+      }
+    }
+  },
+  "neckPivotSetup": {
+    "version": 1,
+    "pivot": {
+      "x": 685,
+      "y": 850
+    }
+  },
+  "hairBundleSetup": {
+    "version": 1,
+    "bundles": {
+      "frontLeft": {
+        "root": {
+          "x": 450,
+          "y": 90
+        },
+        "tip": {
+          "x": 235,
+          "y": 680
+        }
+      },
+      "frontCenter": {
+        "root": {
+          "x": 630,
+          "y": 65
+        },
+        "tip": {
+          "x": 600,
+          "y": 455
+        }
+      },
+      "frontRight": {
+        "root": {
+          "x": 820,
+          "y": 115
+        },
+        "tip": {
+          "x": 990,
+          "y": 675
+        }
+      },
+      "sideLeft": {
+        "root": {
+          "x": 350,
+          "y": 180
+        },
+        "tip": {
+          "x": 250,
+          "y": 775
+        }
+      },
+      "sideRight": {
+        "root": {
+          "x": 910,
+          "y": 190
+        },
+        "tip": {
+          "x": 1020,
+          "y": 730
+        }
+      },
+      "backLeft": {
+        "root": {
+          "x": 390,
+          "y": 160
+        },
+        "tip": {
+          "x": 300,
+          "y": 1050
+        }
+      },
+      "backCenter": {
+        "root": {
+          "x": 630,
+          "y": 100
+        },
+        "tip": {
+          "x": 560,
+          "y": 900
+        }
+      },
+      "backRight": {
+        "root": {
+          "x": 850,
+          "y": 150
+        },
+        "tip": {
+          "x": 1000,
+          "y": 760
+        }
+      }
+    }
+  },
+  "highlightSetup": {
+    "version": 2,
+    "points": [
+      {
+        "x": 507,
+        "y": 558
+      },
+      {
+        "x": 706,
+        "y": 498
+      }
+    ],
+    "subPoints": [
+      {
+        "x": 530,
+        "y": 578
+      },
+      {
+        "x": 730,
+        "y": 518
+      }
+    ],
+    "size": 8,
+    "aspect": 65,
+    "subEnabled": false,
+    "subSize": 4,
+    "subAspect": 80,
+    "subFilmWobble": 20
+  },
+  "activeItemLayerId": null,
+  "itemLayers": [],
+  "baselineSettings": {
+    "label": "Bronze avatar initial setup",
+    "createdAt": "2026-07-18T05:30:38.014Z",
+    "state": {
+      "angleStrength": 78,
+      "faceWarp": 54,
+      "angleXDeform": 78,
+      "faceTurnDepth": 76,
+      "faceTurnVertical": 55,
+      "angleYDeform": 118,
+      "hairVisible": true,
+      "hairWarp": 34,
+      "hairSpring": 40,
+      "hairBundleStrength": 75,
+      "frontHairShadowStrength": 18,
+      "frontHairShadowDistance": 4,
+      "followSpeed": 25,
+      "rangeLeft": 52,
+      "rangeRight": 52,
+      "rangeUp": 18,
+      "rangeDown": 42,
+      "avatarSize": 88,
+      "avatarX": -158,
+      "avatarY": 78,
+      "breathStrength": 38,
+      "rollStrength": 7,
+      "pyokoStrength": 10,
+      "highlightEnabled": false,
+      "highlightStrength": 100,
+      "highlightFilmWobble": 50,
+      "highlightSize": 7,
+      "highlightAspect": 63,
+      "subHighlightEnabled": false,
+      "subHighlightSize": 3,
+      "subHighlightAspect": 100,
+      "subHighlightFilmWobble": 25,
+      "highlightAlphaOnBlink": true,
+      "tearLensEnabled": false,
+      "tearLensStrength": 80,
+      "tearLensRadiusX": 46,
+      "tearLensRadiusY": 21,
+      "tearLensRotationLeft": 0,
+      "tearLensRotationRight": 0,
+      "frontHairShadowEnabled": true,
+      "bgColor": "#FFF8EE",
+      "hairColor": "#2C292C",
+      "hairTintLightness": 0,
+      "hairTintEnabled": false,
+      "showMesh": false,
+      "editLayer": "face",
+      "editKey": "center",
+      "autoBlink": true,
+      "mouseFollowEnabled": true,
+      "idleMotionEnabled": true,
+      "diagonalFaceWarpEnabled": true,
+      "wobbleSeed": 0.18,
+      "micGain": 220,
+      "mouthHalf": 8,
+      "mouthFull": 22,
+      "mouthRelease": 18,
+      "mouthCrossfadeMs": 0
+    }
+  },
+  "packageVersion": 1
+}

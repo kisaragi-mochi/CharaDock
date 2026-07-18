@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Static checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check standalone_drawing_avatar_export/standalone-drawing-avatar.js
+
+      - name: Run JavaScript runtime checks
+        run: node tests/js_runtime_checks.mjs
+
+      - name: Run desktop backend tests
+        run: npm run test:desktop
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile scripts/run_local_server.py
+          python -m py_compile scripts/verify_vendor_checksums.py
+          python -m py_compile scripts/fetch_fonts.py
+
+      - name: Verify vendored dependency checksums
+        run: python scripts/verify_vendor_checksums.py
+
+      - name: Run static tests
+        run: python -m unittest tests.test_project_static

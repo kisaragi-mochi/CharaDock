@@ -1,0 +1,61 @@
+{
+  "name": "purupuru-desktop-mascot",
+  "version": "0.1.0",
+  "description": "Unofficial transparent desktop mascot powered by PuruPuru PNGTuber, Codex app-server, and the OpenAI Responses API.",
+  "main": "desktop/main.cjs",
+  "author": "ochisamu",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "desktop": "electron .",
+    "desktop:debug": "electron . --debug",
+    "test:desktop": "node --test desktop/tests/*.test.cjs",
+    "test": "node tests/js_runtime_checks.mjs && npm run test:desktop && uv run python -m unittest tests.test_project_static",
+    "dist": "electron-builder --dir",
+    "dist:win": "electron-builder --win --dir",
+    "dist:win:installer": "electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "electron": "43.1.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "jp.ochisamu.purupet.desktop",
+    "productName": "PuruPet Desktop",
+    "asar": true,
+    "files": [
+      "app.js",
+      "index.html",
+      "styles.css",
+      "app-icon.ico",
+      "assets/amber-avatar/**/*",
+      "assets/bronze-avatar/**/*",
+      "assets/silver-hood-avatar/**/*",
+      "vendor/**/*",
+      "desktop/**/*",
+      ".agents/skills/**/*",
+      "package.json",
+      "LICENSE",
+      "NOTICE",
+      "MODIFICATIONS.md",
+      "DISTRIBUTION_ASSET_LICENSE.md",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "win": {
+      "icon": "app-icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

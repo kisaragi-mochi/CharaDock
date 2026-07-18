@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tgz
+.npmrc
+
+# Logs and coverage
+*.log
+coverage/
+htmlcov/
+
+# Build / distribution
+build/
+dist/
+out/
+release/
+wheels/
+*.egg-info
+*.exe
+*.msi
+*.zip
+*.7z
+
+# Local settings and generated app data
+settings/
+*.purupuru
+!tests/fixtures/**/*.purupuru
+preferences.json
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.pypirc
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project-specific temporary assets
+assets/*_backup_*/
+*_backup_*/
+*_backup_????????_??????/
+
+# Internal review notes (not for public release)
+full-review-*.md
+note_draft_*.md
+docs/reviews/
+
+# Generated source/intermediate images
+work/
+
+# Private/reference artwork and one-off local generation sources
+source/
+*-reference.png
+*-reference.jpg
+*-reference.jpeg
+
+# Windows alternate data streams copied through WSL
+*:Zone.Identifier
