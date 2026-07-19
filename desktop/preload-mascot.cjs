@@ -84,11 +84,16 @@ window.addEventListener("DOMContentLoaded", () => {
   let lastStreamPulseAt = 0;
   let workActivityTimer;
   let streamWorkMode = false;
+  let streamHasActivity = false;
   let hideTimer;
   let bubbleHideDuration = 9000;
   let workHistoryState = { activeWorkRunId: null, runs: [] };
   let workPanelCloseTimer;
   let permissionTimer;
+  let ttsAudio = null;
+  let ttsPlaybackToken = 0;
+  let ttsPulse = null;
+  let thinkingFillerActive = false;
 
   const formatWorkTime = (value) => {
     const date = new Date(value);
@@ -100,6 +105,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const setWorkPanelOpen = (open) => {
     clearTimeout(workPanelCloseTimer);
     workPanel.classList.toggle("is-open", Boolean(open));
+    document.body.classList.toggle("is-work-panel-open", Boolean(open));
     workPanel.setAttribute("aria-hidden", String(!open));
     workHistoryButton.setAttribute("aria-expanded", String(Boolean(open)));
     if (open) workPanelCloseTimer = setTimeout(() => setWorkPanelOpen(false), 18_000);
@@ -303,6 +309,58 @@ window.addEventListener("DOMContentLoaded", () => {
       if (!sending && document.activeElement !== input && !speechRecognition) setOpen(false);
     }, 720);
   };
+  const stopTtsPlayback = () => {
+    ttsPlaybackToken += 1;
+    window.speechSynthesis?.cancel();
+    if (ttsAudio) {
+      ttsAudio.pause();
+      ttsAudio.src = "";
+      ttsAudio = null;
+    }
+    clearInterval(ttsPulse);
+    ttsPulse = null;
+    ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
+  };
+  const startTtsPulse = () => {
+    clearInterval(ttsPulse);
+    ttsPulse = setInterval(() => ipcRenderer.invoke("mascotInline:voice", .2 + Math.random() * .28).catch(() => {}), 85);
+  };
+  const playStyleBertSpeech = async (text) => {
+    const token = ttsPlaybackToken;
+    try {
+      const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", text);
+      for (const source of result?.audioDataUrls || []) {
+        if (token !== ttsPlaybackToken) return;
+        await new Promise((resolve, reject) => {
+          ttsAudio = new Audio(source);
+          ttsAudio.onplay = startTtsPulse;
+          ttsAudio.onended = resolve;
+          ttsAudio.onerror = () => reject(new Error("生成した音声を再生できません。"));
+          ttsAudio.play().catch(reject);
+        });
+      }
+    } catch (error) {
+      if (token === ttsPlaybackToken) setStatus(error.message, 5000);
+    } finally {
+      if (token === ttsPlaybackToken) {
+        clearInterval(ttsPulse);
+        ttsPulse = null;
+        ttsAudio = null;
+        ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
+      }
+    }
+  };
+  const speakSystemText = (text, language) => {
+    if (!window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = String(language || "ja-JP");
+    utterance.rate = 1.03;
+    utterance.onstart = startTtsPulse;
+    const stop = () => { clearInterval(ttsPulse); ttsPulse = null; ipcRenderer.invoke("mascotInline:voice", 0); };
+    utterance.onend = stop;
+    utterance.onerror = stop;
+    window.speechSynthesis.speak(utterance);
+  };
   const showSpeech = (payload) => {
     clearPermission();
     clearTimeout(hideTimer);
@@ -315,17 +373,12 @@ window.addEventListener("DOMContentLoaded", () => {
     bubbleHideDuration = Math.max(1500, Number(payload?.durationMs) || 9000);
     syncBubbleOverflow();
     scheduleBubbleHide(bubbleHideDuration);
-    if (payload?.ttsEnabled && bubbleText.textContent && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(bubbleText.textContent);
-      utterance.lang = String(payload.speechLanguage || "ja-JP");
-      utterance.rate = 1.03;
-      let pulse;
-      utterance.onstart = () => { pulse = setInterval(() => ipcRenderer.invoke("mascotInline:voice", .2 + Math.random() * .28), 85); };
-      const stop = () => { clearInterval(pulse); ipcRenderer.invoke("mascotInline:voice", 0); };
-      utterance.onend = stop;
-      utterance.onerror = stop;
-      window.speechSynthesis.speak(utterance);
+    stopTtsPlayback();
+    thinkingFillerActive = false;
+    if (payload?.ttsEnabled && bubbleText.textContent && payload?.ttsProvider === "style-bert-vits2") {
+      playStyleBertSpeech(bubbleText.textContent);
+    } else if (payload?.ttsEnabled && bubbleText.textContent && window.speechSynthesis) {
+      speakSystemText(bubbleText.textContent, payload.speechLanguage);
     }
   };
 
@@ -604,6 +657,7 @@ window.addEventListener("DOMContentLoaded", () => {
       clearPermission();
       sending = true;
       streamWorkMode = payload?.mode === "work";
+      streamHasActivity = false;
       clearTimeout(hideTimer);
       bubbleText.textContent = "考え中…";
       bubble.classList.remove("is-expanded", "has-overflow");
@@ -613,6 +667,10 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (payload?.phase === "delta") {
+      if (thinkingFillerActive) {
+        thinkingFillerActive = false;
+        stopTtsPlayback();
+      }
       bubbleText.textContent = String(payload.text || "");
       bubble.classList.add("is-visible");
       syncBubbleOverflow();
@@ -624,17 +682,22 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (payload?.phase === "activity") {
+      streamHasActivity = true;
       setWorkActivity(String(payload.text || "作業中…"));
       return;
     }
     if (payload?.phase === "done") {
       sending = false;
       if (streamWorkMode) setWorkActivity("作業完了", { finish: true });
+      else if (streamHasActivity) setWorkActivity("");
       streamWorkMode = false;
+      streamHasActivity = false;
     } else if (payload?.phase === "error") {
       sending = false;
       if (streamWorkMode) setWorkActivity("作業を完了できませんでした", { finish: true });
+      else if (streamHasActivity) setWorkActivity("");
       streamWorkMode = false;
+      streamHasActivity = false;
     }
     ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
   });
@@ -683,9 +746,16 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   ipcRenderer.on("mascot:tts", (_event, payload) => {
     if (!payload?.enabled) {
-      window.speechSynthesis?.cancel();
-      ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
+      stopTtsPlayback();
     }
+  });
+  ipcRenderer.on("mascot:thinkingFiller", (_event, payload) => {
+    const text = String(payload?.text || "").trim();
+    if (!text || !sending) return;
+    stopTtsPlayback();
+    thinkingFillerActive = true;
+    if (payload?.ttsProvider === "style-bert-vits2") playStyleBertSpeech(text);
+    else speakSystemText(text, payload?.speechLanguage);
   });
   ipcRenderer.invoke("mascotInline:getState").then((state) => {
     appState = state;

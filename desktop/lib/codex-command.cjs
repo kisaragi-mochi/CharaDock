@@ -23,6 +23,37 @@ function cacheAppxBinary(source, cacheDirectory) {
   return destination;
 }
 
+function windowsPathToWsl(value) {
+  const normalized = String(value || "");
+  const match = normalized.match(/^([a-zA-Z]):[\\/](.*)$/);
+  if (!match) return normalized.replace(/\\/g, "/");
+  return `/mnt/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
+}
+
+function resolveWslCodexCommand({
+  platform = process.platform,
+  env = process.env,
+  exists = fs.existsSync,
+  readDirectory = fs.readdirSync,
+  stat = fs.statSync,
+} = {}) {
+  if (platform !== "win32") return "";
+  if (env.CODEX_WSL_CLI_PATH && exists(env.CODEX_WSL_CLI_PATH)) return windowsPathToWsl(env.CODEX_WSL_CLI_PATH);
+  const profile = env.USERPROFILE || "";
+  if (!profile) return "";
+  const root = path.win32.join(profile, ".codex", "bin", "wsl");
+  let entries;
+  try { entries = readDirectory(root, { withFileTypes: true }); } catch { return ""; }
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.win32.join(root, entry.name, "codex"))
+    .filter((candidate) => exists(candidate))
+    .sort((left, right) => {
+      try { return stat(right).mtimeMs - stat(left).mtimeMs; } catch { return 0; }
+    })
+    .map(windowsPathToWsl)[0] || "";
+}
+
 async function resolveCodexCommand({
   platform = process.platform,
   env = process.env,
@@ -60,4 +91,4 @@ async function resolveCodexCommand({
   return "codex";
 }
 
-module.exports = { cacheAppxBinary, resolveCodexCommand };
+module.exports = { cacheAppxBinary, resolveCodexCommand, resolveWslCodexCommand, windowsPathToWsl };

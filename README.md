@@ -52,8 +52,11 @@ PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruP
 - Codex app-serverのChatGPTログイン、またはOpenAI Responses API
 - 長文時だけ全文表示と上限付きスクロールを出すコンパクトな吹き出し
 - Codex Realtime音声入力を優先し、未提供時は端末音声認識へ自動フォールバック
-- Windows / Chromiumの音声読み上げと、設定からのON/OFF
+- Windows標準音声またはローカルStyle-Bert-VITS2による読み上げと、設定からのON/OFF
+- 応答待ちが0.8秒を超えたときだけ、キャラクターらしい短い音声フィラーを一度再生
 - キャラクターごとの触れ合い文、表情、会話メモリ
+
+Style-Bert-VITS2は設定の「デスクトップ → 音声方式」から選択します。ローカルAPIのURL（既定 `http://localhost:5000`）、モデルID、速度だけを指定でき、`/docs`のURLを入力した場合も自動的に`/voice`へ接続します。長い返答はAPIの100文字上限に合わせて分割し、順番に再生します。
 
 ### 安全な作業モード
 
@@ -116,7 +119,7 @@ npm run desktop
 
 | 操作 | キー |
 | --- | --- |
-| キャラクターから話す | `Ctrl + Shift + Enter` |
+| 現在のモードの入力欄を開く | `Ctrl + Shift + Enter` |
 | 設定を開く | `Ctrl + Shift + M` |
 | クリック透過 | `Ctrl + Shift + L` |
 | キャラクター表示 | `Ctrl + Shift + H` |

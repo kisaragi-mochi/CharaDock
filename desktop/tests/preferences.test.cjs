@@ -45,6 +45,10 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.edgeSnap, true);
   assert.equal(state.preferredDisplayId, "");
   assert.equal(state.interactionMode, "chat");
+  assert.equal(state.ttsProvider, "system");
+  assert.equal(state.styleBertVits2Url, "http://localhost:5000");
+  assert.equal(state.styleBertVits2ModelId, 0);
+  assert.equal(state.styleBertVits2Speed, 1);
   assert.equal(state.hasWorkDirectory, false);
   assert.equal(state.workDirectoryName, "");
 });

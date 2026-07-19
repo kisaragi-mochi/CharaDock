@@ -23,6 +23,8 @@
   let realtimeAssistantMessage = null;
   let realtimeUnavailable = false;
   let speechPulseTimer = null;
+  let speechAudio = null;
+  let speechPlaybackToken = 0;
   let streamingMessage = null;
   let generatorFile = null;
   let generatorBusy = false;
@@ -276,6 +278,11 @@
     $("#mouseFollowToggle").checked = Boolean(state.mouseFollow);
     $("#launchAtLoginToggle").checked = Boolean(state.launchAtLogin);
     $("#ttsToggle").checked = Boolean(state.ttsEnabled);
+    $("#ttsProviderSelect").value = state.ttsProvider || "system";
+    $("#styleBertVits2UrlInput").value = state.styleBertVits2Url || "http://localhost:5000";
+    $("#styleBertVits2ModelIdInput").value = Number(state.styleBertVits2ModelId) || 0;
+    $("#styleBertVits2SpeedInput").value = Number(state.styleBertVits2Speed) || 1;
+    $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
     $("#positionLockedToggle").checked = Boolean(state.positionLocked);
     $("#edgeSnapToggle").checked = Boolean(state.edgeSnap);
     const displaySelect = $("#displaySelect");
@@ -374,6 +381,10 @@
       mouseFollow: $("#mouseFollowToggle").checked,
       launchAtLogin: $("#launchAtLoginToggle").checked,
       ttsEnabled: $("#ttsToggle").checked,
+      ttsProvider: $("#ttsProviderSelect").value,
+      styleBertVits2Url: $("#styleBertVits2UrlInput").value.trim(),
+      styleBertVits2ModelId: Number($("#styleBertVits2ModelIdInput").value),
+      styleBertVits2Speed: Number($("#styleBertVits2SpeedInput").value),
       speechLanguage: state?.speechLanguage || "ja-JP",
       positionLocked: $("#positionLockedToggle").checked,
       edgeSnap: $("#edgeSnapToggle").checked,
@@ -658,10 +669,56 @@
     api.sendVoiceLevel(0).catch(() => {});
   }
 
-  function speakResponse(text) {
-    if (!state.ttsEnabled || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+  function stopSpeechPlayback() {
+    speechPlaybackToken += 1;
+    window.speechSynthesis?.cancel();
+    if (speechAudio) {
+      speechAudio.pause();
+      speechAudio.src = "";
+      speechAudio = null;
+    }
     stopSpeechPulse();
+  }
+
+  function playGeneratedAudio(source, token) {
+    return new Promise((resolve, reject) => {
+      if (token !== speechPlaybackToken) return resolve();
+      speechAudio = new Audio(source);
+      speechAudio.onplay = () => {
+        let phase = 0;
+        clearInterval(speechPulseTimer);
+        speechPulseTimer = setInterval(() => {
+          phase += .8;
+          api.sendVoiceLevel(.12 + Math.abs(Math.sin(phase)) * .28).catch(() => {});
+        }, 80);
+      };
+      speechAudio.onended = resolve;
+      speechAudio.onerror = () => reject(new Error("生成した音声を再生できません。"));
+      speechAudio.play().catch(reject);
+    });
+  }
+
+  async function speakResponse(text) {
+    if (!state.ttsEnabled) return;
+    stopSpeechPlayback();
+    const token = speechPlaybackToken;
+    if (state.ttsProvider === "style-bert-vits2") {
+      try {
+        setStatus($("#ttsStatus"), "Style-Bert-VITS2で生成しています…");
+        const result = await api.synthesizeTts(text);
+        for (const source of result?.audioDataUrls || []) await playGeneratedAudio(source, token);
+        if (token === speechPlaybackToken) setStatus($("#ttsStatus"), "接続と再生を確認しました。");
+      } catch (error) {
+        if (token === speechPlaybackToken) setStatus($("#ttsStatus"), error.message, true);
+      } finally {
+        if (token === speechPlaybackToken) {
+          speechAudio = null;
+          stopSpeechPulse();
+        }
+      }
+      return;
+    }
+    if (!window.speechSynthesis) return;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = state.speechLanguage || "ja-JP";
     utterance.rate = 1.03;
@@ -849,6 +906,33 @@
     }));
     ["#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#positionLockedToggle", "#edgeSnapToggle"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
+    $("#ttsProviderSelect").addEventListener("change", () => {
+      $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
+      if (!$("#styleBertVits2Settings").hidden) {
+        setTimeout(() => {
+          const scroller = $(".main-panel");
+          const container = $("#ttsProviderSelect").closest(".tts-settings");
+          const overflow = container.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 24;
+          if (overflow > 0) scroller.scrollBy({
+            top: overflow,
+            behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          });
+        }, 30);
+      }
+      saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
+    });
+    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput"]
+      .forEach((selector) => $(selector).addEventListener("change", () => {
+        saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
+      }));
+    $("#ttsTestButton").addEventListener("click", async () => {
+      try {
+        await saveSettings();
+        await speakResponse("音声テストです。これからよろしくね。");
+      } catch (error) {
+        setStatus($("#ttsStatus"), error.message, true);
+      }
+    });
     $("#mouseFollowToggle").addEventListener("change", () => {
       sessionStorage.setItem("purupet.activePage", "character");
       sessionStorage.setItem("purupet.characterScroll", String(document.scrollingElement?.scrollTop || 0));

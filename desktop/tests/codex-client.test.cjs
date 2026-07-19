@@ -2,13 +2,52 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { CodexAppServerClient, appServerArgs } = require("../backend/codex-client.cjs");
+const {
+  CODEX_MASCOT_INSTRUCTIONS,
+  CodexAppServerClient,
+  appServerArgs,
+  permissionProfileForSandbox,
+  workspaceSandboxPolicy,
+} = require("../backend/codex-client.cjs");
 
 test("Codex work client can explicitly enable live web search", () => {
   assert.deepEqual(appServerArgs("live"), [
     "app-server", "--stdio", "--enable", "realtime_conversation", "-c", 'web_search="live"',
   ]);
+  assert.deepEqual(appServerArgs("live", "workspace-write"), [
+    "app-server", "--stdio", "--enable", "realtime_conversation",
+    "-c", 'web_search="live"', "-c", 'sandbox_mode="workspace-write"',
+  ]);
   assert.deepEqual(appServerArgs("invalid"), ["app-server", "--stdio", "--enable", "realtime_conversation"]);
+  assert.match(CODEX_MASCOT_INSTRUCTIONS, /read-only web search/);
+  assert.doesNotMatch(CODEX_MASCOT_INSTRUCTIONS, /Do not .*invoke tools/);
+});
+
+test("Codex workspace-write client scopes writes to the selected folder", async () => {
+  const cwd = process.platform === "win32" ? "C:\\Users\\test\\Downloads\\project" : "/tmp/project";
+  assert.deepEqual(workspaceSandboxPolicy("workspace-write", cwd), {
+    type: "workspaceWrite",
+    writableRoots: [cwd],
+    networkAccess: false,
+    excludeTmpdirEnvVar: false,
+    excludeSlashTmp: false,
+  });
+  assert.equal(workspaceSandboxPolicy("read-only", cwd), null);
+  assert.equal(permissionProfileForSandbox("workspace-write"), ":workspace");
+  assert.equal(permissionProfileForSandbox("read-only"), ":read-only");
+
+  const client = new CodexAppServerClient({ cwd, sandbox: "workspace-write" });
+  client.ensureStarted = async () => {};
+  let threadParams;
+  client.request = async (method, params) => {
+    assert.equal(method, "thread/start");
+    threadParams = params;
+    return { thread: { id: "thread-workspace" } };
+  };
+  await client.ensureThread();
+  assert.deepEqual(threadParams.runtimeWorkspaceRoots, [cwd]);
+  assert.equal(threadParams.permissions, ":workspace");
+  assert.equal(Object.prototype.hasOwnProperty.call(threadParams, "sandbox"), false);
 });
 
 test("Codex client registers and answers app-server dynamic tools", async () => {

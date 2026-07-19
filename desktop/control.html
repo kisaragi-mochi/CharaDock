@@ -26,7 +26,7 @@
         <span class="status-dot"></span>
         <span><strong id="connectionLabel">準備中</strong><small id="connectionDetail">状態を確認しています</small></span>
       </div>
-      <p class="shortcut-note">設定を開く <kbd>Ctrl</kbd>＋<kbd>Shift</kbd>＋<kbd>M</kbd></p>
+      <p class="shortcut-note">すぐ入力 <kbd>Ctrl</kbd>＋<kbd>Shift</kbd>＋<kbd>Enter</kbd></p>
     </aside>
 
     <main class="main-panel">
@@ -180,7 +180,19 @@
             <label class="switch-row"><span><strong>位置をロック</strong><small>誤操作でキャラクターが動くのを防止</small></span><input id="positionLockedToggle" type="checkbox" /><i></i></label>
             <label class="switch-row"><span><strong>画面端へ吸着</strong><small>近くまで移動すると端へ揃える</small></span><input id="edgeSnapToggle" type="checkbox" /><i></i></label>
             <label class="switch-row"><span><strong>PC起動時に開始</strong><small>Windows・macOSで有効</small></span><input id="launchAtLoginToggle" type="checkbox" /><i></i></label>
-            <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>Windows標準の日本語音声を使用・追加のAPI料金なし</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
+            <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>端末音声またはローカルのStyle-Bert-VITS2を使用</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
+            <div class="tts-settings">
+              <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2</option></select></label>
+              <div id="styleBertVits2Settings" class="tts-provider-settings" hidden>
+                <label>API URL<input id="styleBertVits2UrlInput" type="text" inputmode="url" autocomplete="off" placeholder="http://localhost:5000" /></label>
+                <div class="size-actions">
+                  <label>モデルID<input id="styleBertVits2ModelIdInput" type="number" min="0" max="9999" step="1" /></label>
+                  <label>速度（0.5–2.0×）<input id="styleBertVits2SpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                </div>
+              </div>
+              <button id="ttsTestButton" class="button button-quiet" type="button">この音声を試す</button>
+              <p id="ttsStatus" class="hint" role="status"></p>
+            </div>
           </section>
           <section class="card settings-card">
             <h2>キャラクターウィンドウ</h2>
@@ -197,7 +209,7 @@
         </div>
         <section class="card shortcut-card">
           <h2>ショートカット</h2>
-          <div><span>キャラクターから話す</span><kbd>Ctrl＋Shift＋Enter</kbd></div>
+          <div><span>どこからでも入力欄を開く</span><kbd>Ctrl＋Shift＋Enter</kbd></div>
           <div><span>設定を開く</span><kbd>Ctrl＋Shift＋M</kbd></div>
           <div><span>クリック透過を切替</span><kbd>Ctrl＋Shift＋L</kbd></div>
           <div><span>キャラクター表示を切替</span><kbd>Ctrl＋Shift＋H</kbd></div>

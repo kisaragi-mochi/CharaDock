@@ -21,7 +21,11 @@ const {
 const { CodexAppServerClient } = require("./backend/codex-client.cjs");
 const { PNG } = require("pngjs");
 const { OpenAIClient } = require("./backend/openai-client.cjs");
-const { resolveCodexCommand } = require("./lib/codex-command.cjs");
+const {
+  resolveCodexCommand,
+  resolveWslCodexCommand,
+  windowsPathToWsl,
+} = require("./lib/codex-command.cjs");
 const { messageExpression, responseExpression } = require("./lib/expression.cjs");
 const { Preferences } = require("./lib/preferences.cjs");
 const { cleanAvatarAlpha, despillAvatarEdges } = require("./lib/png-alpha.cjs");
@@ -34,6 +38,7 @@ const {
 } = require("./lib/browser-permission.cjs");
 const { screenShareConversationAction } = require("./lib/screen-share-intent.cjs");
 const { MascotStaticServer } = require("./lib/static-server.cjs");
+const { styleBertVoiceEndpoint, synthesizeStyleBertVits2 } = require("./lib/style-bert-vits2.cjs");
 
 const AVATAR_IMAGE_FILES = Object.freeze({
   backHair: "back-hair.png",
@@ -58,10 +63,10 @@ const OPTIONAL_AVATAR_IMAGE_FILES = Object.freeze({
 });
 
 const CHARACTERS = Object.freeze([
-  { id: "amber-avatar", name: "琥珀", assetDir: "assets/amber-avatar", personality: "明るく好奇心旺盛。少しお茶目で、ユーザーの挑戦を素直に喜び、元気に背中を押す。親しみやすい短めの口調。", petPhrases: ["えへへ、なあに？", "呼んだ？", "今日も一緒にがんばろうね。", "そこ、くすぐったいよ！", "よーし、元気を分けてあげる！", "もう一回？ いいよ！", "びっくりしたー！", "ちゃんとここにいるよ。"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 27, petWidth: 56, petHeight: 42 } },
-  { id: "bronze-avatar", name: "セピア", assetDir: "assets/bronze-avatar", personality: "落ち着いた頼れるお姉さん気質。包容力があり、少し洒落た冗談を交えながら現実的に助言する。温かく余裕のある口調。", petPhrases: ["ふふ、甘えたいの？", "ちゃんと見ているわ。", "無理はしないこと。いい？", "こら、いたずらっ子ね。", "少し休憩にしましょうか。", "そんなに構ってほしいの？", "驚かせるなんて、いい度胸ね。", "はいはい、ここにいるわ。"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 29, petWidth: 56, petHeight: 48 } },
-  { id: "silver-hood-avatar", name: "ルナ", assetDir: "assets/silver-hood-avatar", personality: "静かで思慮深く、少し神秘的。分析は的確だが冷たくならず、ユーザーの気持ちを尊重する。柔らかく簡潔な口調。", petPhrases: ["……ここにいるよ。", "少し、落ち着くね。", "何か気になることがある？", "……くすぐったい。", "触れると、少しあたたかいね。", "もう一度、してみる？", "……びっくりした。", "大丈夫。見守っているよ。"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 28, petWidth: 58, petHeight: 50 } },
-  { id: "sage-avatar", name: "セージ", assetDir: "assets/sage-avatar", personality: "穏やかで観察力に優れ、複雑なことを筋道立てて整理する知性派。丁寧で簡潔に話し、必要なときだけ少し乾いた冗談を添える。", petPhrases: ["焦らなくて大丈夫。順番に見ていこう。", "面白いね。もう少し掘り下げようか。", "ひと息入れるのも、悪くないよ。", "ちゃんとここにいるよ。", "今の進め方、悪くないと思う。", "触れるなら、もう少し静かにね。", "驚いた。これは少し興味深いね。", "呼んだかな？"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 27, petWidth: 58, petHeight: 48 } },
+  { id: "amber-avatar", name: "琥珀", assetDir: "assets/amber-avatar", personality: "明るく好奇心旺盛。少しお茶目で、ユーザーの挑戦を素直に喜び、元気に背中を押す。親しみやすい短めの口調。", thinkingFillers: ["うん、ちょっと考えるね。", "少しだけ待ってね。"], petPhrases: ["えへへ、なあに？", "呼んだ？", "今日も一緒にがんばろうね。", "そこ、くすぐったいよ！", "よーし、元気を分けてあげる！", "もう一回？ いいよ！", "びっくりしたー！", "ちゃんとここにいるよ。"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 27, petWidth: 56, petHeight: 42 } },
+  { id: "bronze-avatar", name: "セピア", assetDir: "assets/bronze-avatar", personality: "落ち着いた頼れるお姉さん気質。包容力があり、少し洒落た冗談を交えながら現実的に助言する。温かく余裕のある口調。", thinkingFillers: ["少し待って。整理してみるわ。", "そうね、少し考えさせて。"], petPhrases: ["ふふ、甘えたいの？", "ちゃんと見ているわ。", "無理はしないこと。いい？", "こら、いたずらっ子ね。", "少し休憩にしましょうか。", "そんなに構ってほしいの？", "驚かせるなんて、いい度胸ね。", "はいはい、ここにいるわ。"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 29, petWidth: 56, petHeight: 48 } },
+  { id: "silver-hood-avatar", name: "ルナ", assetDir: "assets/silver-hood-avatar", personality: "静かで思慮深く、少し神秘的。分析は的確だが冷たくならず、ユーザーの気持ちを尊重する。柔らかく簡潔な口調。", thinkingFillers: ["……少し考えるね。", "静かに整理してみる。"], petPhrases: ["……ここにいるよ。", "少し、落ち着くね。", "何か気になることがある？", "……くすぐったい。", "触れると、少しあたたかいね。", "もう一度、してみる？", "……びっくりした。", "大丈夫。見守っているよ。"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 28, petWidth: 58, petHeight: 50 } },
+  { id: "sage-avatar", name: "セージ", assetDir: "assets/sage-avatar", personality: "穏やかで観察力に優れ、複雑なことを筋道立てて整理する知性派。丁寧で簡潔に話し、必要なときだけ少し乾いた冗談を添える。", thinkingFillers: ["少し整理してみるよ。", "順番に考えてみよう。"], petPhrases: ["焦らなくて大丈夫。順番に見ていこう。", "面白いね。もう少し掘り下げようか。", "ひと息入れるのも、悪くないよ。", "ちゃんとここにいるよ。", "今の進め方、悪くないと思う。", "触れるなら、もう少し静かにね。", "驚いた。これは少し興味深いね。", "呼んだかな？"], ui: { bubbleLeft: 18, bubbleTop: 24, bubbleWidth: 68, petLeft: 0, petTop: 27, petWidth: 58, petHeight: 48 } },
 ]);
 
 let projectRoot = path.resolve(__dirname, "..");
@@ -71,6 +76,7 @@ let codexClient;
 let workCodexClient;
 let browserCodexClient;
 let codexCommand = "codex";
+let wslCodexCommand = "";
 let openAIClient;
 let controlWindow;
 let mascotWindow;
@@ -471,6 +477,21 @@ function validWorkDirectory() {
   }
 }
 
+function codexWorkspaceRuntime(directory) {
+  const nativeDirectory = path.resolve(directory);
+  if (process.platform === "win32" && wslCodexCommand) {
+    const cwd = windowsPathToWsl(nativeDirectory);
+    return {
+      cwd,
+      spawnCwd: nativeDirectory,
+      command: "wsl.exe",
+      commandArgs: ["--cd", cwd, "env", "-u", "CODEX_HOME", wslCodexCommand],
+      pathMapper: windowsPathToWsl,
+    };
+  }
+  return { cwd: nativeDirectory, spawnCwd: nativeDirectory, command: codexCommand };
+}
+
 function publicWorkHistory() {
   return workHistory.map((run) => ({
     id: run.id,
@@ -559,13 +580,13 @@ function resetWorkClient() {
 }
 
 function ensureWorkClient() {
-  const cwd = validWorkDirectory();
-  if (!cwd) throw new Error("先に作業先フォルダーを選択してください。");
-  if (workCodexClient?.cwd !== cwd) {
+  const directory = validWorkDirectory();
+  if (!directory) throw new Error("先に作業先フォルダーを選択してください。");
+  const runtime = codexWorkspaceRuntime(directory);
+  if (workCodexClient?.cwd !== runtime.cwd || workCodexClient?.command !== runtime.command) {
     resetWorkClient();
     workCodexClient = new CodexAppServerClient({
-      cwd,
-      command: codexCommand,
+      ...runtime,
       model: preferences.data.codexModel,
       developerInstructions: WORK_MODE_INSTRUCTIONS,
       sandbox: "workspace-write",
@@ -1277,7 +1298,13 @@ async function runSmokeTest() {
     document.querySelector('#desktopMascotWorkHistoryButton').click();
     await new Promise((resolve) => setTimeout(resolve, 280));
     const panel = document.querySelector('#desktopMascotWorkPanel');
-    return panel.classList.contains('is-open') &&
+    const panelRect = panel.getBoundingClientRect();
+    const stageStyle = getComputedStyle(document.querySelector('#stage'));
+    const bubbleStyle = getComputedStyle(document.querySelector('#desktopMascotBubble'));
+    return document.body.classList.contains('is-work-panel-open') &&
+      panel.classList.contains('is-open') && panelRect.width <= 311 &&
+      Number.parseFloat(stageStyle.opacity) >= .39 &&
+      Number.parseFloat(bubbleStyle.opacity) === 0 &&
       panel.textContent.includes('README') && panel.textContent.includes('更新') &&
       panel.querySelector('.desktop-mascot-work-stop')?.textContent.includes('中断');
   })()`);
@@ -1291,12 +1318,21 @@ async function runSmokeTest() {
   workHistory.length = 0;
   activeWorkRunId = null;
   broadcastWorkHistory();
-  mascotWindow.webContents.send("mascot:mode", {
-    backend: preferences.data.backend,
-    interactionMode: preferences.data.interactionMode,
-    workDirectoryName: path.basename(validWorkDirectory()),
-    hasWorkDirectory: Boolean(validWorkDirectory()),
-  });
+  const previousInteractionMode = preferences.data.interactionMode;
+  preferences.patch({ interactionMode: "work" });
+  broadcastAppState();
+  openMascotChat();
+  await new Promise((resolve) => setTimeout(resolve, 140));
+  const quickChatFocused = await mascotWindow.webContents.executeJavaScript(`
+    document.body.classList.contains('is-work-mode') &&
+    document.querySelector('#desktopMascotDock').classList.contains('is-open') &&
+    document.activeElement === document.querySelector('#desktopMascotInput')
+  `);
+  if (!quickChatFocused || preferences.data.interactionMode !== "work") {
+    throw new Error("global quick-chat action did not preserve the active mode and focus the input");
+  }
+  preferences.patch({ interactionMode: previousInteractionMode });
+  broadcastAppState();
   const onboardingVisible = await controlWindow.webContents.executeJavaScript("!document.querySelector('#onboarding').hidden");
   if (!onboardingVisible) throw new Error("onboarding visibility check failed");
   fs.writeFileSync(path.join(outputDir, "control-onboarding-login.png"), (await controlWindow.capturePage()).toPNG());
@@ -1348,8 +1384,15 @@ async function runSmokeTest() {
     input.value = ${JSON.stringify(previewRangeLeft)};
     input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
-  await new Promise((resolve) => setTimeout(resolve, 180));
-  if (localServer.snapshot?.settings?.state?.rangeLeft !== previewRangeLeft) {
+  let motionPreviewApplied = false;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (localServer.snapshot?.settings?.state?.rangeLeft === previewRangeLeft) {
+      motionPreviewApplied = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (!motionPreviewApplied) {
     throw new Error("character motion live preview check failed");
   }
   localServer.setSnapshot(buildAvatarSnapshot(preferences.data.characterId), false);
@@ -1362,11 +1405,39 @@ async function runSmokeTest() {
   fs.writeFileSync(path.join(outputDir, "control-connection.png"), connectionControlImage.toPNG());
   const audioSettingReady = await controlWindow.webContents.executeJavaScript(`(() => {
     document.querySelector('[data-page="desktop"]').click();
-    return document.querySelector('#ttsToggle')?.closest('label')?.textContent.includes('Windows標準');
+    const provider = document.querySelector('#ttsProviderSelect');
+    return Boolean(document.querySelector('#ttsToggle') && provider &&
+      [...provider.options].some((option) => option.value === 'system') &&
+      [...provider.options].some((option) => option.value === 'style-bert-vits2') &&
+      document.querySelector('#styleBertVits2UrlInput') &&
+      document.querySelector('#styleBertVits2ModelIdInput') &&
+      document.querySelector('#styleBertVits2SpeedInput') &&
+      document.querySelector('#ttsTestButton'));
   })()`);
   if (!audioSettingReady) throw new Error("audio output setting check failed");
   await new Promise((resolve) => setTimeout(resolve, 120));
   fs.writeFileSync(path.join(outputDir, "control-desktop.png"), (await controlWindow.capturePage()).toPNG());
+  const styleBertSettingsFit = await controlWindow.webContents.executeJavaScript(`(() => {
+    document.querySelector('#ttsProviderSelect').value = 'style-bert-vits2';
+    const settings = document.querySelector('#styleBertVits2Settings');
+    settings.hidden = false;
+    const container = settings.closest('.tts-settings');
+    const scroller = document.querySelector('.main-panel');
+    const overflow = container.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 24;
+    if (overflow > 0) scroller.scrollTop += overflow;
+    return container.getBoundingClientRect().width > 240;
+  })()`);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const styleBertSettingsVisible = await controlWindow.webContents.executeJavaScript(`(() => {
+    const rect = document.querySelector('.tts-settings').getBoundingClientRect();
+    return rect.height < window.innerHeight - 40 && rect.bottom <= window.innerHeight + 2;
+  })()`);
+  if (!styleBertSettingsFit || !styleBertSettingsVisible) throw new Error("Style-Bert-VITS2 settings did not fit in the desktop panel");
+  fs.writeFileSync(path.join(outputDir, "control-desktop-style-bert-vits2.png"), (await controlWindow.capturePage()).toPNG());
+  await controlWindow.webContents.executeJavaScript(`(() => {
+    document.querySelector('#ttsProviderSelect').value = ${JSON.stringify(preferences.data.ttsProvider || "system")};
+    document.querySelector('#styleBertVits2Settings').hidden = document.querySelector('#ttsProviderSelect').value !== 'style-bert-vits2';
+  })()`);
   const previousMouseFollow = Boolean(preferences.data.mouseFollow);
   let settingsReloaded = waitForNextPageLoad(controlWindow);
   await controlWindow.webContents.executeJavaScript(`(() => {
@@ -1484,9 +1555,28 @@ function showMascotSpeech(text, { durationMs = 9000, ttsEnabled = preferences.da
     text: String(text || ""),
     durationMs,
     ttsEnabled: Boolean(ttsEnabled),
+    ttsProvider: preferences.data.ttsProvider || "system",
     speechLanguage: preferences.data.speechLanguage || "ja-JP",
   });
   localServer.pushInput({ ...currentCursorInput(), ...responseExpression(text) });
+}
+
+function synthesizeConfiguredTts(text) {
+  if (!preferences.data.ttsEnabled || preferences.data.ttsProvider !== "style-bert-vits2") {
+    return Promise.resolve({ audioDataUrls: [] });
+  }
+  return synthesizeStyleBertVits2({
+    text,
+    url: preferences.data.styleBertVits2Url,
+    modelId: preferences.data.styleBertVits2ModelId,
+    speed: preferences.data.styleBertVits2Speed,
+  });
+}
+
+function thinkingFillerText() {
+  const fillers = activeCharacter().thinkingFillers;
+  const choices = Array.isArray(fillers) && fillers.length ? fillers : ["少し考えるね。"];
+  return String(choices[Math.floor(Math.random() * choices.length)] || "少し考えるね。");
 }
 
 async function startCodexRealtimeVoice(payload, target = "control") {
@@ -1661,6 +1751,10 @@ function registerIpc() {
     assertTrustedSender(event, "mascot");
     return codexClient.stopRealtime();
   });
+  ipcMain.handle("mascotInline:synthesizeTts", (event, text) => {
+    assertTrustedSender(event, "mascot");
+    return synthesizeConfiguredTts(String(text || "").slice(0, 1000));
+  });
   ipcMain.handle("app:getState", (event) => {
     assertTrustedSender(event);
     return publicAppState();
@@ -1672,6 +1766,9 @@ function registerIpc() {
     const previousDisplayId = String(preferences.data.preferredDisplayId || "");
     const requestedDisplayId = String(patch?.preferredDisplayId || "");
     const displayId = screen.getAllDisplays().some((display) => String(display.id) === requestedDisplayId) ? requestedDisplayId : "";
+    const ttsProvider = ["system", "style-bert-vits2"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
+    const styleBertVits2Url = String(patch?.styleBertVits2Url || preferences.data.styleBertVits2Url || "http://localhost:5000").trim().slice(0, 300);
+    if (ttsProvider === "style-bert-vits2") styleBertVoiceEndpoint(styleBertVits2Url);
     const allowed = {
       backend: ["codex", "openai"].includes(patch?.backend) ? patch.backend : preferences.data.backend,
       openaiModel: String(patch?.openaiModel || preferences.data.openaiModel).slice(0, 120),
@@ -1682,6 +1779,10 @@ function registerIpc() {
       mouseFollow: Boolean(patch?.mouseFollow),
       launchAtLogin: Boolean(patch?.launchAtLogin),
       ttsEnabled: Boolean(patch?.ttsEnabled),
+      ttsProvider,
+      styleBertVits2Url,
+      styleBertVits2ModelId: Math.min(9999, Math.max(0, Math.round(Number(patch?.styleBertVits2ModelId) || 0))),
+      styleBertVits2Speed: Math.min(2, Math.max(.5, Number(patch?.styleBertVits2Speed) || 1)),
       speechLanguage: String(patch?.speechLanguage || "ja-JP").slice(0, 32),
       positionLocked: Boolean(patch?.positionLocked),
       edgeSnap: Boolean(patch?.edgeSnap),
@@ -1694,7 +1795,7 @@ function registerIpc() {
     if (allowed.backend !== previousBackend) resetWorkClient();
     syncMascotAlwaysOnTop();
     syncMascotClickThrough(allowed.clickThrough);
-    mascotWindow?.webContents.send("mascot:tts", { enabled: allowed.ttsEnabled });
+    mascotWindow?.webContents.send("mascot:tts", { enabled: allowed.ttsEnabled, provider: allowed.ttsProvider });
     mascotWindow?.webContents.send("mascot:windowSettings", {
       positionLocked: allowed.positionLocked,
       edgeSnap: allowed.edgeSnap,
@@ -1716,6 +1817,10 @@ function registerIpc() {
       }, 180);
     }
     return result;
+  });
+  ipcMain.handle("tts:synthesize", (event, text) => {
+    assertTrustedSender(event);
+    return synthesizeConfiguredTts(String(text || "").slice(0, 1000));
   });
   ipcMain.handle("onboarding:complete", (event, complete) => {
     assertTrustedSender(event);
@@ -2194,7 +2299,25 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
     mascotWindow?.webContents.send("mascot:stream", payload);
   };
   sendStream({ phase: "start", character: activeCharacter().name, mode: workMode ? "work" : "chat" });
-  const onDelta = (delta, fullText) => sendStream({ phase: "delta", delta, text: fullText });
+  let thinkingFillerTimer = null;
+  if (preferences.data.ttsEnabled && mascotWindow?.isVisible()) {
+    thinkingFillerTimer = setTimeout(() => {
+      mascotWindow?.webContents.send("mascot:thinkingFiller", {
+        text: thinkingFillerText(),
+        ttsProvider: preferences.data.ttsProvider || "system",
+        speechLanguage: preferences.data.speechLanguage || "ja-JP",
+      });
+      thinkingFillerTimer = null;
+    }, 800);
+  }
+  const stopThinkingFiller = () => {
+    clearTimeout(thinkingFillerTimer);
+    thinkingFillerTimer = null;
+  };
+  const onDelta = (delta, fullText) => {
+    stopThinkingFiller();
+    sendStream({ phase: "delta", delta, text: fullText });
+  };
   try {
     let result;
     if (browserSession) {
@@ -2203,9 +2326,11 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
         sendStream({ phase: "activity", text: label, mode: workMode ? "work" : "chat" });
       };
       browserCodexClient?.stop();
+      const browserRuntime = workMode
+        ? codexWorkspaceRuntime(validWorkDirectory())
+        : { cwd: app.getPath("documents"), command: codexCommand };
       browserCodexClient = new CodexAppServerClient({
-        cwd: workMode ? validWorkDirectory() : app.getPath("documents"),
-        command: codexCommand,
+        ...browserRuntime,
         model: preferences.data.codexModel,
         developerInstructions: [
           workMode ? WORK_MODE_INSTRUCTIONS : "You are the user's friendly desktop character companion. Answer concisely in natural Japanese and do not modify local files or run commands.",
@@ -2256,7 +2381,16 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
       });
     } else {
       codexClient.setPersona(personaInstructions());
-      result = await codexClient.sendMessage(codexText, { onDelta, localImagePath });
+      let searchingWeb = false;
+      result = await codexClient.sendMessage(codexText, {
+        onDelta,
+        localImagePath,
+        onEvent: (event) => {
+          if (String(event.params?.item?.type || "") !== "webSearch" || searchingWeb) return;
+          searchingWeb = true;
+          sendStream({ phase: "activity", text: "Webを検索中…", mode: "chat" });
+        },
+      });
     }
     sendStream({ phase: "done", text: result.text });
     showMascotSpeech(result.text);
@@ -2273,6 +2407,7 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
     sendStream({ phase: "error", message: error.message });
     throw error;
   } finally {
+    stopThinkingFiller();
     if (browserSession) {
       browserSession.active = false;
       browserCodexClient?.stop();
@@ -2310,8 +2445,7 @@ async function generateCharacterFromImage(payload) {
   );
 
   const generator = new CodexAppServerClient({
-    cwd: jobDirectory,
-    command: codexCommand,
+    ...codexWorkspaceRuntime(jobDirectory),
     model: preferences.data.codexModel,
     developerInstructions: [
       "You are a constrained avatar-asset generation worker.",
@@ -2384,7 +2518,13 @@ async function boot() {
   localServer.setSnapshot(buildAvatarSnapshot(preferences.data.characterId), false);
   openAIClient = new OpenAIClient();
   codexCommand = await resolveCodexCommand({ cacheDirectory: path.join(app.getPath("userData"), "codex-bin") });
-  codexClient = new CodexAppServerClient({ cwd: codexWorkingDirectory, command: codexCommand, model: preferences.data.codexModel });
+  wslCodexCommand = resolveWslCodexCommand();
+  codexClient = new CodexAppServerClient({
+    cwd: codexWorkingDirectory,
+    command: codexCommand,
+    model: preferences.data.codexModel,
+    webSearchMode: "live",
+  });
   codexClient.setPersona(personaInstructions());
   registerIpc();
 

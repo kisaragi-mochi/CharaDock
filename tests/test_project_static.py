@@ -295,6 +295,10 @@ class ProjectStaticTests(unittest.TestCase):
         self.assertIn('sandbox: true', main)
         self.assertIn('safeStorage', main)
         self.assertIn('new CodexAppServerClient', main)
+        self.assertRegex(
+            main,
+            r"codexClient = new CodexAppServerClient\(\{[\s\S]*?webSearchMode: \"live\",[\s\S]*?\}\);",
+        )
         self.assertIn('new OpenAIClient', main)
         self.assertIn('contextBridge.exposeInMainWorld("mascotDesktop"', control_preload)
         self.assertNotIn('ipcRenderer.send,', control_preload)

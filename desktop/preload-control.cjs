@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   logoutCodex: () => ipcRenderer.invoke("codex:logout"),
   completeOnboarding: (complete) => ipcRenderer.invoke("onboarding:complete", complete),
   transcribe: (payload) => ipcRenderer.invoke("audio:transcribe", payload),
+  synthesizeTts: (text) => ipcRenderer.invoke("tts:synthesize", text),
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
   onChatStream: (callback) => {
