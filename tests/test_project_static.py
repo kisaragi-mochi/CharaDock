@@ -428,6 +428,26 @@ class ProjectStaticTests(unittest.TestCase):
         self.assertIn(".agents/skills/build-purupuru-avatar/", readme)
         self.assertIn("アップロード・加工・利用に必要な権利", readme)
 
+    def test_public_character_previews_include_hair_layers(self) -> None:
+        readme = self.read_text("README.md")
+        site_builder = self.read_text("scripts/build_site.mjs")
+        for name in ["amber-complete-v2.png", "bronze-complete-v2.png", "silver-complete-v2.png", "sage-complete-v1.png"]:
+            relative = f"docs/images/characters/{name}"
+            self.assertTrue((ROOT / relative).is_file(), relative)
+            self.assertIn(relative, readme)
+            self.assertIn(relative, site_builder)
+        self.assertNotIn("assets/amber-avatar/eyes-open-mouth-closed.png\" alt=\"琥珀", readme)
+
+    def test_public_copy_calls_human_characters_companions(self) -> None:
+        public_copy = "\n".join([
+            self.read_text("README.md"),
+            self.read_text("site/index.html"),
+            self.read_text("pyproject.toml"),
+        ]).lower()
+        self.assertNotIn("デスクトップペット", public_copy)
+        self.assertNotIn("desktop pet", public_copy)
+        self.assertIn("デスクトップコンパニオン", public_copy)
+
     def test_purupuru_package_is_documented_as_self_contained(self) -> None:
         readme = self.read_text("README.md")
         usage = self.read_text("docs/usage.md")
@@ -756,8 +776,6 @@ class ProjectStaticTests(unittest.TestCase):
                 "/styles.css",
                 "/app.js",
                 "/app-icon.ico",
-                "/vendor/fonts/zen-maru-gothic/fonts.css",
-                "/vendor/fonts/zen-maru-gothic/zen-maru-gothic-500-001.woff2",
                 "/assets/demo-avatar/default-settings.json",
                 "/assets/demo-avatar/back-hair.png",
                 "/assets/demo-avatar02/default-settings.json",
@@ -1640,7 +1658,6 @@ class ProjectStaticTests(unittest.TestCase):
             "node tests/js_runtime_checks.mjs",
             "python -m py_compile scripts/run_local_server.py",
             "python -m py_compile scripts/verify_vendor_checksums.py",
-            "python -m py_compile scripts/fetch_fonts.py",
             "python scripts/verify_vendor_checksums.py",
             "python -m unittest tests.test_project_static",
         ]

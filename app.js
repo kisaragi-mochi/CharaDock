@@ -12609,12 +12609,16 @@
     }
 
     lastCharacterTransform = computeCharacterTransform();
-    drawShadow(
-      lastCharacterTransform.centerX,
-      lastCharacterTransform.centerY + lastCharacterTransform.drawH * 0.43,
-      lastCharacterTransform.drawW * 0.34,
-      lastCharacterTransform.pyokoVoice
-    );
+    // A contact shadow looks natural in the editor, but on a transparent
+    // desktop it becomes a floating dark smudge around the cutout.
+    if (!OBS_TRANSPARENT) {
+      drawShadow(
+        lastCharacterTransform.centerX,
+        lastCharacterTransform.centerY + lastCharacterTransform.drawH * 0.43,
+        lastCharacterTransform.drawW * 0.34,
+        lastCharacterTransform.pyokoVoice
+      );
+    }
     drawCharacterAnchoredItemLayers("characterBack");
     drawBackHairLayer();
     drawCharacterAnchoredItemLayers("faceBack");

@@ -63,4 +63,5 @@ All rig coordinates are integer pixel coordinates in the output PNG coordinate s
 - Reject photorealistic style drift, changed costume, changed camera crop, changed head angle, extra accessories, text, watermarks, or background scenery.
 - Ensure the six expression images differ only around eyes and mouth.
 - Ensure hair edges meet the scalp naturally when `front-hair.png` is overlaid.
+- Ensure background pixels are alpha 0 with no faint rectangular matte or chroma-key fringe. The desktop finalizer performs a deterministic cleanup, but the generated source should already be as clean as possible.
 - Never claim completion if validation fails or a required file is missing.

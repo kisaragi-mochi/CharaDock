@@ -8,7 +8,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CHECKSUM_FILES = (
     ROOT / "vendor" / "mediapipe" / "SHASUMS256.txt",
-    ROOT / "vendor" / "fonts" / "zen-maru-gothic" / "SHASUMS256.txt",
 )
 
 

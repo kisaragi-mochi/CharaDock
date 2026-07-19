@@ -23,6 +23,7 @@ htmlcov/
 # Build / distribution
 build/
 dist/
+site-dist/
 out/
 release/
 wheels/

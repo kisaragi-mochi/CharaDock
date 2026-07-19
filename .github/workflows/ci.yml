@@ -12,14 +12,10 @@ permissions:
   contents: read
 
 jobs:
-  static-checks:
-    name: Static checks (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+  quality:
+    name: Quality and runtime checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
 
     steps:
       - name: Checkout
@@ -36,6 +32,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+          cache: npm
 
       - name: Install Node dependencies
         run: npm ci
@@ -55,10 +52,38 @@ jobs:
         run: |
           python -m py_compile scripts/run_local_server.py
           python -m py_compile scripts/verify_vendor_checksums.py
-          python -m py_compile scripts/fetch_fonts.py
 
       - name: Verify vendored dependency checksums
         run: python scripts/verify_vendor_checksums.py
 
       - name: Run static tests
         run: python -m unittest tests.test_project_static
+
+      - name: Build landing page
+        run: npm run site:build
+
+      - name: Verify committed character previews are current
+        run: git diff --exit-code -- docs/images/characters
+
+  windows-backend:
+    name: Windows backend checks
+    runs-on: windows-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run desktop backend tests
+        run: npm run test:desktop

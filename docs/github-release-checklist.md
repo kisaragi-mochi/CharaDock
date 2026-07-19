@@ -2,7 +2,7 @@
 
 ## 公開前の必須確認
 
-- [ ] `assets/amber-avatar/**`、`assets/bronze-avatar/**`、`assets/silver-hood-avatar/**`の元絵と生成差分を公開配布できる権利がある。
+- [ ] `assets/amber-avatar/**`、`assets/bronze-avatar/**`、`assets/silver-hood-avatar/**`、`assets/sage-avatar/**`の元絵と生成差分を公開配布できる権利がある。
 - [ ] `docs/images/purupet-work-mode.png`と`app-icon.ico`を公開できる。
 - [ ] `DISTRIBUTION_ASSET_LICENSE.md`の条件が権利者の意図と一致している。
 - [ ] 上流PuruPuru PNGTuberの`LICENSE`、`NOTICE`、`MODIFICATIONS.md`、`THIRD_PARTY_NOTICES.md`を残している。
@@ -15,6 +15,7 @@
 ```bash
 npm ci
 npm test
+npm run site:build
 npm audit
 uv lock --check
 uv run python scripts/verify_vendor_checksums.py
@@ -51,8 +52,17 @@ git push -u origin main
 - [ ] Dependabot alertsとDependabot security updatesを有効にする。
 - [ ] Private vulnerability reportingを有効にする。
 - [ ] Issue templatesとSecurity policyが表示されることを確認する。
+- [ ] **Settings → Pages → Source**を**GitHub Actions**にし、`GitHub Pages` workflowの公開URLを確認する。
+- [ ] Actionsの`Windows package`を手動実行し、portable版、installer、`SHA256SUMS.txt`を取得できる。
 
 ## Windows配布時
+
+`package.json`のversionを更新し、同じ番号のタグ（例: `v0.1.0`）をpushすると、ActionsがWindowsでportable版とNSIS installerを生成してDraft Releaseへ添付します。
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 - [ ] クリーンなWindows 10/11 x64で初回起動を確認する。
 - [ ] ChatGPTログイン、通常会話、作業モード、音声フォールバックを確認する。

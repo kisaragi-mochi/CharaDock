@@ -2,7 +2,46 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { CodexAppServerClient } = require("../backend/codex-client.cjs");
+const { CodexAppServerClient, appServerArgs } = require("../backend/codex-client.cjs");
+
+test("Codex work client can explicitly enable live web search", () => {
+  assert.deepEqual(appServerArgs("live"), [
+    "app-server", "--stdio", "--enable", "realtime_conversation", "-c", 'web_search="live"',
+  ]);
+  assert.deepEqual(appServerArgs("invalid"), ["app-server", "--stdio", "--enable", "realtime_conversation"]);
+});
+
+test("Codex client registers and answers app-server dynamic tools", async () => {
+  const tools = [{ type: "function", name: "read_page", description: "Read", inputSchema: { type: "object" } }];
+  const client = new CodexAppServerClient({
+    dynamicTools: tools,
+    onDynamicToolCall: async (params) => ({
+      success: true,
+      contentItems: [{ type: "inputText", text: `called:${params.tool}` }],
+    }),
+  });
+  client.ensureStarted = async () => {};
+  let threadParams;
+  client.request = async (method, params) => {
+    assert.equal(method, "thread/start");
+    threadParams = params;
+    return { thread: { id: "thread-tools" } };
+  };
+  await client.ensureThread();
+  assert.deepEqual(threadParams.dynamicTools, tools);
+  let response;
+  client.proc = { stdin: { writable: true } };
+  client.send = (payload) => { response = payload; };
+  client.handleLine(JSON.stringify({
+    id: 44,
+    method: "item/tool/call",
+    params: { threadId: "thread-tools", turnId: "turn-tools", callId: "call-1", tool: "read_page", arguments: {} },
+  }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(response.id, 44);
+  assert.equal(response.result.success, true);
+  assert.equal(response.result.contentItems[0].text, "called:read_page");
+});
 
 test("Codex client reads account state through app-server", async () => {
   const client = new CodexAppServerClient();
@@ -108,6 +147,26 @@ test("Codex client stops the active realtime session", async () => {
   client.request = async (method, params) => { call = { method, params }; return {}; };
   assert.equal(await client.stopRealtime(), true);
   assert.deepEqual(call, { method: "thread/realtime/stop", params: { threadId: "thread-voice" } });
+});
+
+test("Codex client interrupts the active work turn", async () => {
+  const client = new CodexAppServerClient();
+  client.threadId = "thread-work";
+  client.activeTurnId = "turn-work";
+  let call;
+  client.request = async (method, params) => { call = { method, params }; return {}; };
+  assert.equal(await client.interruptActiveTurn(), true);
+  assert.deepEqual(call, {
+    method: "turn/interrupt",
+    params: { threadId: "thread-work", turnId: "turn-work" },
+  });
+});
+
+test("Codex client remembers an interrupt requested while a turn is starting", async () => {
+  const client = new CodexAppServerClient();
+  client.turnStarting = true;
+  assert.equal(await client.interruptActiveTurn(), true);
+  assert.equal(client.interruptRequested, true);
 });
 
 test("missing Codex CLI reports a friendly error instead of crashing", async () => {

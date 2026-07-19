@@ -5,25 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'" />
   <title>PuruPet Desktop</title>
-  <link rel="stylesheet" href="../vendor/fonts/zen-maru-gothic/fonts.css" />
   <link rel="stylesheet" href="./control.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <header class="brand">
-        <span class="brand-mark" aria-hidden="true">P</span>
-        <span><strong>PuruPet</strong><small>Powered by PuruPuru · Unofficial</small></span>
+        <span class="brand-mark" aria-hidden="true"><img id="sidebarCharacterPreview" alt="" /></span>
+        <span><strong>PuruPet</strong><small>Desktop Companion</small></span>
       </header>
 
       <nav class="nav-tabs" aria-label="設定カテゴリ">
-        <button class="nav-tab is-active" type="button" data-page="chat"><span>✦</span>会話</button>
-        <button class="nav-tab" type="button" data-page="character"><span>◎</span>キャラクター</button>
-        <button class="nav-tab" type="button" data-page="connection"><span>⌁</span>AI接続</button>
-        <button class="nav-tab" type="button" data-page="desktop"><span>▣</span>デスクトップ</button>
+        <button class="nav-tab is-active" type="button" data-page="chat"><span aria-hidden="true">✦</span>会話</button>
+        <button class="nav-tab" type="button" data-page="character"><span aria-hidden="true">◎</span>キャラクター</button>
+        <button class="nav-tab" type="button" data-page="connection"><span aria-hidden="true">⌁</span>AI接続</button>
+        <button class="nav-tab" type="button" data-page="desktop"><span aria-hidden="true">▣</span>デスクトップ</button>
       </nav>
 
-      <div class="connection-pill" id="connectionPill">
+      <div class="connection-pill" id="connectionPill" role="status" aria-live="polite">
         <span class="status-dot"></span>
         <span><strong id="connectionLabel">準備中</strong><small id="connectionDetail">状態を確認しています</small></span>
       </div>
@@ -33,7 +32,7 @@
     <main class="main-panel">
       <section class="page is-active" data-page-panel="chat">
         <header class="page-header">
-          <div><p class="eyebrow">TALK WITH YOUR MASCOT</p><h1>キャラクターと話す</h1></div>
+          <div><p class="eyebrow">会話</p><h1>キャラクターと話す</h1></div>
           <button id="resetChatButton" class="button button-quiet" type="button">新しい会話</button>
         </header>
 
@@ -41,11 +40,11 @@
           <div id="chatLog" class="chat-log" aria-live="polite">
             <article class="message is-assistant">
               <span class="message-avatar">P</span>
-              <div><small>マスコット</small><p>こんにちは。今日は何をしようか？</p></div>
+              <div><small id="initialAssistantLabel">キャラクター</small><p>こんにちは。今日は何をしようか？</p></div>
             </article>
           </div>
 
-          <div class="expression-strip" aria-label="表情操作">
+          <div class="expression-strip" role="group" aria-label="表情操作">
             <span>表情</span>
             <button type="button" data-expression="neutral">通常</button>
             <button type="button" data-expression="happy">にこっ</button>
@@ -71,12 +70,12 @@
       </section>
 
       <section class="page" data-page-panel="character">
-        <header class="page-header"><div><p class="eyebrow">CHARACTER LIBRARY</p><h1>キャラクター</h1></div></header>
+        <header class="page-header"><div><p class="eyebrow">キャラクター</p><h1>見た目と振る舞い</h1></div></header>
         <p class="page-lead">クリックすると透明ウィンドウのキャラクターがすぐ切り替わります。</p>
         <div id="characterGrid" class="character-grid"></div>
         <section id="avatarGeneratorCard" class="card avatar-generator">
           <header>
-            <div><p class="eyebrow">CODEX AVATAR STUDIO</p><h2>一枚絵からキャラクターを追加</h2><p>Codexが元絵を解析し、目・口・髪の標準差分と性格・話し方をまとめて作成します。</p></div>
+            <div><p class="eyebrow">Codex Avatar Studio</p><h2>一枚絵からキャラクターを追加</h2><p>Codexが元絵を解析し、目・口・髪の標準差分と性格・話し方をまとめて作成します。</p></div>
             <span class="codex-only-badge">Codexのみ</span>
           </header>
           <div class="generator-content">
@@ -125,13 +124,13 @@
           </div>
         </section>
         <div class="card feature-card">
-          <div><span class="card-icon">◌</span><div><h2>動きと反応</h2><p>自動まばたき、呼吸、髪揺れ、マウス追従、音量リップシンクを常時利用します。</p></div></div>
-          <label class="switch-row"><span>マウスを目で追う</span><input id="mouseFollowToggle" type="checkbox" /><i></i></label>
+          <div><span class="card-icon">◌</span><div><h2>動きと反応</h2><p>自動まばたき、呼吸、髪揺れ、フォーカス中のマウス追従、音量リップシンクを利用します。</p></div></div>
+          <label class="switch-row"><span>フォーカス中、マウスを目で追う</span><input id="mouseFollowToggle" type="checkbox" /><i></i></label>
         </div>
       </section>
 
       <section class="page" data-page-panel="connection">
-        <header class="page-header"><div><p class="eyebrow">AI CONNECTION</p><h1>応答エンジン</h1></div><button id="testBackendButton" class="button button-secondary" type="button">接続テスト</button></header>
+        <header class="page-header"><div><p class="eyebrow">AI接続</p><h1>応答エンジン</h1></div><button id="testBackendButton" class="button button-secondary" type="button">接続を確認</button></header>
         <div class="backend-grid">
           <label class="backend-card">
             <input type="radio" name="backend" value="codex" />
@@ -172,7 +171,7 @@
       </section>
 
       <section class="page" data-page-panel="desktop">
-        <header class="page-header"><div><p class="eyebrow">DESKTOP BEHAVIOR</p><h1>常駐と表示</h1></div></header>
+        <header class="page-header"><div><p class="eyebrow">デスクトップ</p><h1>常駐と表示</h1></div></header>
         <div class="desktop-grid">
           <section class="card settings-card">
             <h2>ウィンドウ</h2>
@@ -204,7 +203,7 @@
           <div><span>キャラクター表示を切替</span><kbd>Ctrl＋Shift＋H</kbd></div>
         </section>
         <section class="card license-card">
-          <div><p class="eyebrow">LICENSES &amp; CREDITS</p><h2>配布とクレジット</h2></div>
+          <div><p class="eyebrow">ライセンス</p><h2>配布とクレジット</h2></div>
           <p>PuruPet Desktopは、Apache License 2.0のPuruPuru PNGTuberを基にした非公式派生アプリです。元開発者による公式製品ではありません。</p>
           <p>旧デモキャラクターと旧faviconは配布物に含めていません。画像を追加・公開するときは、アップロード・加工・配布に必要な権利を利用者自身で確認してください。</p>
           <small>同梱文書: LICENSE / NOTICE / MODIFICATIONS.md / DISTRIBUTION_ASSET_LICENSE.md / THIRD_PARTY_NOTICES.md</small>
@@ -215,13 +214,13 @@
   <section id="onboarding" class="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle" hidden>
     <div class="onboarding-window">
       <header class="onboarding-header">
-        <div><p class="eyebrow">WELCOME TO PURUPET</p><h1 id="onboardingTitle">最初の3分セットアップ</h1></div>
+        <div><p class="eyebrow">はじめに</p><h1 id="onboardingTitle">最初の3分セットアップ</h1></div>
         <button id="onboardingSkipButton" class="button button-quiet" type="button">あとで設定</button>
       </header>
       <div class="onboarding-progress" aria-label="進行状況"><i></i><i></i><i></i></div>
       <div class="onboarding-step is-active" data-onboarding-step="0">
         <span class="onboarding-step-icon">⌘</span>
-        <div><p class="eyebrow">STEP 1</p><h2>ChatGPTと接続</h2><p>Codex app-serverはCodex CLIのChatGPTログインを使います。APIキーを画面へ渡しません。</p></div>
+        <div><p class="eyebrow">1 · AI接続</p><h2>ChatGPTと接続</h2><p>Codex app-serverはCodex CLIのChatGPTログインを使います。APIキーを画面へ渡しません。</p></div>
         <div class="onboarding-action-card">
           <strong id="onboardingAccountState">ログイン状態を確認しています…</strong>
           <button id="onboardingLoginButton" class="button button-secondary" type="button">ChatGPTでログイン</button>
@@ -229,14 +228,14 @@
       </div>
       <div class="onboarding-step" data-onboarding-step="1">
         <span class="onboarding-step-icon">◎</span>
-        <div><p class="eyebrow">STEP 2</p><h2>最初のキャラクター</h2><p>同梱の3キャラから選べます。一枚絵からの追加はCodex Avatar Studioで行えます。</p></div>
+        <div><p class="eyebrow">2 · キャラクター</p><h2>最初のキャラクター</h2><p>同梱の4キャラから選べます。一枚絵からの追加はCodex Avatar Studioで行えます。</p></div>
         <div id="onboardingCharacterGrid" class="onboarding-character-grid"></div>
         <button id="onboardingOpenGeneratorButton" class="button button-quiet" type="button">＋ 自分の画像からキャラを追加</button>
         <p class="onboarding-legal">画像を追加する場合、その画像をアップロード・加工・利用する権利が必要です。生成処理では画像がCodexへ送信されます。</p>
       </div>
       <div class="onboarding-step" data-onboarding-step="2">
         <span class="onboarding-step-icon">◉</span>
-        <div><p class="eyebrow">STEP 3</p><h2>声を確認</h2><p>Windows標準の日本語音声でAIの返答を読み上げます。追加の音声API料金はありません。</p></div>
+        <div><p class="eyebrow">3 · 音声</p><h2>声を確認</h2><p>Windows標準の日本語音声でAIの返答を読み上げます。追加の音声API料金はありません。</p></div>
         <label class="switch-row onboarding-switch"><span><strong>音声読み上げを使う</strong><small>後からデスクトップ設定で変更できます</small></span><input id="onboardingTtsToggle" type="checkbox" /><i></i></label>
         <button id="onboardingAudioTestButton" class="button button-secondary" type="button">音声をテスト</button>
       </div>

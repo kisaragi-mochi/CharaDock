@@ -21,12 +21,15 @@
   let realtimeStarting = false;
   let realtimeUserTranscript = "";
   let realtimeAssistantMessage = null;
+  let realtimeUnavailable = false;
   let speechPulseTimer = null;
   let streamingMessage = null;
   let generatorFile = null;
   let generatorBusy = false;
   let codexAccount = null;
   let onboardingStep = 0;
+  let onboardingWasOpen = false;
+  let onboardingFocusReturn = null;
   let motionPreviewTimer = 0;
   const motionFields = ["avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown"];
 
@@ -36,8 +39,18 @@
   }
 
   function showPage(name) {
-    $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.page === name));
-    $$("[data-page-panel]").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.pagePanel === name));
+    sessionStorage.setItem("purupet.activePage", name);
+    $$(".nav-tab").forEach((button) => {
+      const active = button.dataset.page === name;
+      button.classList.toggle("is-active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    $$("[data-page-panel]").forEach((panel) => {
+      const active = panel.dataset.pagePanel === name;
+      panel.classList.toggle("is-active", active);
+      panel.setAttribute("aria-hidden", String(!active));
+    });
   }
 
   function appendMessage(role, text, thinking = false) {
@@ -45,10 +58,11 @@
     article.className = `message is-${role}${thinking ? " is-thinking" : ""}`;
     const avatar = document.createElement("span");
     avatar.className = "message-avatar";
-    avatar.textContent = role === "user" ? "YOU" : "P";
+    const character = currentCharacter();
+    avatar.textContent = role === "user" ? "YOU" : [...(character?.name || "AI")][0];
     const content = document.createElement("div");
     const label = document.createElement("small");
-    label.textContent = role === "user" ? "あなた" : "マスコット";
+    label.textContent = role === "user" ? "あなた" : character?.name || "キャラクター";
     const paragraph = document.createElement("p");
     paragraph.textContent = text;
     content.append(label, paragraph);
@@ -56,6 +70,14 @@
     $("#chatLog").appendChild(article);
     $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
     return article;
+  }
+
+  function showOptimisticCharacterSelection(characterId, selector) {
+    $$(selector).forEach((item) => {
+      const selected = item.dataset.characterId === characterId;
+      item.classList.toggle("is-active", selected);
+      item.setAttribute("aria-pressed", String(selected));
+    });
   }
 
   function renderCharacters() {
@@ -66,22 +88,30 @@
       button.type = "button";
       button.className = `character-card${character.id === state.characterId ? " is-active" : ""}`;
       button.dataset.characterId = character.id;
+      button.setAttribute("aria-pressed", String(character.id === state.characterId));
       const image = document.createElement("img");
       image.src = character.thumbnailUrl;
-      image.alt = "";
+      image.alt = `${character.name}のプレビュー`;
+      const copy = document.createElement("span");
+      copy.className = "character-card-copy";
       const name = document.createElement("strong");
       name.textContent = character.name;
+      const summary = document.createElement("small");
+      summary.textContent = String(character.personality || "会話スタイルを設定できます").split(/[。！!]/)[0];
       const selected = document.createElement("span");
       selected.className = "selected";
       selected.textContent = "✓";
-      button.append(image, name, selected);
+      copy.append(name, summary);
+      button.append(image, copy, selected);
       button.addEventListener("click", async () => {
+        showOptimisticCharacterSelection(character.id, "#characterGrid .character-card");
         try {
           state = await api.setCharacter(character.id);
           renderCharacters();
           syncCharacterEditor();
           setStatus($("#chatStatus"), `${state.characters.find((item) => item.id === character.id)?.name || character.name}に切り替えました。`);
         } catch (error) {
+          renderCharacters();
           setStatus($("#chatStatus"), error.message, true);
         }
       });
@@ -96,17 +126,30 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = `onboarding-character${character.id === state.characterId ? " is-active" : ""}`;
+      button.dataset.characterId = character.id;
+      button.setAttribute("aria-pressed", String(character.id === state.characterId));
       const image = document.createElement("img");
       image.src = character.thumbnailUrl;
-      image.alt = "";
+      image.alt = `${character.name}のプレビュー`;
       const name = document.createElement("strong");
       name.textContent = character.name;
       button.append(image, name);
       button.addEventListener("click", async () => {
-        state = await api.setCharacter(character.id);
-        renderCharacters();
-        renderOnboardingCharacters();
-        syncCharacterEditor();
+        showOptimisticCharacterSelection(character.id, "#onboardingCharacterGrid .onboarding-character");
+        try {
+          state = await api.setCharacter(character.id);
+          renderCharacters();
+          renderOnboardingCharacters();
+          syncCharacterEditor();
+          const legal = $(".onboarding-legal");
+          legal.classList.remove("is-error");
+          legal.textContent = "画像を追加する場合、その画像をアップロード・加工・利用する権利が必要です。生成処理では画像がCodexへ送信されます。";
+        } catch (error) {
+          renderOnboardingCharacters();
+          const legal = $(".onboarding-legal");
+          legal.textContent = `切り替えられませんでした: ${error.message}`;
+          legal.classList.add("is-error");
+        }
       });
       grid.appendChild(button);
     }
@@ -133,7 +176,12 @@
 
   function syncMotionReadouts() {
     for (const key of motionFields) {
-      $(`#${key}Output`).textContent = `${Math.round(Number($(`#${key}Input`).value) || 0)}%`;
+      const input = $(`#${key}Input`);
+      const value = Number(input.value) || 0;
+      const min = Number(input.min) || 0;
+      const max = Number(input.max) || 100;
+      input.style.setProperty("--range-progress", `${Math.max(0, Math.min(100, ((value - min) / Math.max(1, max - min)) * 100))}%`);
+      $(`#${key}Output`).textContent = `${Math.round(value)}%`;
     }
   }
 
@@ -142,35 +190,53 @@
   }
 
   function previewCharacterMotion() {
-    clearTimeout(motionPreviewTimer);
-    motionPreviewTimer = setTimeout(() => {
+    cancelAnimationFrame(motionPreviewTimer);
+    motionPreviewTimer = requestAnimationFrame(() => {
       const character = currentCharacter();
       if (!character) return;
       api.previewCharacterMotion({ id: character.id, motion: currentMotionValues() }).catch((error) => {
         setStatus($("#characterProfileStatus"), error.message, true);
       });
-    }, 45);
+    });
   }
 
   function setOnboardingStep(step) {
-    onboardingStep = Math.max(0, Math.min(2, Number(step) || 0));
+    const nextStep = Math.max(0, Math.min(2, Number(step) || 0));
+    const modal = $(".onboarding-window");
+    modal.dataset.stepDirection = nextStep < onboardingStep ? "back" : "forward";
+    onboardingStep = nextStep;
     $$("[data-onboarding-step]").forEach((panel) => panel.classList.toggle("is-active", Number(panel.dataset.onboardingStep) === onboardingStep));
-    $$(".onboarding-progress i").forEach((item, index) => item.classList.toggle("is-active", index <= onboardingStep));
+    $$(".onboarding-progress i").forEach((item, index) => {
+      item.classList.toggle("is-active", index <= onboardingStep);
+      if (index === onboardingStep) item.setAttribute("aria-current", "step");
+      else item.removeAttribute("aria-current");
+    });
     $("#onboardingBackButton").disabled = onboardingStep === 0;
     $("#onboardingStepLabel").textContent = `${onboardingStep + 1} / 3`;
     $("#onboardingNextButton").textContent = onboardingStep === 2 ? "セットアップ完了" : "次へ";
+    requestAnimationFrame(() => {
+      const heading = $(`[data-onboarding-step="${onboardingStep}"] h2`);
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus({ preventScroll: true });
+    });
   }
 
   function syncOnboarding() {
-    $("#onboarding").hidden = Boolean(state.onboardingComplete);
+    const open = !state.onboardingComplete;
+    const opening = open && !onboardingWasOpen;
+    const onboarding = $("#onboarding");
+    if (opening) onboardingFocusReturn = document.activeElement;
+    onboarding.hidden = !open;
+    $(".app-shell").inert = open;
+    if (!open && onboardingWasOpen && onboardingFocusReturn?.focus) onboardingFocusReturn.focus({ preventScroll: true });
+    onboardingWasOpen = open;
     $("#onboardingTtsToggle").checked = Boolean(state.ttsEnabled);
     renderOnboardingCharacters();
-    setOnboardingStep(onboardingStep);
+    if (opening) setOnboardingStep(onboardingStep);
   }
 
   async function finishOnboarding() {
     state = await api.completeOnboarding(true);
-    $("#onboarding").hidden = true;
     syncUi();
   }
 
@@ -189,6 +255,14 @@
   }
 
   function syncUi() {
+    document.documentElement.dataset.character = state.characterId || "amber-avatar";
+    const sidebarCharacter = currentCharacter();
+    if (sidebarCharacter) {
+      $("#sidebarCharacterPreview").src = sidebarCharacter.thumbnailUrl;
+      $("#initialAssistantLabel").textContent = sidebarCharacter.name;
+      const initialAvatar = $("#chatLog .message.is-assistant .message-avatar");
+      if (initialAvatar) initialAvatar.textContent = [...sidebarCharacter.name][0];
+    }
     renderCharacters();
     syncCharacterEditor();
     syncGeneratorUi();
@@ -209,8 +283,9 @@
     for (const display of state.displays || []) displaySelect.appendChild(new Option(display.label, display.id));
     displaySelect.value = state.preferredDisplayId || "";
     const voiceMode = $("#speechInputMode");
-    voiceMode.textContent = state.backend === "codex" ? "Codex Realtime" : "端末音声認識";
-    voiceMode.classList.toggle("is-fallback", state.backend !== "codex");
+    const canTryRealtime = state.backend === "codex" && !realtimeUnavailable;
+    voiceMode.textContent = canTryRealtime ? "Codex Realtime" : "端末音声認識";
+    voiceMode.classList.toggle("is-fallback", !canTryRealtime);
     $("#apiKeyState").textContent = state.hasApiKey
       ? `APIキー設定済み（${state.apiKeyPersistence === "encrypted" ? "暗号化保存" : "今回のみ"}）`
       : "APIキー未設定";
@@ -394,6 +469,21 @@
     return true;
   }
 
+  async function startFallbackSpeechInput(message = "端末音声認識へ切り替えました。") {
+    $("#speechInputMode").textContent = "端末音声認識";
+    $("#speechInputMode").classList.add("is-fallback");
+    setStatus($("#chatStatus"), message, true);
+    try {
+      if (speechRecognition || mediaRecorder?.state === "recording") return true;
+      if (startBrowserSpeechRecognition()) return true;
+      await toggleRecordedSpeechInput();
+      return true;
+    } catch (error) {
+      setStatus($("#chatStatus"), `音声入力を開始できません: ${error.message}`, true);
+      return false;
+    }
+  }
+
   function closeRealtimeAudio() {
     try { realtimeDataChannel?.close(); } catch {}
     try { realtimePeerConnection?.close(); } catch {}
@@ -495,8 +585,9 @@
       return;
     }
     if (method === "thread/realtime/error") {
-      setStatus($("#chatStatus"), `Codex Realtime: ${params.message || "音声接続エラー"}`, true);
+      realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtimeAudio();
+      await startFallbackSpeechInput(`${params.message || "Codex Realtime音声接続を開始できませんでした。"} 端末音声認識へ自動で切り替えます。`);
       return;
     }
     if (method === "thread/realtime/closed") {
@@ -532,28 +623,33 @@
   }
 
   async function toggleSpeechInput() {
+    if (speechRecognition) {
+      speechRecognition.stop();
+      return;
+    }
+    if (mediaRecorder?.state === "recording") {
+      await toggleRecordedSpeechInput();
+      return;
+    }
     if (realtimePeerConnection || realtimeStarting) {
       await stopCodexRealtimeVoice();
       return;
     }
-    if (state.backend === "codex") {
+    if (state.backend === "codex" && !realtimeUnavailable) {
       try {
         await startCodexRealtimeVoice();
         return;
       } catch (error) {
         api.stopCodexRealtime().catch(() => {});
         closeRealtimeAudio();
-        $("#speechInputMode").textContent = "端末音声認識";
-        $("#speechInputMode").classList.add("is-fallback");
-        setStatus($("#chatStatus"), `Codex Realtimeを利用できないため端末音声認識へ切り替えます: ${error.message}`, true);
+        realtimeUnavailable ||= /まだ提供されていません/.test(error.message);
+        await startFallbackSpeechInput(`Codex Realtimeを利用できません。端末音声認識へ自動で切り替えます: ${error.message}`);
+        return;
       }
     }
-    if (startBrowserSpeechRecognition()) return;
-    try {
-      await toggleRecordedSpeechInput();
-    } catch (error) {
-      setStatus($("#chatStatus"), `音声入力を開始できません: ${error.message}`, true);
-    }
+    await startFallbackSpeechInput(realtimeUnavailable
+      ? "Codex Realtimeは現在未提供のため、端末音声認識を使います。"
+      : "端末音声認識を使います。");
   }
 
   function stopSpeechPulse() {
@@ -683,7 +779,18 @@
         syncGeneratorUi();
       }
     });
-    $$(".nav-tab").forEach((button) => button.addEventListener("click", () => showPage(button.dataset.page)));
+    $$(".nav-tab").forEach((button) => {
+      button.addEventListener("click", () => showPage(button.dataset.page));
+      button.addEventListener("keydown", (event) => {
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const tabs = $$(".nav-tab");
+        const current = tabs.indexOf(button);
+        const index = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[index].focus();
+        tabs[index].click();
+      });
+    });
     $("#chatForm").addEventListener("submit", (event) => { event.preventDefault(); sendChat(); });
     $("#chatInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendChat(); }
@@ -699,6 +806,8 @@
         sleepy: { forceMouth: 0, forceEyesClosed: true, durationMs: 2200 },
       };
       api.setExpression(expressions[button.dataset.expression]);
+      $$("[data-expression]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      setTimeout(() => button.setAttribute("aria-pressed", "false"), expressions[button.dataset.expression].durationMs);
     }));
     $("#resetChatButton").addEventListener("click", async () => {
       await api.resetChat();
@@ -738,8 +847,13 @@
       if (input.checked && input.value !== "codex") await stopCodexRealtimeVoice({ quiet: true });
       await saveSettings();
     }));
-    ["#alwaysOnTopToggle", "#clickThroughToggle", "#mouseFollowToggle", "#launchAtLoginToggle", "#ttsToggle", "#positionLockedToggle", "#edgeSnapToggle"]
+    ["#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#positionLockedToggle", "#edgeSnapToggle"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
+    $("#mouseFollowToggle").addEventListener("change", () => {
+      sessionStorage.setItem("purupet.activePage", "character");
+      sessionStorage.setItem("purupet.characterScroll", String(document.scrollingElement?.scrollTop || 0));
+      saveSettings().catch((error) => setStatus($("#characterProfileStatus"), error.message, true));
+    });
     ["#openaiModelInput", "#transcriptionModelInput", "#codexModelInput"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
     $("#displaySelect").addEventListener("change", saveSettings);
@@ -809,10 +923,11 @@
       else await finishOnboarding();
     });
     $("#onboardingSkipButton").addEventListener("click", finishOnboarding);
-    $("#onboardingOpenGeneratorButton").addEventListener("click", () => {
-      $("#onboarding").hidden = true;
+    $("#onboardingOpenGeneratorButton").addEventListener("click", async () => {
+      state = await api.completeOnboarding(true);
+      syncOnboarding();
       showPage("character");
-      setTimeout(() => $("#avatarGeneratorCard").scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+      setTimeout(() => $("#avatarGeneratorCard").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 30);
     });
     $("#onboardingTtsToggle").addEventListener("change", async () => {
       $("#ttsToggle").checked = $("#onboardingTtsToggle").checked;
@@ -837,6 +952,20 @@
     $("#sizeDownButton").addEventListener("click", () => api.controlMascotWindow("sizeDown"));
     $("#sizeUpButton").addEventListener("click", () => api.controlMascotWindow("sizeUp"));
     $("#resetPositionButton").addEventListener("click", () => api.controlMascotWindow("resetPosition"));
+    $("#onboarding").addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finishOnboarding();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = $$("#onboarding button:not(:disabled), #onboarding input:not(:disabled), #onboarding [tabindex='0']").filter((item) => item.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
     document.addEventListener("visibilitychange", async () => {
       if (!document.hidden) {
         state = await api.getState();
@@ -850,6 +979,11 @@
     state = await api.getState();
     bindEvents();
     syncUi();
+    const page = sessionStorage.getItem("purupet.activePage") || "chat";
+    showPage(["chat", "character", "connection", "desktop"].includes(page) ? page : "chat");
+    if (page === "character") requestAnimationFrame(() => {
+      document.scrollingElement.scrollTop = Number(sessionStorage.getItem("purupet.characterScroll")) || 0;
+    });
     refreshCodexAccount();
   }
 

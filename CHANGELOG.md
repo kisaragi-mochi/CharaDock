@@ -4,6 +4,29 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- Add a responsive OS-adaptive GitHub Pages landing page, rebuild the README around the current product experience, and add pinned Actions workflows for Pages deployment and Windows installer/portable draft releases with SHA-256 manifests.
+- Use fully composited hair-on character previews in README and Pages, and describe the human cast consistently as desktop companions rather than pets.
+- Remove 366 Google Fonts unicode-subset files and their fetch pipeline; the browser editor now uses the operating-system font stack while the required offline MediaPipe runtime remains vendored.
+- Replace the shared purple theme with an OS-adaptive neutral design system: light frost or dark graphite materials, character-linked amber/terracotta/slate accents, and the selected character portrait in the sidebar.
+- Redesign the settings, onboarding, conversation, character, connection, and desktop surfaces with clearer type hierarchy, thicker task-focused materials, immediate press feedback, source-anchored transitions, live frame-level motion previews, and reduced-motion/transparency/high-contrast adaptations.
+- Refine the transparent mascot UI with a face-anchored speech tail, denser readable long-answer and work-history surfaces, responsive press states, and uninterrupted 1:1 dragging before edge snap on release.
+- Add a consent-gated Codex browser session: conversational approval opens a visible clean-profile window, exposes only read-only navigation tools, scopes access to one host for one answer, blocks cross-host navigation, and revokes agent control after the turn.
+- Add consent-gated one-shot screen sharing for Codex: natural requests such as “今の画面を見て” trigger an in-character permission prompt that accepts conversational approval/denial or compact buttons, captures only the current display once, treats visible text as untrusted, and deletes the temporary image after the turn.
+- Add a compact work-history panel that retains the latest 12 requests, observed operations, and completion results independently from the speech bubble, with interruption of the active Codex turn and automatic dismissal outside active use.
+- Apply the selected character personality explicitly to short work-progress narration and final reports while keeping technical decisions, facts, commands, safety, and verification persona-neutral.
+- Preserve the compact speech-bubble design for short replies while adding a fade cue, an accessible full-text toggle, and a bounded 270px scroll area for long replies; compact input now auto-grows up to a bounded height before scrolling.
+- Clamp restored settings-window dimensions to a compact 720–900px height, eliminating the large empty dark lower region caused by a previously oversized window.
+- Fade the compact composer in when hovering the character, widen the work-mode input while reducing its visual frame, and keep work progress in a dedicated status layer.
+- Keep active work output intact when the character is touched, add animated touch feedback, avoid repeated phrases, and expand each bundled character to eight touch lines with varied expressions.
+- Start the Codex app-server work client with live web search explicitly enabled; ordinary mascot chat remains constrained to conversation only.
+- Remove residual low-alpha/chroma mattes from all three bundled desktop avatars and automatically clean newly generated avatars.
+- Keep the settings window above the transparent mascot while it is open, preventing mouse-follow changes from covering the settings surface on Windows.
+- Suppress the artificial contact shadow in transparent desktop/OBS output.
+- Disable the Windows resize frame, rounded DWM corners, and system backdrop on the transparent mascot; size remains adjustable from settings.
+- Detect ChatGPT-side Codex Realtime 404 responses, avoid repeated attempts for the current app session, and automatically continue with device speech recognition without exposing backend URLs.
+- Prevent Windows compositor blackouts by keeping the settings renderer active, applying transparent-window styles only when their values change, and pausing cursor animation whenever settings are visible. Mouse following starts only after the mascot itself receives focus.
+- Automatically reload only the settings renderer after mouse-follow is changed—the same recovery as Ctrl+R—while retaining the Character page and its scroll position.
+
 - Added streaming desktop chat for Codex app-server and OpenAI Responses API.
 - Added Codex Realtime WebRTC voice with automatic device-recognition fallback.
 - Added a compact conversation/work switch directly on the transparent avatar, with workspace-write limited to the user-selected folder.

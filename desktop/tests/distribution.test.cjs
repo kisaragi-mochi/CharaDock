@@ -7,12 +7,13 @@ const test = require("node:test");
 const projectRoot = path.resolve(__dirname, "../..");
 const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
 
-test("desktop distribution contains only the three cleared built-in character sets", () => {
+test("desktop distribution contains only the four cleared built-in character sets", () => {
   const files = packageJson.build.files;
   const assetEntries = files.filter((entry) => entry.startsWith("assets/"));
   assert.deepEqual(assetEntries.sort(), [
     "assets/amber-avatar/**/*",
     "assets/bronze-avatar/**/*",
+    "assets/sage-avatar/**/*",
     "assets/silver-hood-avatar/**/*",
   ]);
   assert.equal(files.some((entry) => entry.includes("demo-avatar")), false);

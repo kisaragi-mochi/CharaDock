@@ -1,7 +1,7 @@
 [project]
 name = "purupet-desktop"
 version = "0.1.0"
-description = "Unofficial Windows desktop pet derived from PuruPuru PNGTuber"
+description = "Unofficial Windows desktop companion derived from PuruPuru PNGTuber"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []

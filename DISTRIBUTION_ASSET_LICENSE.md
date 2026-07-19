@@ -3,9 +3,9 @@
 Copyright 2026 the applicable character rights holder. All rights reserved
 unless an individual asset notice says otherwise.
 
-The PuruPet Desktop distribution contains only the three newly prepared character
-sets under `assets/amber-avatar`, `assets/bronze-avatar`, and
-`assets/silver-hood-avatar`, plus `app-icon.ico` and screenshots that visibly
+The PuruPet Desktop distribution contains only the four newly prepared character
+sets under `assets/amber-avatar`, `assets/bronze-avatar`,
+`assets/silver-hood-avatar`, and `assets/sage-avatar`, plus `app-icon.ico` and screenshots that visibly
 incorporate these characters, including `docs/images/purupet-work-mode.png`.
 
 Public distribution of these character sets is permitted only if the distributor
