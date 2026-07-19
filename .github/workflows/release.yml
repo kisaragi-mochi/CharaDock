@@ -1,8 +1,6 @@
 name: Windows package
 
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
 
 concurrency:
