@@ -82,13 +82,27 @@ it remains in memory for the current app session only.
   whole response. The bubble follows the sentence currently being spoken and
   restores the full reply afterward. Expressions follow each sentence while
   Style-Bert-VITS2 mouth motion follows the actual decoded audio envelope;
-  system speech uses boundary-aware Japanese text timing.
+  system speech uses boundary-aware Japanese text timing. Speech movement is
+  smoothed to avoid rapid whole-body or mouth jitter, and a thinking filler is
+  allowed to finish before answer playback begins.
 - Codex and OpenAI replies stream into both the control chat and the desktop
   speech bubble, with a light mouth pulse while text arrives.
 - When the mouse rests, breathing, swaying, blinking, hair spring, and small
   autonomous gaze changes form the idle loop.
 - Cursor following is active only while the pointer is over the mascot; follow
   speed, breathing, body lean/bounce, and hair motion are saved per character.
+- Screen-share and browser permission prompts are read aloud when speech is
+  enabled; while VAD is active, saying `いいよ` or `やめて` approves or declines.
+- Screen and computer snapshots temporarily exclude the mascot through native
+  capture protection without hiding its window, avoiding visible flicker.
+- Approved browser turns disable built-in web search and require the visible
+  dedicated browser. In addition to reading and navigation, it exposes bounded
+  referenced clicks, safe text entry, option selection, keys, and scrolling.
+- A separately consented Windows-computer turn can inspect the active display
+  and perform bounded foreground clicks, Unicode typing, hotkeys, and scrolling.
+  It is limited to 30 operations, remains interruptible, and must hand sensitive,
+  destructive, representational, financial, installation, and security actions
+  back to the user.
 - The hooded character clips its hair layer to the hood opening; other custom
   characters use face-following spring hair.
 

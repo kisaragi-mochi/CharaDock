@@ -7,6 +7,8 @@ const { screenShareConversationAction } = require("../lib/screen-share-intent.cj
 test("screen sharing is proposed from natural visual-context requests", () => {
   assert.equal(screenShareConversationAction("今の画面を見て、どこがおかしいか教えて"), "request");
   assert.equal(screenShareConversationAction("スクショを確認して"), "request");
+  assert.equal(screenShareConversationAction("画面を撮影して内容を教えて"), "request");
+  assert.equal(screenShareConversationAction("デスクトップをキャプチャして"), "request");
   assert.equal(screenShareConversationAction("明日の予定を教えて"), "");
 });
 

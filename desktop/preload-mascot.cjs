@@ -25,7 +25,7 @@ window.addEventListener("DOMContentLoaded", () => {
   permissionActions.id = "desktopMascotPermissionActions";
   permissionActions.hidden = true;
   permissionActions.innerHTML = `
-    <button type="button" data-permission-action="approve">今回だけ許可</button>
+    <button type="button" data-permission-action="approve">依頼を許可</button>
     <button type="button" data-permission-action="deny">やめる</button>`;
   const bubbleMore = document.createElement("button");
   bubbleMore.id = "desktopMascotBubbleMore";
@@ -326,20 +326,30 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const showPermission = (result) => {
     clearTimeout(hideTimer);
+    stopTtsPlayback();
     bubblePersistent = false;
     const permissionType = String(result?.permissionRequest?.type || "");
-    bubbleText.textContent = String(result?.text || "今回だけ許可してもいい？");
+    const question = String(result?.text || "今回だけ許可してもいい？");
+    streamFullText = question;
+    streamCurrentSpeechText = "";
+    bubbleText.textContent = question;
     permissionActions.dataset.requestId = String(result?.permissionRequest?.id || "");
     permissionActions.dataset.permissionType = permissionType;
-    permissionActions.querySelector('[data-permission-action="approve"]').textContent = permissionType === "screen" ? "今回だけ見る" : "今回だけ開く";
+    permissionActions.querySelector('[data-permission-action="approve"]').textContent = permissionType === "screen"
+      ? "今回だけ見る"
+      : permissionType === "computer" ? "操作を許可" : "ブラウザを許可";
     permissionActions.hidden = false;
-    bubble.classList.remove("is-expanded", "has-overflow");
+    bubble.classList.remove("is-expanded", "has-overflow", "has-full-reply");
     bubble.classList.add("is-visible", "is-permission");
     bubbleMore.hidden = true;
     permissionTimer = setTimeout(() => {
       clearPermission();
       scheduleBubbleHide(1800);
     }, Math.max(10_000, Number(result?.permissionRequest?.expiresInMs) || 60_000));
+    if (appState?.ttsEnabled && question) {
+      if (appState.ttsProvider === "style-bert-vits2") playStyleBertSpeech(question);
+      else speakSystemText(question, appState.speechLanguage || "ja-JP");
+    }
   };
   const syncBubbleOverflow = () => {
     const measure = () => {
@@ -363,9 +373,10 @@ window.addEventListener("DOMContentLoaded", () => {
         probe.remove();
       }
       overflow ||= conservativelyLong;
-      overflow ||= Boolean(streamCurrentSpeechText && streamFullText && streamCurrentSpeechText !== streamFullText);
+      const hasFullReply = Boolean(streamCurrentSpeechText && streamFullText && streamCurrentSpeechText !== streamFullText);
       bubble.classList.toggle("has-overflow", overflow);
-      bubbleMore.hidden = !overflow;
+      bubble.classList.toggle("has-full-reply", hasFullReply);
+      bubbleMore.hidden = !(overflow || hasFullReply);
     };
     measure();
     requestAnimationFrame(measure);
@@ -392,6 +403,7 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const stopTtsPlayback = () => {
     ttsPlaybackToken += 1;
+    thinkingFillerActive = false;
     streamTtsQueue = [];
     streamTtsDraining = false;
     streamTtsFinished = false;
@@ -428,8 +440,8 @@ window.addEventListener("DOMContentLoaded", () => {
     const vowelBias = /[あかさたなはまやらわがざだばぱアカサタナハマヤラワガザダバパ]/.test(character) ? .18
       : /[いきしちにひみりぎじぢびぴイキシチニヒミリギジヂビピ]/.test(character) ? -.08
         : .04;
-    const rhythm = [.12, .42, .24, .66, .31, .5][tick % 6];
-    return Math.max(.08, Math.min(.78, rhythm + vowelBias));
+    const rhythm = [.1, .3, .18, .44, .24, .36][tick % 6];
+    return Math.max(.06, Math.min(.48, rhythm + vowelBias * .55));
   };
   const startTextTtsPulse = (text, indexProvider = () => 0) => {
     stopTtsPulse();
@@ -437,7 +449,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ttsPulse = setInterval(() => {
       const index = Number(indexProvider()) || 0;
       ipcRenderer.invoke("mascotInline:voice", textLipLevel(text, index, tick++)).catch(() => {});
-    }, 64);
+    }, 82);
   };
   const startMeasuredTtsPulse = async (audio, fallbackText) => {
     stopTtsPulse();
@@ -462,19 +474,19 @@ window.addEventListener("DOMContentLoaded", () => {
         let sum = 0;
         for (const sample of ttsAudioSamples) sum += sample * sample;
         const rms = Math.sqrt(sum / ttsAudioSamples.length);
-        const target = Math.max(0, Math.min(1, (rms - .004) * 7.5));
-        const follow = target > ttsEnvelope ? .62 : .28;
+        const target = Math.max(0, Math.min(.5, (rms - .004) * 5.2));
+        const follow = target > ttsEnvelope ? .4 : .16;
         ttsEnvelope += (target - ttsEnvelope) * follow;
-        if (now - lastSentAt >= 32) {
+        if (now - lastSentAt >= 44) {
           lastSentAt = now;
-          ipcRenderer.invoke("mascotInline:voice", ttsEnvelope < .035 ? 0 : Math.min(1, Math.pow(ttsEnvelope, .82))).catch(() => {});
+          ipcRenderer.invoke("mascotInline:voice", ttsEnvelope < .03 ? 0 : Math.min(.5, Math.pow(ttsEnvelope, .9))).catch(() => {});
         }
         ttsAudioFrame = requestAnimationFrame(update);
       };
       ttsAudioFrame = requestAnimationFrame(update);
     } catch {
       const startedAt = performance.now();
-      startTextTtsPulse(fallbackText, () => Math.floor((performance.now() - startedAt) / 125));
+      startTextTtsPulse(fallbackText, () => Math.floor((performance.now() - startedAt) / 140));
     }
   };
   const setTtsBusy = (busy) => {
@@ -513,7 +525,7 @@ window.addEventListener("DOMContentLoaded", () => {
     utterance.onstart = () => {
       onStart?.();
       startedAt = performance.now();
-      startTextTtsPulse(text, () => Math.max(boundaryIndex, Math.floor((performance.now() - startedAt) / 125)));
+      startTextTtsPulse(text, () => Math.max(boundaryIndex, Math.floor((performance.now() - startedAt) / 140)));
     };
     utterance.onboundary = (event) => { boundaryIndex = Math.max(boundaryIndex, Number(event.charIndex) || 0); };
     utterance.onend = () => { stopTtsPulse(); resolve(); };
@@ -522,6 +534,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   const playSpeechSegment = async (segment, provider, language, token) => {
     const text = String(segment?.text || segment || "").trim();
+    const spokenText = String(segment?.spokenText || text).trim();
     if (!text) return;
     let activated = false;
     const activate = () => {
@@ -533,19 +546,20 @@ window.addEventListener("DOMContentLoaded", () => {
       if (segment?.expression) ipcRenderer.invoke("mascotInline:expression", segment.expression).catch(() => {});
     };
     if (provider === "style-bert-vits2") {
-      const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", text);
+      const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", spokenText);
       for (const source of result?.audioDataUrls || []) {
         if (token !== ttsPlaybackToken) return;
-        await playAudioSource(source, text, token, activate);
+        await playAudioSource(source, spokenText, token, activate);
       }
       return;
     }
-    await speakSystemSegment(text, language, token, activate);
+    await speakSystemSegment(spokenText, language, token, activate);
   };
   const finishTtsPlayback = () => {
     stopTtsPulse();
     ttsAudio = null;
     setTtsBusy(false);
+    if (vadActive) vadResumeAt = performance.now() + 650;
     if (streamTtsFinished && !streamTtsQueue.length) {
       streamCurrentSpeechText = "";
       if (!bubble.classList.contains("is-expanded") && streamFullText) bubbleText.textContent = streamFullText;
@@ -554,7 +568,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
   const drainStreamTtsQueue = async () => {
-    if (streamTtsDraining || !streamTtsConfig.enabled || !streamTtsQueue.length) return;
+    if (thinkingFillerActive || streamTtsDraining || !streamTtsConfig.enabled || !streamTtsQueue.length) return;
     const token = ttsPlaybackToken;
     streamTtsDraining = true;
     setTtsBusy(true);
@@ -585,26 +599,26 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     drainStreamTtsQueue();
   };
-  const playStandaloneSpeech = async (text, provider, language, expression = null) => {
+  const playStandaloneSpeech = async (text, provider, language, expression = null, spokenText = text) => {
     const token = ttsPlaybackToken;
     setTtsBusy(true);
     try {
-      await playSpeechSegment({ text, expression }, provider, language, token);
+      await playSpeechSegment({ text, spokenText, expression }, provider, language, token);
     } catch (error) {
       if (token === ttsPlaybackToken) setStatus(error.message, 5000);
     } finally {
       if (token === ttsPlaybackToken) finishTtsPlayback();
     }
   };
-  const playStyleBertSpeech = (text, expression) => playStandaloneSpeech(text, "style-bert-vits2", "ja-JP", expression);
-  const speakSystemText = (text, language, expression) => playStandaloneSpeech(text, "system", language, expression);
+  const playStyleBertSpeech = (text, expression, spokenText) => playStandaloneSpeech(text, "style-bert-vits2", "ja-JP", expression, spokenText);
+  const speakSystemText = (text, language, expression, spokenText) => playStandaloneSpeech(text, "system", language, expression, spokenText);
   const showSpeech = (payload) => {
     clearPermission();
     clearTimeout(hideTimer);
     streamFullText = "";
     streamCurrentSpeechText = "";
     bubbleText.textContent = String(payload?.text || "");
-    bubble.classList.remove("is-expanded", "has-overflow");
+    bubble.classList.remove("is-expanded", "has-overflow", "has-full-reply");
     bubbleMore.hidden = true;
     bubbleMore.textContent = "全文";
     bubbleMore.setAttribute("aria-expanded", "false");
@@ -616,9 +630,9 @@ window.addEventListener("DOMContentLoaded", () => {
     stopTtsPlayback();
     thinkingFillerActive = false;
     if (payload?.ttsEnabled && bubbleText.textContent && payload?.ttsProvider === "style-bert-vits2") {
-      playStyleBertSpeech(bubbleText.textContent, payload?.expression);
+      playStyleBertSpeech(bubbleText.textContent, payload?.expression, payload?.spokenText);
     } else if (payload?.ttsEnabled && bubbleText.textContent && window.speechSynthesis) {
-      speakSystemText(bubbleText.textContent, payload.speechLanguage, payload?.expression);
+      speakSystemText(bubbleText.textContent, payload.speechLanguage, payload?.expression, payload?.spokenText);
     }
   };
 
@@ -648,28 +662,39 @@ window.addEventListener("DOMContentLoaded", () => {
     const action = event.target.closest("button")?.dataset?.permissionAction;
     const requestId = permissionActions.dataset.requestId;
     const permissionType = permissionActions.dataset.permissionType;
-    if (!action || !requestId || !["screen", "browser"].includes(permissionType) || sending) return;
+    if (!action || !requestId || !["screen", "browser", "computer"].includes(permissionType) || sending) return;
     const isScreen = permissionType === "screen";
+    const isComputer = permissionType === "computer";
     sending = true;
     sendButton.disabled = true;
     modeButton.disabled = true;
     workTarget.disabled = true;
-    setStatus(action === "approve" ? isScreen ? "画面を1枚だけ取得しています…" : "読み取りブラウザを準備しています…" : "許可を取り消しています…", 30_000);
+    setStatus(action === "approve"
+      ? isScreen ? "画面を1枚だけ取得しています…" : isComputer ? "Windows操作を準備しています…" : "専用ブラウザを準備しています…"
+      : "許可を取り消しています…", 30_000);
     try {
       const channel = action === "approve"
-        ? isScreen ? "mascotInline:approveScreenShare" : "mascotInline:approveBrowserUse"
-        : isScreen ? "mascotInline:declineScreenShare" : "mascotInline:declineBrowserUse";
+        ? isScreen ? "mascotInline:approveScreenShare" : isComputer ? "mascotInline:approveComputerUse" : "mascotInline:approveBrowserUse"
+        : isScreen ? "mascotInline:declineScreenShare" : isComputer ? "mascotInline:declineComputerUse" : "mascotInline:declineBrowserUse";
       const result = await ipcRenderer.invoke(
         channel,
         requestId,
       );
       clearPermission();
-      if (!result.streamed) showSpeech({ text: result.text, durationMs: 9000 });
-      setStatus(action === "approve" ? isScreen ? "画面を確認しました" : "ブラウザ確認が完了しました" : isScreen ? "画面は共有されませんでした" : "ブラウザは開かれませんでした");
+      if (!result.streamed) showSpeech({
+        text: result.text,
+        durationMs: 9000,
+        ttsEnabled: Boolean(appState?.ttsEnabled),
+        ttsProvider: appState?.ttsProvider || "system",
+        speechLanguage: appState?.speechLanguage || "ja-JP",
+      });
+      setStatus(action === "approve"
+        ? isScreen ? "画面を確認しました" : isComputer ? "Windows操作が完了しました" : "ブラウザ確認が完了しました"
+        : isScreen ? "画面は共有されませんでした" : isComputer ? "Windowsは操作されませんでした" : "ブラウザは開かれませんでした");
     } catch (error) {
       clearPermission();
       showSpeech({ text: `エラー: ${error.message}`, durationMs: 12_000 });
-      setStatus(isScreen ? "画面を共有できませんでした" : "ブラウザを利用できませんでした");
+      setStatus(isScreen ? "画面を共有できませんでした" : isComputer ? "Windowsを操作できませんでした" : "ブラウザを利用できませんでした");
     } finally {
       sendButton.disabled = false;
       modeButton.disabled = false;
@@ -693,13 +718,23 @@ window.addEventListener("DOMContentLoaded", () => {
     setStatus(appState?.interactionMode === "work" ? "作業を開始…" : "考え中…", 30_000);
     try {
       const result = await ipcRenderer.invoke("mascotInline:chat", message);
-      if (["screen", "browser"].includes(result.permissionRequest?.type)) {
+      if (["screen", "browser", "computer"].includes(result.permissionRequest?.type)) {
         showPermission(result);
-        setStatus("会話で「いいよ」と答えても許可できます", 6000);
+        setStatus("「いいよ」「やめて」と話しても選べます", 9000);
       } else if (!result.streamed) {
-        showSpeech({ text: result.text, durationMs: 9000 });
+        showSpeech({
+          text: result.text,
+          durationMs: 9000,
+          ttsEnabled: Boolean(appState?.ttsEnabled),
+          ttsProvider: appState?.ttsProvider || "system",
+          speechLanguage: appState?.speechLanguage || "ja-JP",
+        });
       }
-      setStatus(result.permissionDeclined ? result.permissionType === "browser" ? "ブラウザは開かれませんでした" : "画面は共有されませんでした" : result.mode === "work" ? `${result.workDirectoryName || "選択フォルダー"}で作業完了` : result.provider === "codex" ? "Codexから返答" : "OpenAIから返答");
+      if (!["screen", "browser", "computer"].includes(result.permissionRequest?.type)) {
+        setStatus(result.permissionDeclined
+          ? result.permissionType === "browser" ? "ブラウザは開かれませんでした" : result.permissionType === "computer" ? "Windowsは操作されませんでした" : "画面は共有されませんでした"
+          : result.mode === "work" ? `${result.workDirectoryName || "選択フォルダー"}で作業完了` : result.provider === "codex" ? "Codexから返答" : "OpenAIから返答");
+      }
     } catch (error) {
       const interrupted = /interrupt|cancel|abort|中断/i.test(String(error.message || ""));
       const interruptedText = appState?.interactionMode === "work"
@@ -1280,18 +1315,13 @@ window.addEventListener("DOMContentLoaded", () => {
       streamHasActivity = false;
       clearTimeout(hideTimer);
       bubbleText.textContent = streamFullText;
-      bubble.classList.remove("is-expanded", "has-overflow");
+      bubble.classList.remove("is-expanded", "has-overflow", "has-full-reply");
       bubbleMore.hidden = true;
       bubble.classList.add("is-visible");
       if (streamWorkMode) setWorkActivity("作業を開始しています");
       return;
     }
     if (payload?.phase === "delta") {
-      if (thinkingFillerActive) {
-        thinkingFillerActive = false;
-        stopTtsPlayback();
-        streamCurrentSpeechText = "";
-      }
       streamFullText = String(payload.displayText || payload.text || "");
       if (bubble.classList.contains("is-expanded") || !streamCurrentSpeechText) {
         bubbleText.textContent = streamFullText;
@@ -1389,6 +1419,7 @@ window.addEventListener("DOMContentLoaded", () => {
     applyInteractionMode(appState);
   });
   ipcRenderer.on("mascot:tts", (_event, payload) => {
+    appState = { ...appState, ttsEnabled: Boolean(payload?.enabled), ttsProvider: payload?.provider || "system" };
     if (!payload?.enabled) {
       stopTtsPlayback();
     }
@@ -1409,8 +1440,17 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!text || !sending) return;
     stopTtsPlayback();
     thinkingFillerActive = true;
-    if (payload?.ttsProvider === "style-bert-vits2") playStyleBertSpeech(text);
-    else speakSystemText(text, payload?.speechLanguage);
+    const playback = payload?.ttsProvider === "style-bert-vits2"
+      ? playStyleBertSpeech(text)
+      : speakSystemText(text, payload?.speechLanguage);
+    Promise.resolve(playback).finally(() => {
+      if (!thinkingFillerActive) return;
+      thinkingFillerActive = false;
+      streamCurrentSpeechText = "";
+      if (!bubble.classList.contains("is-expanded") && streamFullText) bubbleText.textContent = streamFullText;
+      syncBubbleOverflow();
+      drainStreamTtsQueue();
+    });
   });
   ipcRenderer.invoke("mascotInline:getState").then((state) => {
     appState = state;

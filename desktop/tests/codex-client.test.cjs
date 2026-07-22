@@ -19,6 +19,9 @@ test("Codex work client can explicitly enable live web search", () => {
     "-c", 'web_search="live"', "-c", 'sandbox_mode="workspace-write"',
   ]);
   assert.deepEqual(appServerArgs("invalid"), ["app-server", "--stdio", "--enable", "realtime_conversation"]);
+  assert.deepEqual(appServerArgs("disabled"), [
+    "app-server", "--stdio", "--enable", "realtime_conversation", "-c", 'web_search="disabled"',
+  ]);
   assert.match(CODEX_MASCOT_INSTRUCTIONS, /read-only web search/);
   assert.doesNotMatch(CODEX_MASCOT_INSTRUCTIONS, /Do not .*invoke tools/);
 });

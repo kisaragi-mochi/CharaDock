@@ -9350,7 +9350,7 @@
     const configured = clamp(state.mouthCrossfadeMs, 0, MOUTH_CROSSFADE_MAX_MS);
     // Desktop speech arrives as a live envelope. A tiny minimum blend avoids
     // hard PNG popping without making manually configured editor previews slow.
-    return OBS_MODE && voiceLevel > 0.015 ? Math.max(42, configured) : configured;
+    return OBS_MODE && voiceLevel > 0.015 ? Math.max(68, configured) : configured;
   }
 
   function resetMouthBlendState() {

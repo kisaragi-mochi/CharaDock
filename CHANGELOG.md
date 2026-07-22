@@ -4,6 +4,15 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- Retain browser or foreground-computer permission for five minutes after a completed turn, reuse it only for explicit operational follow-ups, and revoke it on ordinary conversation, stop phrases, expiry, window close, or a different browser host.
+- Normalize common Latin product/technical words only at the TTS boundary so they are pronounced as Japanese words, expand short all-caps abbreviations as letter names, and preserve the original on-screen text and code-like identifiers.
+- Keep the mascot continuously visible during screen/computer captures by temporarily excluding its window from Windows capture instead of hiding and restoring it.
+- Expand the consented visible browser with referenced control clicks, safe text entry, option selection, keys, scrolling, and waits; disable built-in web search for the browser turn and reject any answer that did not use the dedicated browser tools.
+- Add consent-gated Windows foreground control for one conversation turn, with screenshot-guided click, Unicode typing, hotkey, scroll, wait, a 30-operation cap, visible progress, interruption, and strict blocking instructions for destructive or sensitive actions.
+- Recognize Japanese requests such as screen capture, desktop capture, browser search, and direct-URL reading as consent-gated actions; force approved browser turns through the visible browser tools instead of silently falling back to built-in web search.
+- Slow and smooth speech-driven mouth/body motion, keep short two-line speech bubbles fully visible, and delay thinking fillers until 2.6 seconds without cutting them off when the answer becomes ready.
+- Read screen/browser permission prompts aloud and accept spoken approval or denial while VAD is active.
+- Register browser actions as flat app-server tools for broader model compatibility and report cross-host redirects or page-load failures explicitly.
 - Synchronize happy, surprised, and soft expressions to each spoken sentence without pinning the mouth or eyes; drive Style-Bert-VITS2 lip sync from the real audio waveform, add stable threshold hysteresis, and show the sentence currently being spoken before restoring the full reply.
 - Add switchable local sherpa-onnx ASR models (Japanese Parakeet CTC, Japanese ReazonSpeech Zipformer, SenseVoice, Whisper base, and Whisper tiny) with independent verified downloads, plus a verified Silero neural VAD with energy-based fallback.
 - Strip internal Codex citation markers before display and speech, keep VAD recording alive with a 600ms pre-roll across repeated utterances, add conversation/work interruption controls, and show only the latest work update with full progress retained in a disclosure history.
@@ -12,7 +21,7 @@ All notable changes to PuruPet Desktop will be documented here.
 - Add selectable voice-input providers: automatic Japanese-local recognition, explicit Realtime, embedded sherpa-onnx ASR, device speech recognition, and OpenAI transcription.
 - Add Codex CLI 0.145 `localAudio` input as a selectable provider, with direct VAD-to-turn sending and automatic cleanup of temporary recordings.
 - Add adaptive VAD, silence-stop transcription, optional auto-send, and low/normal/high sensitivity for compact sherpa-onnx/OpenAI voice input; remove unreliable Japanese wake-word activation.
-- Keep the latest chat reply visible, delay thinking fillers until 1.8 seconds, and expand each character's filler variations.
+- Keep the latest chat reply visible and expand each character's filler variations.
 - Preserve short follow-up context with a bounded in-session conversation backup, and make click reactions invoke bubble/TTS playback directly.
 - Stop automatic Realtime attempts, prefer Japanese-local recognition in automatic mode, and move explicit Realtime sessions to the current experimental V3 voice path.
 - Bundle the sherpa-onnx native runtime while downloading and SHA-256-verifying the optional 116MB multilingual Japanese model only on request.
