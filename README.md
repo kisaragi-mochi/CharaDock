@@ -50,16 +50,17 @@ PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruP
 ### 会話と音声
 
 - Codex app-serverのChatGPTログイン、またはOpenAI Responses API
-- 長文時だけ全文表示と上限付きスクロールを出すコンパクトな吹き出し
-- Codex Realtime、ローカルsherpa-onnx、端末音声認識、OpenAI文字起こしを選択可能
-- Windows標準音声またはローカルStyle-Bert-VITS2による読み上げと、設定からのON/OFF
+- 長文読み上げ中は現在話している文を表示し、完了後は全文へ戻るコンパクトな吹き出し
+- Codex Realtime、Codex 0.145音声入力、ローカルsherpa-onnx、端末音声認識、OpenAI文字起こしを選択可能
+- VADによる無音区切り・認識後の自動送信・3段階の感度調整を選択可能
+- Windows標準音声またはローカルStyle-Bert-VITS2による読み上げ、文ごとの表情同期、実音声波形リップシンク
 - キャラクターをクリックしたときの反応も、選択中の音声で読み上げ
 - 応答待ちが0.8秒を超えたときだけ、キャラクターらしい短い音声フィラーを一度再生
 - キャラクターごとの触れ合い文、表情、会話メモリ
 
-Style-Bert-VITS2は設定の「デスクトップ → 音声方式」から選択します。ローカルAPIのURL（既定 `http://localhost:5000`）、モデルID、速度だけを指定でき、`/docs`のURLを入力した場合も自動的に`/voice`へ接続します。長い返答はAPIの100文字上限に合わせて分割し、順番に再生します。
+Style-Bert-VITS2は設定の「デスクトップ → 音声方式」から選択します。ローカルAPIのURL（既定 `http://localhost:5000`）、モデルID、速度だけを指定でき、`/docs`のURLを入力した場合も自動的に`/voice`へ接続します。長い返答は画面へ表示された文ごと（最大90文字）に生成キューへ追加し、最初の文が生成できた時点から表示順に再生します。
 
-音声入力は「デスクトップ → 音声入力」から選択します。`自動`はCodex Realtimeを優先し、利用できなければ端末音声認識へ切り替えます。`sherpa-onnx`はローカルの公式non-streaming WebSocket server（既定 `ws://localhost:6006`）へ、停止するまで録音した音声を送って認識します。
+音声入力は「デスクトップ → 音声入力」から選択します。`自動`は、選択したsherpa-onnxモデルがダウンロード済みならローカル認識を、未導入なら端末の日本語音声認識を使います。sherpa-onnxでは、日本語Parakeet CTC、ReazonSpeech Zipformer、SenseVoice、Whisper base、従来のWhisper tinyを切り替えられ、各モデルは必要なものだけ初回にダウンロードします。認識言語は日本語へ固定され、録音音声と認識処理は端末内で完結します。VADには約0.6MBのSileroモデルを使用し、準備できない場合だけ従来の音量検出へ戻ります。実験的なCodex Realtimeを自動起動することはありません。Codex CLI 0.145以降では`Codex音声入力`を選ぶと、録音を通常のCodexターンへ直接添付できますが、上流側の提供状況に依存します。OpenAI文字起こしもAPIへ`ja`を指定し、端末音声認識も`ja-JP`を使用します。感度は「低・標準・高」から選べます。
 
 ### 安全な作業モード
 
@@ -131,7 +132,7 @@ npm run desktop
 
 ### Codex app-server
 
-アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、PuruPetは受け取りません。会話と作業は別スレッド・別権限で、設定画面からそれぞれのモデルと推論の深さを変更できます。推論の深さは固定の秒数ではなく、モデルへ渡すreasoning effortです。
+アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、PuruPetは受け取りません。会話と作業は別スレッド・別権限で、app-serverから取得したモデル一覧のプルダウンから、それぞれのモデルと推論の深さを変更できます。推論の深さは固定の秒数ではなく、モデルへ渡すreasoning effortです。
 
 Codex Realtimeは実験機能です。ChatGPT側で利用できず404になる場合は、その起動中の再試行を止め、利用可能な端末音声認識へ切り替えます。`realtime_conversation`とapp-serverの`experimentalApi`はアプリ側で有効化済みです。
 
@@ -141,7 +142,7 @@ Responses APIによる会話とTranscriptions APIによる文字起こしを利�
 
 ### マイクと読み上げ
 
-通常の口パクは音量値だけをローカル処理します。sherpa-onnxと端末音声認識はローカルで処理します。Codex RealtimeやOpenAI文字起こしを使う場合は、音声が該当サービスへ送られます。現在の入力方式はUIに表示されます。
+通常の口パクは音量値だけをローカル処理します。sherpa-onnxと端末音声認識はローカルで処理します。Codex Realtime、Codex音声入力、OpenAI文字起こしを使う場合は、音声が該当サービスへ送られます。Codex音声入力用の一時ファイルは応答後に削除され、異常終了時に残ったものも次回起動時に消去されます。現在の入力方式はUIに表示されます。
 
 ## 一枚絵からキャラクターを追加
 

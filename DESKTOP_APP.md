@@ -43,8 +43,9 @@ that Windows permits app-server child-process execution.
 managed ChatGPT OAuthを開始し、既定ブラウザでログインした後、画面が
 `ChatGPTログイン済み` へ自動更新されます。認証トークンの保存・更新はCodex側が
 担当し、このアプリはトークンを受け取りません。
-Codex設定では、会話と作業それぞれにモデルと推論の深さを指定できます。空欄なら
-Codex側の既定値を使い、深い推論ほど応答に時間がかかる場合があります。
+Codex設定では、app-serverから取得したプルダウンを使い、会話と作業それぞれに
+モデルと推論の深さを指定できます。Codex既定を選ぶとCodex側の既定値を使い、
+深い推論ほど応答に時間がかかる場合があります。
 
 ### OpenAI API
 
@@ -58,13 +59,30 @@ it remains in memory for the current app session only.
 
 - **Mic link** continuously measures microphone volume locally and sends only a
   numeric level to the mascot renderer for three-stage lip sync.
-- **Voice input** can use automatic Codex Realtime fallback, Codex Realtime only,
-  a local sherpa-onnx non-streaming WebSocket server, Chromium device speech
-  recognition, or OpenAI transcription. The selected provider works from both
+- **Voice input** can automatically prefer local Japanese recognition, or use explicit experimental Codex Realtime,
+  stable Codex 0.145 local-audio turn input, the embedded sherpa-onnx runtime
+  with a selectable on-demand Japanese ASR model, Chromium device speech recognition,
+  or OpenAI transcription. The selected provider works from both
   the control chat and the compact mascot composer.
+- The sherpa-onnx model selector offers Japanese ReazonSpeech Zipformer,
+  Japanese NeMo Parakeet CTC, SenseVoice, and multilingual Whisper base/tiny.
+  Models are downloaded only when selected, verified against pinned SHA-256
+  digests, and can be removed from the settings screen.
+- sherpa-onnx and OpenAI transcription use the official Silero neural VAD in
+  the compact composer. Its small model is downloaded on first use and verified;
+  the existing local energy detector remains available automatically if neural
+  VAD initialization fails. Low/normal/high sensitivity changes speech and
+  silence thresholds, and completed utterances can be sent automatically.
+- Codex 0.145 audio input uses the same VAD and sends the completed recording
+  directly as `localAudio`, without an extra API key or ASR model. Temporary
+  recordings are deleted after the turn and on next boot.
 - Reply read-aloud uses the operating system speech voice or a local
-  Style-Bert-VITS2 server. A generated amplitude
-  envelope drives the character's mouth while it speaks.
+  Style-Bert-VITS2 server. Completed visible sentences enter a bounded queue so
+  playback begins after the first sentence is synthesized instead of after the
+  whole response. The bubble follows the sentence currently being spoken and
+  restores the full reply afterward. Expressions follow each sentence while
+  Style-Bert-VITS2 mouth motion follows the actual decoded audio envelope;
+  system speech uses boundary-aware Japanese text timing.
 - Codex and OpenAI replies stream into both the control chat and the desktop
   speech bubble, with a light mouth pulse while text arrives.
 - When the mouse rests, breathing, swaying, blinking, hair spring, and small

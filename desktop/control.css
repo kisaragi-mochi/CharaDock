@@ -181,6 +181,7 @@ p { line-height: 1.65; }
 .button:active { transform: scale(.97); }
 .button:disabled { opacity: .44; cursor: wait; filter: none; transform: none; }
 .button-primary { color: var(--accent-ink); background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 72%, white), var(--accent)); box-shadow: 0 9px 28px color-mix(in srgb, var(--accent) 19%, transparent); }
+.button-danger { color: #ffecee; background: color-mix(in srgb, var(--danger) 26%, #242426); border-color: color-mix(in srgb, var(--danger) 48%, transparent); }
 .button-secondary { color: #eeeef0; background: #2b2b2e; border-color: var(--line); }
 .button-quiet { color: var(--text-secondary); background: transparent; border-color: var(--line); }
 
@@ -299,6 +300,7 @@ select option { color: #f8f5fa; background: #252229; }
 .motion-advanced[open] summary { margin-bottom: 14px; color: var(--accent); }
 .speech-input-settings { display: grid; gap: 12px; margin-top: 14px; }
 .speech-input-settings h3, .codex-mode-settings h3 { margin: 0; color: var(--text); font-size: 12px; }
+.speech-input-settings progress { width: 100%; height: 7px; accent-color: var(--accent-strong); }
 .codex-mode-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; background: var(--field); border: 1px solid var(--line); border-radius: 13px; }
 .codex-mode-settings h3 { grid-column: 1 / -1; }
 input[type="range"] {

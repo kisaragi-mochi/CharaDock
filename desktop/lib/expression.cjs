@@ -33,4 +33,29 @@ function responseExpression(text) {
   return expressionForText(text);
 }
 
-module.exports = { expressionForText, messageExpression, responseExpression };
+function estimatedSpeechDurationMs(text) {
+  const value = String(text || "").trim();
+  const characters = value.replace(/\s/g, "").length;
+  const pauses = (value.match(/[、。！？!?]/g) || []).length;
+  return Math.max(1200, Math.min(9000, 650 + characters * 105 + pauses * 170));
+}
+
+// During speech the audio envelope must own the mouth and normal blinking must
+// remain available. Only the optional emotion artwork is held for the segment.
+function speechExpression(text) {
+  const expression = responseExpression(text);
+  return {
+    ...expression,
+    forceMouth: null,
+    forceEyesClosed: null,
+    durationMs: Math.max(expression.durationMs, estimatedSpeechDurationMs(text)),
+  };
+}
+
+module.exports = {
+  estimatedSpeechDurationMs,
+  expressionForText,
+  messageExpression,
+  responseExpression,
+  speechExpression,
+};

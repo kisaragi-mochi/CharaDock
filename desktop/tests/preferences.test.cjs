@@ -50,7 +50,10 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.styleBertVits2ModelId, 0);
   assert.equal(state.styleBertVits2Speed, 1);
   assert.equal(state.speechInputProvider, "auto");
-  assert.equal(state.sherpaOnnxUrl, "ws://localhost:6006");
+  assert.equal(state.sherpaModelId, "reazonspeech-ja-int8");
+  assert.equal(state.voiceActivationMode, "vad");
+  assert.equal(state.vadSensitivity, "normal");
+  assert.equal(state.voiceAutoSend, true);
   assert.equal(state.codexChatModel, "");
   assert.equal(state.codexChatReasoningEffort, "");
   assert.equal(state.codexWorkModel, "");
@@ -66,6 +69,16 @@ test("preferences migrate the former Codex model to chat and work", () => {
   const state = new Preferences(file).publicState();
   assert.equal(state.codexChatModel, "legacy-model");
   assert.equal(state.codexWorkModel, "legacy-model");
+});
+
+test("preferences migrate removed wake-word activation to VAD", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({ voiceActivationMode: "wake-word", voiceWakeWord: "ぷるぺっと" }));
+  const state = new Preferences(file).publicState();
+  assert.equal(state.voiceActivationMode, "vad");
+  assert.equal(state.vadSensitivity, "normal");
+  assert.equal(Object.prototype.hasOwnProperty.call(state, "voiceWakeWord"), false);
 });
 
 test("preferences expose only the work folder name to renderer windows", () => {

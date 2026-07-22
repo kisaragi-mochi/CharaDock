@@ -9347,7 +9347,10 @@
   }
 
   function mouthCrossfadeDurationMs() {
-    return clamp(state.mouthCrossfadeMs, 0, MOUTH_CROSSFADE_MAX_MS);
+    const configured = clamp(state.mouthCrossfadeMs, 0, MOUTH_CROSSFADE_MAX_MS);
+    // Desktop speech arrives as a live envelope. A tiny minimum blend avoids
+    // hard PNG popping without making manually configured editor previews slow.
+    return OBS_MODE && voiceLevel > 0.015 ? Math.max(42, configured) : configured;
   }
 
   function resetMouthBlendState() {
@@ -13076,7 +13079,13 @@
     jawPuniLevel = clamp(lerp(jawPuniLevel, puniTarget, puniFollow) + openingKick * 0.65, 0, 1.2);
 
     const mouthVisualLevel = mouthTarget;
-    const nextMouth = mouthVisualLevel >= 0.78 ? 2 : mouthVisualLevel >= 0.22 ? 1 : 0;
+    // Separate opening/closing thresholds prevent rapid 0↔1↔2 chatter around
+    // one boundary while retaining quick consonant attacks.
+    let nextMouth = mouthState;
+    if (mouthState === 0 && mouthVisualLevel >= 0.25) nextMouth = 1;
+    else if (mouthState === 1 && mouthVisualLevel >= 0.74) nextMouth = 2;
+    else if (mouthState === 1 && mouthVisualLevel <= 0.14) nextMouth = 0;
+    else if (mouthState === 2 && mouthVisualLevel <= 0.62) nextMouth = 1;
     startMouthCrossfade(nextMouth, nowMs);
     mouthState = nextMouth;
     maybeTriggerTalkStartBlink(nowMs, nextMouth);

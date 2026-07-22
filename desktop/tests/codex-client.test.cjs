@@ -138,8 +138,44 @@ test("Codex client checks image-generation capability", async () => {
   assert.deepEqual(request, { method: "modelProvider/capabilities/read", params: {} });
 });
 
+test("Codex client lists all visible model picker pages", async () => {
+  const client = new CodexAppServerClient();
+  client.ensureStarted = async () => {};
+  const calls = [];
+  client.request = async (method, params) => {
+    calls.push({ method, params });
+    if (!params.cursor) return { data: [{ model: "model-a" }], nextCursor: "page-2" };
+    return { data: [{ model: "model-b" }], nextCursor: null };
+  };
+  const models = await client.listModels();
+  assert.deepEqual(models.map((model) => model.model), ["model-a", "model-b"]);
+  assert.equal(calls[0].method, "model/list");
+  assert.equal(calls[0].params.includeHidden, false);
+  assert.equal(calls[1].params.cursor, "page-2");
+});
+
+test("Codex conversation reuses one thread so follow-up turns keep context", async () => {
+  const client = new CodexAppServerClient();
+  client.ensureStarted = async () => {};
+  let starts = 0;
+  client.request = async (method) => {
+    if (method === "thread/start") {
+      starts += 1;
+      return { thread: { id: "thread-conversation" } };
+    }
+    return {};
+  };
+  assert.equal(await client.ensureThread(), "thread-conversation");
+  assert.equal(await client.ensureThread(), "thread-conversation");
+  assert.equal(starts, 1);
+});
+
 test("Codex client sends per-turn model and reasoning effort overrides", async () => {
-  const client = new CodexAppServerClient({ model: "chat-model", reasoningEffort: "high" });
+  const client = new CodexAppServerClient({
+    model: "chat-model",
+    reasoningEffort: "high",
+    pathMapper: (value) => `/mapped${value}`,
+  });
   client.ensureStarted = async () => {};
   client.ensureThread = async () => "thread-1";
   let turnParams;
@@ -158,10 +194,14 @@ test("Codex client sends per-turn model and reasoning effort overrides", async (
     }
     return {};
   };
-  const pending = client.sendMessage("hello");
+  const pending = client.sendMessage("hello", { localAudioPath: "/voice.webm" });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(turnParams.model, "chat-model");
   assert.equal(turnParams.effort, "high");
+  assert.deepEqual(turnParams.input, [
+    { type: "text", text: "hello" },
+    { type: "localAudio", path: "/mapped/voice.webm" },
+  ]);
   await pending;
 });
 
@@ -190,7 +230,8 @@ test("Codex client starts WebRTC realtime and forwards transcript events", async
   assert.equal(result.threadId, "thread-voice");
   assert.equal(calls[0].method, "thread/realtime/start");
   assert.equal(calls[0].params.outputModality, "audio");
-  assert.equal(calls[0].params.version, "v1");
+  assert.equal(calls[0].params.version, "v3");
+  assert.equal(calls[0].params.codexResponseHandoffMode, "bemTags");
   assert.deepEqual(calls[0].params.transport, { type: "webrtc", sdp: "v=0\r\n..." });
   client.handleLine(JSON.stringify({ method: "thread/realtime/transcript/delta", params: { threadId: "thread-voice", role: "user", delta: "こんにちは" } }));
   assert.equal(events[0].params.delta, "こんにちは");

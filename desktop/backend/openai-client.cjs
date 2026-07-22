@@ -37,10 +37,19 @@ async function parseError(response) {
 class OpenAIClient {
   constructor() {
     this.previousResponseId = null;
+    this.activeAbortController = null;
   }
 
   reset() {
+    this.activeAbortController?.abort(new Error("応答を中断しました。"));
+    this.activeAbortController = null;
     this.previousResponseId = null;
+  }
+
+  async interruptActiveTurn() {
+    if (!this.activeAbortController) return false;
+    this.activeAbortController.abort(new Error("応答を中断しました。"));
+    return true;
   }
 
   async sendMessage({ apiKey, model, message, instructions = "", onDelta } = {}) {
@@ -53,22 +62,30 @@ class OpenAIClient {
     };
     if (this.previousResponseId) body.previous_response_id = this.previousResponseId;
     if (onDelta) body.stream = true;
-    const response = await fetch(RESPONSES_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!response.ok) throw await parseError(response);
-    if (onDelta) return this.parseStream(response, onDelta);
-    const payload = await response.json();
-    const text = responseOutputText(payload);
-    if (!text) throw new Error("OpenAI APIからテキスト応答を取得できませんでした。");
-    this.previousResponseId = payload.id || null;
-    return { text, provider: "openai", responseId: payload.id || null };
+    const controller = new AbortController();
+    this.activeAbortController = controller;
+    const timeout = setTimeout(() => controller.abort(new Error("OpenAI APIの応答がタイムアウトしました。")), 120_000);
+    try {
+      const response = await fetch(RESPONSES_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw await parseError(response);
+      if (onDelta) return await this.parseStream(response, onDelta);
+      const payload = await response.json();
+      const text = responseOutputText(payload);
+      if (!text) throw new Error("OpenAI APIからテキスト応答を取得できませんでした。");
+      this.previousResponseId = payload.id || null;
+      return { text, provider: "openai", responseId: payload.id || null };
+    } finally {
+      clearTimeout(timeout);
+      if (this.activeAbortController === controller) this.activeAbortController = null;
+    }
   }
 
   async parseStream(response, onDelta) {

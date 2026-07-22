@@ -36,6 +36,24 @@ The packaged Electron runtime also supplies `LICENSE.electron.txt` and
 The MIT permission notices for Electron and pngjs are retained with the
 corresponding installed packages and packaged runtime license files.
 
+### sherpa-onnx
+
+- Project: sherpa-onnx
+- Copyright: sherpa-onnx contributors / k2-fsa
+- Source: https://github.com/k2-fsa/sherpa-onnx
+- Runtime package: `sherpa-onnx-node`
+- License: Apache License 2.0
+
+The native runtime is packaged with the desktop app. Speech-recognition models
+(Japanese ReazonSpeech Zipformer, Japanese NeMo Parakeet CTC, SenseVoice, and
+multilingual Whisper base/tiny) are not bundled. The model selected by the user
+is downloaded on demand from the official sherpa-onnx GitHub releases, verified
+against its pinned SHA-256 digest, and stored in the app user-data directory.
+
+The Silero VAD ONNX model used for neural voice activity detection is also not
+bundled. It is downloaded on first use from the official sherpa-onnx release,
+verified against a pinned SHA-256 digest, and stored beside the ASR models.
+
 ### MediaPipe Tasks Vision
 
 - Project: MediaPipe Tasks Vision / Face Landmarker

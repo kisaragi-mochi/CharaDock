@@ -13,13 +13,19 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   setExpression: (expression) => ipcRenderer.invoke("mascot:expression", expression),
   controlMascotWindow: (action, value) => ipcRenderer.invoke("mascot:window", action, value),
   sendChat: (message) => ipcRenderer.invoke("chat:send", message),
+  interruptChat: () => ipcRenderer.invoke("chat:interrupt"),
+  sendCodexAudio: (payload) => ipcRenderer.invoke("audio:sendCodex", payload),
   resetChat: () => ipcRenderer.invoke("chat:reset"),
   testBackend: (backend) => ipcRenderer.invoke("backend:test", backend),
   getCodexAccount: () => ipcRenderer.invoke("codex:account"),
+  getCodexModels: () => ipcRenderer.invoke("codex:models"),
   startCodexLogin: () => ipcRenderer.invoke("codex:login"),
   logoutCodex: () => ipcRenderer.invoke("codex:logout"),
   completeOnboarding: (complete) => ipcRenderer.invoke("onboarding:complete", complete),
   transcribe: (payload) => ipcRenderer.invoke("audio:transcribe", payload),
+  transcribeSherpa: (payload) => ipcRenderer.invoke("audio:transcribeSherpa", payload),
+  downloadSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelDownload", modelId),
+  removeSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelRemove", modelId),
   synthesizeTts: (text) => ipcRenderer.invoke("tts:synthesize", text),
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
@@ -42,5 +48,10 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("audio:realtimeEvent", listener);
     return () => ipcRenderer.removeListener("audio:realtimeEvent", listener);
+  },
+  onSherpaModelProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("sherpa:modelProgress", listener);
+    return () => ipcRenderer.removeListener("sherpa:modelProgress", listener);
   },
 });

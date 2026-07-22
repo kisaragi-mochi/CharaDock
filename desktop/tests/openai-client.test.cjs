@@ -67,3 +67,20 @@ test("OpenAIClient streams Responses API text deltas", async () => {
     global.fetch = originalFetch;
   }
 });
+
+test("OpenAIClient can interrupt an active response", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+  });
+  try {
+    const client = new OpenAIClient();
+    const pending = client.sendMessage({ apiKey: "sk-secret", model: "test-model", message: "hello" });
+    await Promise.resolve();
+    assert.equal(await client.interruptActiveTurn(), true);
+    await assert.rejects(pending, /中断/);
+    assert.equal(await client.interruptActiveTurn(), false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

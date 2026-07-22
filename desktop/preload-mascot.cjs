@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 const { ipcRenderer } = require("electron");
+// Sandboxed Electron preload scripts can only require Electron and a small set
+// of built-ins, so keep this renderer-safe projection aligned with vad-profile.cjs.
+const VAD_PROFILES = Object.freeze({
+  low: { startMin: .035, startFactor: 4.8, onsetMs: 240, stopMin: .009, stopFactor: 1.5, silenceMs: 1200 },
+  normal: { startMin: .024, startFactor: 3.8, onsetMs: 160, stopMin: .0075, stopFactor: 1.35, silenceMs: 1050 },
+  high: { startMin: .014, startFactor: 2.8, onsetMs: 80, stopMin: .006, stopFactor: 1.25, silenceMs: 850 },
+});
+const vadProfile = (sensitivity) => VAD_PROFILES[sensitivity] || VAD_PROFILES.normal;
 
 window.addEventListener("DOMContentLoaded", () => {
   const stylesheet = document.createElement("link");
@@ -39,6 +47,7 @@ window.addEventListener("DOMContentLoaded", () => {
       <button id="desktopMascotMicButton" type="button" aria-label="音声入力" aria-pressed="false">●</button>
       <textarea id="desktopMascotInput" rows="1" maxlength="6000" aria-label="メッセージ" placeholder="短く話しかける…"></textarea>
       <button id="desktopMascotSendButton" type="submit" aria-label="送信">↑</button>
+      <button id="desktopMascotStopButton" type="button" aria-label="応答を中断" hidden>■</button>
     </form>
     <button id="desktopMascotSettingsButton" type="button" aria-label="設定を開く">⚙</button>
     <button id="desktopMascotChatButton" type="button" aria-label="会話入力を開く">✦</button>`;
@@ -64,6 +73,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const form = dock.querySelector("#desktopMascotComposer");
   const input = dock.querySelector("#desktopMascotInput");
   const sendButton = dock.querySelector("#desktopMascotSendButton");
+  const stopButton = dock.querySelector("#desktopMascotStopButton");
   const micButton = dock.querySelector("#desktopMascotMicButton");
   const modeButton = dock.querySelector("#desktopMascotModeButton");
   const workTarget = dock.querySelector("#desktopMascotWorkTarget");
@@ -84,6 +94,29 @@ window.addEventListener("DOMContentLoaded", () => {
   let recordedSpeechRecorder;
   let recordedSpeechChunks = [];
   let recordedSpeechProvider = "openai";
+  let vadActive = false;
+  let vadStream = null;
+  let vadContext = null;
+  let vadAnalyser = null;
+  let vadSource = null;
+  let vadProcessor = null;
+  let vadEngine = "energy";
+  let vadSileroDetected = false;
+  let vadSileroSegmentComplete = false;
+  let vadSileroQueue = Promise.resolve();
+  let vadFrame = 0;
+  let vadRecorder = null;
+  let vadHeaderChunk = null;
+  let vadChunks = [];
+  let vadPreRoll = [];
+  let vadProvider = "sherpa-onnx";
+  let vadSpeaking = false;
+  let vadProcessing = false;
+  let vadResumeAt = 0;
+  let vadNoiseFloor = .006;
+  let vadLoudSince = 0;
+  let vadSilentSince = 0;
+  let vadSpeechStartedAt = 0;
   let realtimeUnavailable = false;
   let lastStreamPulseAt = 0;
   let workActivityTimer;
@@ -91,12 +124,27 @@ window.addEventListener("DOMContentLoaded", () => {
   let streamHasActivity = false;
   let hideTimer;
   let bubbleHideDuration = 9000;
+  let bubblePersistent = false;
   let workHistoryState = { activeWorkRunId: null, runs: [] };
   let workPanelCloseTimer;
   let permissionTimer;
   let ttsAudio = null;
   let ttsPlaybackToken = 0;
   let ttsPulse = null;
+  let ttsAudioContext = null;
+  let ttsAudioAnalyser = null;
+  let ttsAudioSource = null;
+  let ttsAudioFrame = null;
+  let ttsAudioSamples = null;
+  let ttsAudioGraphConnected = false;
+  let ttsEnvelope = 0;
+  let ttsBusy = false;
+  let streamTtsQueue = [];
+  let streamTtsDraining = false;
+  let streamTtsFinished = false;
+  let streamTtsConfig = { enabled: false, provider: "system", language: "ja-JP" };
+  let streamFullText = "";
+  let streamCurrentSpeechText = "";
   let thinkingFillerActive = false;
 
   const formatWorkTime = (value) => {
@@ -147,14 +195,25 @@ window.addEventListener("DOMContentLoaded", () => {
       request.textContent = run.request || "作業内容なし";
       item.append(head, request);
       if (Array.isArray(run.activities) && run.activities.length) {
-        const activities = document.createElement("ul");
-        activities.className = "desktop-mascot-work-activities";
-        for (const activity of run.activities) {
-          const row = document.createElement("li");
-          row.textContent = activity;
-          activities.appendChild(row);
+        const latest = document.createElement("p");
+        latest.className = "desktop-mascot-work-latest";
+        latest.textContent = run.activities.at(-1);
+        item.appendChild(latest);
+        if (run.activities.length > 1) {
+          const details = document.createElement("details");
+          details.className = "desktop-mascot-work-history-details";
+          const summary = document.createElement("summary");
+          summary.textContent = `進捗履歴（${run.activities.length}件）`;
+          const activities = document.createElement("ul");
+          activities.className = "desktop-mascot-work-activities";
+          for (const activity of run.activities) {
+            const row = document.createElement("li");
+            row.textContent = activity;
+            activities.appendChild(row);
+          }
+          details.append(summary, activities);
+          item.appendChild(details);
         }
-        item.appendChild(activities);
       }
       if (run.result) {
         const result = document.createElement("p");
@@ -229,6 +288,15 @@ window.addEventListener("DOMContentLoaded", () => {
     dock.classList.toggle("is-status", Boolean(hint.textContent));
     statusTimer = setTimeout(() => dock.classList.remove("is-status"), duration);
   };
+  const setSendingControls = (busy) => {
+    sending = Boolean(busy);
+    sendButton.disabled = sending;
+    sendButton.hidden = sending;
+    stopButton.hidden = !sending;
+    stopButton.disabled = false;
+    modeButton.disabled = sending;
+    workTarget.disabled = sending;
+  };
   const setWorkActivity = (message, { finish = false } = {}) => {
     clearTimeout(workActivityTimer);
     workActivity.textContent = String(message || "");
@@ -242,6 +310,7 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const scheduleBubbleHide = (duration = bubbleHideDuration) => {
     clearTimeout(hideTimer);
+    if (bubblePersistent) return;
     hideTimer = setTimeout(() => {
       bubble.classList.remove("is-visible", "is-expanded");
       bubbleMore.setAttribute("aria-expanded", "false");
@@ -257,6 +326,7 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const showPermission = (result) => {
     clearTimeout(hideTimer);
+    bubblePersistent = false;
     const permissionType = String(result?.permissionRequest?.type || "");
     bubbleText.textContent = String(result?.text || "今回だけ許可してもいい？");
     permissionActions.dataset.requestId = String(result?.permissionRequest?.id || "");
@@ -293,6 +363,7 @@ window.addEventListener("DOMContentLoaded", () => {
         probe.remove();
       }
       overflow ||= conservativelyLong;
+      overflow ||= Boolean(streamCurrentSpeechText && streamFullText && streamCurrentSpeechText !== streamFullText);
       bubble.classList.toggle("has-overflow", overflow);
       bubbleMore.hidden = !overflow;
     };
@@ -304,17 +375,28 @@ window.addEventListener("DOMContentLoaded", () => {
     bubble.classList.toggle("is-expanded", expanded);
     bubbleMore.setAttribute("aria-expanded", String(expanded));
     bubbleMore.textContent = expanded ? "閉じる" : "全文";
-    if (expanded) clearTimeout(hideTimer);
-    else scheduleBubbleHide(Math.max(9000, bubbleHideDuration));
+    if (expanded) {
+      if (streamFullText) bubbleText.textContent = streamFullText;
+      clearTimeout(hideTimer);
+    } else {
+      bubbleText.textContent = streamCurrentSpeechText || streamFullText || bubbleText.textContent;
+      scheduleBubbleHide(Math.max(9000, bubbleHideDuration));
+    }
+    syncBubbleOverflow();
   });
   const scheduleAutoClose = () => {
     clearTimeout(autoCloseTimer);
     autoCloseTimer = setTimeout(() => {
-      if (!sending && document.activeElement !== input && !speechRecognition) setOpen(false);
+      if (!sending && document.activeElement !== input && !speechRecognition && !vadActive) setOpen(false);
     }, 720);
   };
   const stopTtsPlayback = () => {
     ttsPlaybackToken += 1;
+    streamTtsQueue = [];
+    streamTtsDraining = false;
+    streamTtsFinished = false;
+    ttsBusy = false;
+    bubble.classList.remove("is-speaking");
     window.speechSynthesis?.cancel();
     if (ttsAudio) {
       ttsAudio.pause();
@@ -323,55 +405,204 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     clearInterval(ttsPulse);
     ttsPulse = null;
+    cancelAnimationFrame(ttsAudioFrame);
+    ttsAudioFrame = null;
+    try { ttsAudioSource?.disconnect(); } catch {}
+    ttsAudioSource = null;
+    ttsEnvelope = 0;
     ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
   };
-  const startTtsPulse = () => {
+  const stopTtsPulse = () => {
     clearInterval(ttsPulse);
-    ttsPulse = setInterval(() => ipcRenderer.invoke("mascotInline:voice", .2 + Math.random() * .28).catch(() => {}), 85);
+    ttsPulse = null;
+    cancelAnimationFrame(ttsAudioFrame);
+    ttsAudioFrame = null;
+    ttsEnvelope = 0;
+    ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
   };
-  const playStyleBertSpeech = async (text) => {
-    const token = ttsPlaybackToken;
+  const textLipLevel = (text, index, tick) => {
+    const value = String(text || "");
+    if (!value) return 0;
+    const character = value[Math.max(0, Math.min(value.length - 1, index))] || "";
+    if (/[\s、。！？!?.,]/.test(character)) return 0;
+    const vowelBias = /[あかさたなはまやらわがざだばぱアカサタナハマヤラワガザダバパ]/.test(character) ? .18
+      : /[いきしちにひみりぎじぢびぴイキシチニヒミリギジヂビピ]/.test(character) ? -.08
+        : .04;
+    const rhythm = [.12, .42, .24, .66, .31, .5][tick % 6];
+    return Math.max(.08, Math.min(.78, rhythm + vowelBias));
+  };
+  const startTextTtsPulse = (text, indexProvider = () => 0) => {
+    stopTtsPulse();
+    let tick = 0;
+    ttsPulse = setInterval(() => {
+      const index = Number(indexProvider()) || 0;
+      ipcRenderer.invoke("mascotInline:voice", textLipLevel(text, index, tick++)).catch(() => {});
+    }, 64);
+  };
+  const startMeasuredTtsPulse = async (audio, fallbackText) => {
+    stopTtsPulse();
     try {
-      const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", text);
-      for (const source of result?.audioDataUrls || []) {
-        if (token !== ttsPlaybackToken) return;
-        await new Promise((resolve, reject) => {
-          ttsAudio = new Audio(source);
-          ttsAudio.preload = "auto";
-          ttsAudio.onplay = startTtsPulse;
-          ttsAudio.onended = resolve;
-          ttsAudio.onerror = () => {
-            const detail = ({ 1: "再生が中断されました", 2: "音声データを読み込めません", 3: "音声形式をデコードできません", 4: "音声形式に対応していません" })[ttsAudio.error?.code];
-            reject(new Error(`生成した音声を再生できません${detail ? `（${detail}）` : ""}。`));
-          };
-          ttsAudio.play().catch(reject);
-        });
+      ttsAudioContext ||= new AudioContext();
+      ttsAudioAnalyser ||= ttsAudioContext.createAnalyser();
+      ttsAudioAnalyser.fftSize = 512;
+      ttsAudioAnalyser.smoothingTimeConstant = .18;
+      ttsAudioSamples ||= new Float32Array(ttsAudioAnalyser.fftSize);
+      try { ttsAudioSource?.disconnect(); } catch {}
+      ttsAudioSource = ttsAudioContext.createMediaElementSource(audio);
+      ttsAudioSource.connect(ttsAudioAnalyser);
+      if (!ttsAudioGraphConnected) {
+        ttsAudioAnalyser.connect(ttsAudioContext.destination);
+        ttsAudioGraphConnected = true;
       }
-    } catch (error) {
-      if (token === ttsPlaybackToken) setStatus(error.message, 5000);
-    } finally {
-      if (token === ttsPlaybackToken) {
-        clearInterval(ttsPulse);
-        ttsPulse = null;
-        ttsAudio = null;
-        ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
-      }
+      await ttsAudioContext.resume();
+      let lastSentAt = 0;
+      const update = (now) => {
+        if (audio !== ttsAudio || audio.paused || audio.ended) return;
+        ttsAudioAnalyser.getFloatTimeDomainData(ttsAudioSamples);
+        let sum = 0;
+        for (const sample of ttsAudioSamples) sum += sample * sample;
+        const rms = Math.sqrt(sum / ttsAudioSamples.length);
+        const target = Math.max(0, Math.min(1, (rms - .004) * 7.5));
+        const follow = target > ttsEnvelope ? .62 : .28;
+        ttsEnvelope += (target - ttsEnvelope) * follow;
+        if (now - lastSentAt >= 32) {
+          lastSentAt = now;
+          ipcRenderer.invoke("mascotInline:voice", ttsEnvelope < .035 ? 0 : Math.min(1, Math.pow(ttsEnvelope, .82))).catch(() => {});
+        }
+        ttsAudioFrame = requestAnimationFrame(update);
+      };
+      ttsAudioFrame = requestAnimationFrame(update);
+    } catch {
+      const startedAt = performance.now();
+      startTextTtsPulse(fallbackText, () => Math.floor((performance.now() - startedAt) / 125));
     }
   };
-  const speakSystemText = (text, language) => {
-    if (!window.speechSynthesis) return;
+  const setTtsBusy = (busy) => {
+    ttsBusy = Boolean(busy);
+    bubble.classList.toggle("is-speaking", ttsBusy);
+  };
+  const playAudioSource = (source, text, token, onStart) => new Promise((resolve, reject) => {
+    if (token !== ttsPlaybackToken) return resolve();
+    ttsAudio = new Audio(source);
+    ttsAudio.preload = "auto";
+    ttsAudio.onplay = () => {
+      onStart?.();
+      startMeasuredTtsPulse(ttsAudio, text);
+    };
+    ttsAudio.onended = () => {
+      stopTtsPulse();
+      try { ttsAudioSource?.disconnect(); } catch {}
+      ttsAudioSource = null;
+      ttsAudio = null;
+      resolve();
+    };
+    ttsAudio.onerror = () => {
+      stopTtsPulse();
+      const detail = ({ 1: "再生が中断されました", 2: "音声データを読み込めません", 3: "音声形式をデコードできません", 4: "音声形式に対応していません" })[ttsAudio?.error?.code];
+      reject(new Error(`生成した音声を再生できません${detail ? `（${detail}）` : ""}。`));
+    };
+    ttsAudio.play().catch(reject);
+  });
+  const speakSystemSegment = (text, language, token, onStart) => new Promise((resolve) => {
+    if (!window.speechSynthesis || token !== ttsPlaybackToken) return resolve();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = String(language || "ja-JP");
     utterance.rate = 1.03;
-    utterance.onstart = startTtsPulse;
-    const stop = () => { clearInterval(ttsPulse); ttsPulse = null; ipcRenderer.invoke("mascotInline:voice", 0); };
-    utterance.onend = stop;
-    utterance.onerror = stop;
+    let boundaryIndex = 0;
+    let startedAt = 0;
+    utterance.onstart = () => {
+      onStart?.();
+      startedAt = performance.now();
+      startTextTtsPulse(text, () => Math.max(boundaryIndex, Math.floor((performance.now() - startedAt) / 125)));
+    };
+    utterance.onboundary = (event) => { boundaryIndex = Math.max(boundaryIndex, Number(event.charIndex) || 0); };
+    utterance.onend = () => { stopTtsPulse(); resolve(); };
+    utterance.onerror = () => { stopTtsPulse(); resolve(); };
     window.speechSynthesis.speak(utterance);
+  });
+  const playSpeechSegment = async (segment, provider, language, token) => {
+    const text = String(segment?.text || segment || "").trim();
+    if (!text) return;
+    let activated = false;
+    const activate = () => {
+      if (activated) return;
+      activated = true;
+      streamCurrentSpeechText = text;
+      if (!bubble.classList.contains("is-expanded")) bubbleText.textContent = text;
+      syncBubbleOverflow();
+      if (segment?.expression) ipcRenderer.invoke("mascotInline:expression", segment.expression).catch(() => {});
+    };
+    if (provider === "style-bert-vits2") {
+      const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", text);
+      for (const source of result?.audioDataUrls || []) {
+        if (token !== ttsPlaybackToken) return;
+        await playAudioSource(source, text, token, activate);
+      }
+      return;
+    }
+    await speakSystemSegment(text, language, token, activate);
   };
+  const finishTtsPlayback = () => {
+    stopTtsPulse();
+    ttsAudio = null;
+    setTtsBusy(false);
+    if (streamTtsFinished && !streamTtsQueue.length) {
+      streamCurrentSpeechText = "";
+      if (!bubble.classList.contains("is-expanded") && streamFullText) bubbleText.textContent = streamFullText;
+      ipcRenderer.invoke("mascotInline:expression", { emotion: null, forceMouth: null, forceEyesClosed: null, durationMs: 100 }).catch(() => {});
+      syncBubbleOverflow();
+    }
+  };
+  const drainStreamTtsQueue = async () => {
+    if (streamTtsDraining || !streamTtsConfig.enabled || !streamTtsQueue.length) return;
+    const token = ttsPlaybackToken;
+    streamTtsDraining = true;
+    setTtsBusy(true);
+    try {
+      while (token === ttsPlaybackToken && streamTtsQueue.length) {
+        const segment = streamTtsQueue.shift();
+        await playSpeechSegment(segment, streamTtsConfig.provider, streamTtsConfig.language, token);
+      }
+    } catch (error) {
+      if (token === ttsPlaybackToken) {
+        streamTtsQueue = [];
+        setStatus(error.message, 5000);
+      }
+    } finally {
+      if (token === ttsPlaybackToken) {
+        streamTtsDraining = false;
+        finishTtsPlayback();
+        if (streamTtsQueue.length) drainStreamTtsQueue();
+        else if (streamTtsFinished) scheduleBubbleHide(Math.max(9000, bubbleHideDuration));
+      }
+    }
+  };
+  const queueStreamSpeech = (segments) => {
+    if (!streamTtsConfig.enabled) return;
+    for (const segment of Array.isArray(segments) ? segments : []) {
+      const text = String(segment?.text || segment || "").trim();
+      if (text) streamTtsQueue.push(typeof segment === "object" ? { ...segment, text } : { text });
+    }
+    drainStreamTtsQueue();
+  };
+  const playStandaloneSpeech = async (text, provider, language, expression = null) => {
+    const token = ttsPlaybackToken;
+    setTtsBusy(true);
+    try {
+      await playSpeechSegment({ text, expression }, provider, language, token);
+    } catch (error) {
+      if (token === ttsPlaybackToken) setStatus(error.message, 5000);
+    } finally {
+      if (token === ttsPlaybackToken) finishTtsPlayback();
+    }
+  };
+  const playStyleBertSpeech = (text, expression) => playStandaloneSpeech(text, "style-bert-vits2", "ja-JP", expression);
+  const speakSystemText = (text, language, expression) => playStandaloneSpeech(text, "system", language, expression);
   const showSpeech = (payload) => {
     clearPermission();
     clearTimeout(hideTimer);
+    streamFullText = "";
+    streamCurrentSpeechText = "";
     bubbleText.textContent = String(payload?.text || "");
     bubble.classList.remove("is-expanded", "has-overflow");
     bubbleMore.hidden = true;
@@ -379,14 +610,15 @@ window.addEventListener("DOMContentLoaded", () => {
     bubbleMore.setAttribute("aria-expanded", "false");
     bubble.classList.toggle("is-visible", Boolean(bubbleText.textContent));
     bubbleHideDuration = Math.max(1500, Number(payload?.durationMs) || 9000);
+    bubblePersistent = Boolean(payload?.persistent);
     syncBubbleOverflow();
     scheduleBubbleHide(bubbleHideDuration);
     stopTtsPlayback();
     thinkingFillerActive = false;
     if (payload?.ttsEnabled && bubbleText.textContent && payload?.ttsProvider === "style-bert-vits2") {
-      playStyleBertSpeech(bubbleText.textContent);
+      playStyleBertSpeech(bubbleText.textContent, payload?.expression);
     } else if (payload?.ttsEnabled && bubbleText.textContent && window.speechSynthesis) {
-      speakSystemText(bubbleText.textContent, payload.speechLanguage);
+      speakSystemText(bubbleText.textContent, payload.speechLanguage, payload?.expression);
     }
   };
 
@@ -432,7 +664,7 @@ window.addEventListener("DOMContentLoaded", () => {
         requestId,
       );
       clearPermission();
-      showSpeech({ text: result.text, durationMs: 9000 });
+      if (!result.streamed) showSpeech({ text: result.text, durationMs: 9000 });
       setStatus(action === "approve" ? isScreen ? "画面を確認しました" : "ブラウザ確認が完了しました" : isScreen ? "画面は共有されませんでした" : "ブラウザは開かれませんでした");
     } catch (error) {
       clearPermission();
@@ -457,30 +689,39 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!message || sendButton.disabled) return;
     input.value = "";
     resizeInput();
-    sending = true;
-    sendButton.disabled = true;
-    modeButton.disabled = true;
-    workTarget.disabled = true;
+    setSendingControls(true);
     setStatus(appState?.interactionMode === "work" ? "作業を開始…" : "考え中…", 30_000);
     try {
       const result = await ipcRenderer.invoke("mascotInline:chat", message);
       if (["screen", "browser"].includes(result.permissionRequest?.type)) {
         showPermission(result);
         setStatus("会話で「いいよ」と答えても許可できます", 6000);
-      } else {
+      } else if (!result.streamed) {
         showSpeech({ text: result.text, durationMs: 9000 });
-        setStatus(result.permissionDeclined ? result.permissionType === "browser" ? "ブラウザは開かれませんでした" : "画面は共有されませんでした" : result.mode === "work" ? `${result.workDirectoryName || "選択フォルダー"}で作業完了` : result.provider === "codex" ? "Codexから返答" : "OpenAIから返答");
       }
+      setStatus(result.permissionDeclined ? result.permissionType === "browser" ? "ブラウザは開かれませんでした" : "画面は共有されませんでした" : result.mode === "work" ? `${result.workDirectoryName || "選択フォルダー"}で作業完了` : result.provider === "codex" ? "Codexから返答" : "OpenAIから返答");
     } catch (error) {
-      const interrupted = appState?.interactionMode === "work" && /interrupt|cancel|中断/i.test(String(error.message || ""));
-      showSpeech({ text: interrupted ? "作業を中断しました。履歴から内容を確認できます。" : `エラー: ${error.message}`, durationMs: 12_000 });
-      setStatus(interrupted ? "作業を中断しました" : "送信できませんでした");
+      const interrupted = /interrupt|cancel|abort|中断/i.test(String(error.message || ""));
+      const interruptedText = appState?.interactionMode === "work"
+        ? "作業を中断しました。履歴から内容を確認できます。"
+        : "応答を中断しました。続けて修正を送れます。";
+      showSpeech({ text: interrupted ? interruptedText : `エラー: ${error.message}`, durationMs: 12_000 });
+      setStatus(interrupted ? appState?.interactionMode === "work" ? "作業を中断しました" : "応答を中断しました" : "送信できませんでした");
     } finally {
-      sendButton.disabled = false;
-      modeButton.disabled = false;
-      workTarget.disabled = false;
-      sending = false;
+      setSendingControls(false);
       input.focus();
+    }
+  });
+
+  stopButton.addEventListener("click", async () => {
+    if (!sending || stopButton.disabled) return;
+    stopButton.disabled = true;
+    setStatus("中断しています…", 30_000);
+    try {
+      await ipcRenderer.invoke("mascotInline:interruptActive");
+    } catch (error) {
+      stopButton.disabled = false;
+      setStatus(error.message, 5000);
     }
   });
 
@@ -508,15 +749,22 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const stage = document.querySelector("#stage");
   let hoverSentAt = 0;
+  let hoverState = false;
   const reportHover = (hovered) => {
     const now = performance.now();
-    if (hovered && now - hoverSentAt < 180) return;
+    if (hovered === hoverState && (!hovered || now - hoverSentAt < 180)) return;
+    hoverState = hovered;
     hoverSentAt = now;
     ipcRenderer.invoke("mascotInline:hover", hovered).catch(() => {});
   };
-  stage?.addEventListener("pointerenter", () => reportHover(true));
-  stage?.addEventListener("pointermove", () => reportHover(true));
-  stage?.addEventListener("pointerleave", () => reportHover(false));
+  // Track the whole transparent app window. Listening only on the canvas made
+  // hover turn off as soon as the pointer crossed into the pet/chat overlays.
+  window.addEventListener("pointerenter", () => reportHover(true), true);
+  window.addEventListener("pointermove", () => reportHover(true), true);
+  window.addEventListener("pointerout", (event) => {
+    if (!event.relatedTarget) reportHover(false);
+  }, true);
+  window.addEventListener("blur", () => reportHover(false));
   let petDrag = null;
   let suppressPetClickUntil = 0;
   const showTouchSpark = (event) => {
@@ -560,12 +808,17 @@ window.addEventListener("DOMContentLoaded", () => {
   petZone.addEventListener("pointercancel", finishPetDrag);
   petZone.addEventListener("pointerenter", () => setOpen(true));
   petZone.addEventListener("pointerleave", scheduleAutoClose);
-  petZone.addEventListener("click", (event) => {
+  petZone.addEventListener("click", async (event) => {
     if (performance.now() < suppressPetClickUntil) return;
     showTouchSpark(event);
     if (sending) return;
     const zone = event.clientY < window.innerHeight * .5 ? "head" : "body";
-    ipcRenderer.invoke("mascotInline:pet", { zone }).catch(() => {});
+    try {
+      const result = await ipcRenderer.invoke("mascotInline:pet", { zone });
+      showSpeech(result);
+    } catch (error) {
+      setStatus(`クリック反応: ${error.message}`, 5000);
+    }
   });
   const startFallbackRecognition = () => {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -610,41 +863,268 @@ window.addEventListener("DOMContentLoaded", () => {
     const { samples, sampleRate } = await decodeRecordedAudio(blob);
     if (!samples.length) throw new Error("録音された音声が空です");
     if (samples.byteLength > 60 * 1024 * 1024) throw new Error("録音が長すぎます。短く区切ってください");
-    const packet = new ArrayBuffer(8 + samples.byteLength);
-    const view = new DataView(packet);
-    view.setInt32(0, sampleRate, true);
-    view.setInt32(4, samples.byteLength, true);
-    for (let index = 0; index < samples.length; index += 1) view.setFloat32(8 + index * 4, samples[index], true);
-    return new Promise((resolve, reject) => {
-      const socket = new WebSocket(appState?.sherpaOnnxUrl || "ws://localhost:6006");
-      let settled = false;
-      const finish = (callback, value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        try { socket.send("Done"); } catch {}
-        socket.close();
-        callback(value);
-      };
-      const timeout = setTimeout(() => finish(reject, new Error("sherpa-onnxの認識が時間切れになりました")), 45_000);
-      socket.onopen = () => {
-        for (let offset = 0; offset < packet.byteLength; offset += 10_240) {
-          socket.send(packet.slice(offset, Math.min(packet.byteLength, offset + 10_240)));
-        }
-      };
-      socket.onmessage = (event) => {
-        try {
-          const result = JSON.parse(String(event.data || ""));
-          const text = String(result.text ?? result.result ?? "").trim();
-          if (!text) throw new Error("音声を認識できませんでした");
-          finish(resolve, text);
-        } catch (error) {
-          finish(reject, new Error(`sherpa-onnxの応答を読み取れません: ${error.message}`));
-        }
-      };
-      socket.onerror = () => finish(reject, new Error("sherpa-onnxへ接続できません"));
-      socket.onclose = () => finish(reject, new Error("sherpa-onnxが結果を返す前に接続を終了しました"));
+    return ipcRenderer.invoke("mascotInline:transcribeSherpa", { samples, sampleRate });
+  };
+
+  const transcribeRecordedBlob = async (blob, provider) => {
+    if (provider === "sherpa-onnx") return transcribeWithSherpaOnnx(blob);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    return ipcRenderer.invoke("mascotInline:transcribe", { bytes, mimeType: blob.type });
+  };
+
+  const sendCodexAudioBlob = async (blob) => {
+    setSendingControls(true);
+    setOpen(true);
+    setStatus("Codexへ音声を送信しています…", 30_000);
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const result = await ipcRenderer.invoke("mascotInline:chatAudio", { bytes, mimeType: blob.type });
+      if (!result.streamed) showSpeech({ text: result.text, durationMs: 9000 });
+      setStatus(result.mode === "work" ? `${result.workDirectoryName || "選択フォルダー"}で音声作業を完了` : "Codexが音声へ応答しました");
+      return result;
+    } catch (error) {
+      const interrupted = /interrupt|cancel|abort|中断/i.test(String(error.message || ""));
+      showSpeech({ text: interrupted ? "応答を中断しました。" : `エラー: ${error.message}`, durationMs: 12_000 });
+      setStatus(interrupted ? "応答を中断しました" : "音声を送信できませんでした", 5000);
+      throw error;
+    } finally {
+      setSendingControls(false);
+    }
+  };
+
+  const setVadUi = (phase) => {
+    const active = phase !== "off";
+    micButton.setAttribute("aria-pressed", String(active));
+    micButton.classList.toggle("is-vad-waiting", phase === "waiting");
+    micButton.classList.toggle("is-vad-speaking", phase === "speaking");
+    micButton.classList.toggle("is-vad-processing", phase === "processing");
+    micButton.textContent = phase === "speaking" ? "◉" : phase === "processing" ? "…" : "●";
+    micButton.setAttribute("aria-label", active ? "音声待機を停止" : "音声入力");
+  };
+
+  const cleanupVadMedia = () => {
+    cancelAnimationFrame(vadFrame);
+    vadFrame = 0;
+    if (vadRecorder?.state === "recording") vadRecorder.stop();
+    vadRecorder = null;
+    vadHeaderChunk = null;
+    vadChunks = [];
+    vadPreRoll = [];
+    try { vadProcessor?.disconnect?.(); } catch {}
+    try { vadSource?.disconnect?.(); } catch {}
+    vadProcessor = null;
+    vadSource = null;
+    if (vadEngine === "silero") ipcRenderer.invoke("mascotInline:vadStop").catch(() => {});
+    vadEngine = "energy";
+    vadSileroDetected = false;
+    vadSileroSegmentComplete = false;
+    for (const track of vadStream?.getTracks?.() || []) track.stop();
+    vadStream = null;
+    vadAnalyser = null;
+    const context = vadContext;
+    vadContext = null;
+    context?.close?.().catch(() => {});
+    vadSpeaking = false;
+    vadLoudSince = 0;
+    vadSilentSince = 0;
+    vadResumeAt = 0;
+    setVadUi("off");
+  };
+
+  const waitingVoiceStatus = () => "音声待機中…そのまま話してください";
+
+  const processVadTranscript = async (blob, provider) => {
+    vadProcessing = true;
+    setVadUi("processing");
+    try {
+      if (provider === "codex-audio") {
+        await sendCodexAudioBlob(blob);
+        return;
+      }
+      setStatus(provider === "sherpa-onnx" ? "sherpa-onnxで認識中…" : "OpenAIで文字起こし中…", 30_000);
+      const transcript = String(await transcribeRecordedBlob(blob, provider) || "").trim();
+      if (!transcript) {
+        setStatus(waitingVoiceStatus(), 30_000);
+        return;
+      }
+      const command = transcript;
+      input.value = command;
+      resizeInput();
+      setOpen(true, { focus: true });
+      setStatus(`認識: ${command}`, 5000);
+      if (appState?.voiceAutoSend !== false) {
+        setTimeout(() => {
+          if (!sending && input.value.trim() === command) form.requestSubmit();
+        }, 420);
+      }
+    } catch (error) {
+      setStatus(error.message, 5000);
+    } finally {
+      vadProcessing = false;
+      if (vadActive) {
+        vadResumeAt = performance.now() + 700;
+        vadPreRoll = [];
+        vadLoudSince = 0;
+        vadSilentSince = 0;
+        setVadUi("waiting");
+        if (!input.value.trim()) setStatus(waitingVoiceStatus(), 30_000);
+      } else {
+        cleanupVadMedia();
+      }
+    }
+  };
+
+  const finishVadUtterance = () => {
+    if (!vadSpeaking) return;
+    vadSpeaking = false;
+    setVadUi("processing");
+    const chunks = vadChunks;
+    vadChunks = [];
+    const blob = new Blob(chunks, { type: vadRecorder?.mimeType || "audio/webm" });
+    if (blob.size > 512) processVadTranscript(blob, vadProvider);
+    else if (vadActive) {
+      setVadUi("waiting");
+      setStatus(waitingVoiceStatus(), 30_000);
+    } else if (!vadProcessing) cleanupVadMedia();
+  };
+
+  const beginVadUtterance = () => {
+    if (!vadActive || vadProcessing || vadSpeaking || vadRecorder?.state !== "recording") return;
+    vadChunks = vadPreRoll.splice(0);
+    if (vadHeaderChunk && vadChunks[0] !== vadHeaderChunk) vadChunks.unshift(vadHeaderChunk);
+    vadSpeaking = true;
+    vadSpeechStartedAt = performance.now();
+    vadSilentSince = 0;
+    setVadUi("speaking");
+    setStatus("聞いています…話し終えると自動で認識します", 30_000);
+  };
+
+  const runVadFrame = () => {
+    if (!vadActive || !vadAnalyser) return;
+    const samples = new Float32Array(vadAnalyser.fftSize);
+    vadAnalyser.getFloatTimeDomainData(samples);
+    let energy = 0;
+    for (const sample of samples) energy += sample * sample;
+    const rms = Math.sqrt(energy / samples.length);
+    const now = performance.now();
+    const paused = sending || ttsBusy || vadProcessing || now < vadResumeAt;
+    const profile = vadProfile(appState?.vadSensitivity);
+    if (vadEngine === "silero" && !paused) {
+      if (!vadSpeaking && vadSileroDetected) beginVadUtterance();
+      if (vadSpeaking && vadSileroSegmentComplete) {
+        vadSileroSegmentComplete = false;
+        finishVadUtterance();
+      }
+    } else if (vadEngine !== "silero" && !paused && !vadSpeaking) {
+      vadNoiseFloor = Math.min(.04, Math.max(.0035, vadNoiseFloor * .96 + rms * .04));
+      const startThreshold = Math.max(profile.startMin, vadNoiseFloor * profile.startFactor);
+      if (rms > startThreshold) {
+        vadLoudSince ||= now;
+        if (now - vadLoudSince >= profile.onsetMs) beginVadUtterance();
+      } else {
+        vadLoudSince = 0;
+      }
+    } else if (!paused && vadSpeaking) {
+      const stopThreshold = Math.max(profile.stopMin, vadNoiseFloor * profile.stopFactor);
+      if (rms < stopThreshold) vadSilentSince ||= now;
+      else vadSilentSince = 0;
+      if ((vadSilentSince && now - vadSilentSince >= profile.silenceMs && now - vadSpeechStartedAt >= 550)
+        || now - vadSpeechStartedAt >= 20_000) finishVadUtterance();
+    } else {
+      vadLoudSince = 0;
+      vadSilentSince = 0;
+    }
+    vadFrame = requestAnimationFrame(runVadFrame);
+  };
+
+  const stopVadListening = () => {
+    if (!vadActive && !vadStream) return;
+    vadActive = false;
+    cancelAnimationFrame(vadFrame);
+    vadFrame = 0;
+    vadSpeaking = false;
+    vadChunks = [];
+    vadPreRoll = [];
+    if (!vadProcessing) cleanupVadMedia();
+    setVadUi("off");
+  };
+
+  const startVadListening = async (provider) => {
+    if (vadActive) return;
+    if (!["codex-audio", "sherpa-onnx", "openai"].includes(provider)) throw new Error("この音声入力方式ではVADを利用できません");
+    if (provider === "codex-audio" && appState?.backend !== "codex") throw new Error("Codex app-server接続へ切り替えてください");
+    if (provider === "sherpa-onnx" && !appState?.sherpaModel?.installed) {
+      throw new Error("設定からsherpa-onnx日本語モデルをダウンロードしてください");
+    }
+    if (provider === "openai" && !appState?.hasApiKey) throw new Error("OpenAI APIキーを設定してください");
+    vadProvider = provider;
+    vadStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false,
     });
+    vadContext = new AudioContext();
+    await vadContext.resume().catch(() => {});
+    vadAnalyser = vadContext.createAnalyser();
+    vadAnalyser.fftSize = 1024;
+    vadAnalyser.smoothingTimeConstant = .2;
+    vadSource = vadContext.createMediaStreamSource(vadStream);
+    vadSource.connect(vadAnalyser);
+    setStatus("Silero VADを準備しています…", 30_000);
+    try {
+      await ipcRenderer.invoke("mascotInline:vadStart", appState?.vadSensitivity || "normal");
+      vadEngine = "silero";
+      vadSileroDetected = false;
+      vadSileroSegmentComplete = false;
+      vadProcessor = vadContext.createScriptProcessor(2048, 1, 1);
+      vadProcessor.onaudioprocess = (event) => {
+        if (!vadActive || sending || ttsBusy || vadProcessing) return;
+        const source = event.inputBuffer.getChannelData(0);
+        const ratio = vadContext.sampleRate / 16_000;
+        const length = Math.max(1, Math.floor(source.length / ratio));
+        const samples = new Float32Array(length);
+        for (let index = 0; index < length; index += 1) {
+          const start = Math.floor(index * ratio);
+          const end = Math.max(start + 1, Math.min(source.length, Math.floor((index + 1) * ratio)));
+          let sum = 0;
+          for (let sourceIndex = start; sourceIndex < end; sourceIndex += 1) sum += source[sourceIndex];
+          samples[index] = sum / (end - start);
+        }
+        vadSileroQueue = vadSileroQueue.then(async () => {
+          if (!vadActive || vadEngine !== "silero") return;
+          const result = await ipcRenderer.invoke("mascotInline:vadAccept", samples);
+          vadSileroDetected = Boolean(result?.detected);
+          if (result?.segmentComplete) vadSileroSegmentComplete = true;
+        }).catch(() => {
+          vadEngine = "energy";
+          vadSileroDetected = false;
+          vadSileroSegmentComplete = false;
+        });
+      };
+      vadSource.connect(vadProcessor);
+      vadProcessor.connect(vadContext.destination);
+    } catch {
+      vadEngine = "energy";
+      setStatus("Silero VADを準備できないため音量検出を使用します", 5000);
+    }
+    vadChunks = [];
+    vadPreRoll = [];
+    vadHeaderChunk = null;
+    vadRecorder = new MediaRecorder(vadStream);
+    vadRecorder.ondataavailable = (event) => {
+      if (!event.data.size) return;
+      vadHeaderChunk ||= event.data;
+      if (vadSpeaking) {
+        vadChunks.push(event.data);
+      } else if (!vadProcessing) {
+        vadPreRoll.push(event.data);
+        if (vadPreRoll.length > 6) vadPreRoll.shift();
+      }
+    };
+    vadRecorder.start(100);
+    vadNoiseFloor = .008;
+    vadActive = true;
+    setVadUi("waiting");
+    setStatus(waitingVoiceStatus(), 30_000);
+    runVadFrame();
   };
 
   const toggleRecordedSpeech = async (provider) => {
@@ -662,11 +1142,11 @@ window.addEventListener("DOMContentLoaded", () => {
       try {
         setStatus(provider === "sherpa-onnx" ? "sherpa-onnxで認識中…" : "OpenAIで文字起こし中…", 30_000);
         const blob = new Blob(recordedSpeechChunks, { type: recordedSpeechRecorder.mimeType || "audio/webm" });
-        if (recordedSpeechProvider === "sherpa-onnx") input.value = await transcribeWithSherpaOnnx(blob);
-        else {
-          const bytes = new Uint8Array(await blob.arrayBuffer());
-          input.value = await ipcRenderer.invoke("mascotInline:transcribe", { bytes, mimeType: blob.type });
+        if (recordedSpeechProvider === "codex-audio") {
+          await sendCodexAudioBlob(blob);
+          return;
         }
+        input.value = await transcribeRecordedBlob(blob, recordedSpeechProvider);
         resizeInput();
         input.focus();
         setStatus("音声を入力しました");
@@ -720,6 +1200,11 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   micButton.addEventListener("click", async () => {
+    if (vadActive || vadStream) {
+      stopVadListening();
+      setStatus("音声待機を終了しました");
+      return;
+    }
     if (speechRecognition) {
       speechRecognition.stop();
       return;
@@ -735,12 +1220,17 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     appState = await ipcRenderer.invoke("mascotInline:getState").catch(() => appState);
-    const provider = appState?.speechInputProvider || "auto";
+    let provider = appState?.speechInputProvider || "auto";
+    if (provider === "auto") provider = appState?.sherpaModel?.installed ? "sherpa-onnx" : "browser";
     if (provider === "browser") {
       ensureFallbackRecognition();
       return;
     }
-    if (provider === "sherpa-onnx" || provider === "openai") {
+    if (provider === "codex-audio" || provider === "sherpa-onnx" || provider === "openai") {
+      if ((appState?.voiceActivationMode || "vad") !== "manual") {
+        await startVadListening(provider).catch((error) => setStatus(`音声入力: ${error.message}`, 5000));
+        return;
+      }
       await toggleRecordedSpeech(provider).catch((error) => setStatus(`音声入力: ${error.message}`, 5000));
       return;
     }
@@ -748,7 +1238,7 @@ window.addEventListener("DOMContentLoaded", () => {
       setStatus("Codex RealtimeはCodex接続時のみ利用できます", 5000);
       return;
     }
-    if ((provider === "auto" || provider === "realtime") && appState?.backend === "codex" && !realtimeUnavailable) {
+    if (provider === "realtime" && appState?.backend === "codex" && !realtimeUnavailable) {
       try {
         await startRealtime();
         return;
@@ -756,11 +1246,8 @@ window.addEventListener("DOMContentLoaded", () => {
         ipcRenderer.invoke("mascotInline:realtimeStop").catch(() => {});
         closeRealtime();
         realtimeUnavailable ||= /まだ提供されていません/.test(error.message);
-        if (provider === "realtime") {
-          setStatus(`Codex Realtimeを開始できません: ${error.message}`, 5000);
-          return;
-        }
-        setStatus(`端末音声認識へ切替: ${error.message}`, 5000);
+        setStatus(`Codex Realtimeを開始できません: ${error.message}`, 5000);
+        return;
       }
     }
     if (provider === "realtime") {
@@ -779,11 +1266,20 @@ window.addEventListener("DOMContentLoaded", () => {
   ipcRenderer.on("mascot:stream", (_event, payload) => {
     if (payload?.phase === "start") {
       clearPermission();
+      stopTtsPlayback();
+      bubblePersistent = false;
+      streamFullText = "考え中…";
+      streamCurrentSpeechText = "";
+      streamTtsConfig = {
+        enabled: Boolean(payload?.ttsEnabled),
+        provider: payload?.ttsProvider || "system",
+        language: payload?.speechLanguage || "ja-JP",
+      };
       sending = true;
       streamWorkMode = payload?.mode === "work";
       streamHasActivity = false;
       clearTimeout(hideTimer);
-      bubbleText.textContent = "考え中…";
+      bubbleText.textContent = streamFullText;
       bubble.classList.remove("is-expanded", "has-overflow");
       bubbleMore.hidden = true;
       bubble.classList.add("is-visible");
@@ -794,15 +1290,21 @@ window.addEventListener("DOMContentLoaded", () => {
       if (thinkingFillerActive) {
         thinkingFillerActive = false;
         stopTtsPlayback();
+        streamCurrentSpeechText = "";
       }
-      bubbleText.textContent = String(payload.text || "");
+      streamFullText = String(payload.displayText || payload.text || "");
+      if (bubble.classList.contains("is-expanded") || !streamCurrentSpeechText) {
+        bubbleText.textContent = streamFullText;
+      }
       bubble.classList.add("is-visible");
       syncBubbleOverflow();
       const now = performance.now();
-      if (now - lastStreamPulseAt > 90) {
+      if (!streamTtsConfig.enabled && now - lastStreamPulseAt > 64) {
         lastStreamPulseAt = now;
-        ipcRenderer.invoke("mascotInline:voice", .16 + Math.random() * .2).catch(() => {});
+        const deltaText = String(payload.delta || streamFullText);
+        ipcRenderer.invoke("mascotInline:voice", textLipLevel(deltaText, Math.max(0, deltaText.length - 1), Math.floor(now / 64))).catch(() => {});
       }
+      queueStreamSpeech(payload?.speechSegments);
       return;
     }
     if (payload?.phase === "activity") {
@@ -811,19 +1313,33 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (payload?.phase === "done") {
+      if (payload?.text) streamFullText = String(payload.displayText || payload.text);
+      streamTtsFinished = true;
+      bubblePersistent = !streamWorkMode;
+      queueStreamSpeech(payload?.speechSegments);
+      if (!streamTtsConfig.enabled || (!streamTtsDraining && !streamTtsQueue.length)) {
+        streamCurrentSpeechText = "";
+        if (!bubble.classList.contains("is-expanded")) bubbleText.textContent = streamFullText;
+        if (streamTtsConfig.enabled) finishTtsPlayback();
+      }
+      syncBubbleOverflow();
+      scheduleBubbleHide(Math.max(9000, bubbleHideDuration));
       sending = false;
       if (streamWorkMode) setWorkActivity("作業完了", { finish: true });
       else if (streamHasActivity) setWorkActivity("");
       streamWorkMode = false;
       streamHasActivity = false;
     } else if (payload?.phase === "error") {
+      stopTtsPlayback();
+      streamCurrentSpeechText = "";
+      if (!bubble.classList.contains("is-expanded") && streamFullText) bubbleText.textContent = streamFullText;
       sending = false;
       if (streamWorkMode) setWorkActivity("作業を完了できませんでした", { finish: true });
       else if (streamHasActivity) setWorkActivity("");
       streamWorkMode = false;
       streamHasActivity = false;
     }
-    ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
+    if (!ttsBusy) ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
   });
   ipcRenderer.on("mascot:realtimeEvent", async (_event, message) => {
     const method = String(message?.method || "");
@@ -875,6 +1391,17 @@ window.addEventListener("DOMContentLoaded", () => {
   ipcRenderer.on("mascot:tts", (_event, payload) => {
     if (!payload?.enabled) {
       stopTtsPlayback();
+    }
+  });
+  ipcRenderer.on("mascot:voiceInputSettings", (_event, payload) => {
+    const previousProvider = appState?.speechInputProvider;
+    const previousMode = appState?.voiceActivationMode;
+    const previousSensitivity = appState?.vadSensitivity;
+    appState = { ...appState, ...payload };
+    if (vadActive && (previousProvider !== appState.speechInputProvider
+      || previousMode !== appState.voiceActivationMode
+      || previousSensitivity !== appState.vadSensitivity)) {
+      stopVadListening({ discard: true });
     }
   });
   ipcRenderer.on("mascot:thinkingFiller", (_event, payload) => {

@@ -195,7 +195,7 @@ body.is-work-panel-open #desktopMascotBubble.is-visible { opacity: 0; transform:
   gap: 6px;
   pointer-events: none;
 }
-#desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton, #desktopMascotSendButton, #desktopMascotModeButton, #desktopMascotWorkTarget, #desktopMascotWorkHistoryButton {
+#desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton, #desktopMascotSendButton, #desktopMascotStopButton, #desktopMascotModeButton, #desktopMascotWorkTarget, #desktopMascotWorkHistoryButton {
   -webkit-app-region: no-drag;
   pointer-events: auto;
   cursor: pointer;
@@ -311,16 +311,22 @@ body.is-work-mode #desktopMascotWorkHistoryButton { display: block; }
 }
 body.is-work-mode #desktopMascotInput { min-height: 42px; max-height: 78px; padding: 9px 5px; font-size: 12.5px; }
 #desktopMascotInput::placeholder { color: var(--pet-placeholder); }
-#desktopMascotMicButton, #desktopMascotSendButton { width: 34px; height: 34px; border-radius: 10px; box-shadow: none; font-size: 12px; background: var(--pet-control-subtle); }
+#desktopMascotMicButton, #desktopMascotSendButton, #desktopMascotStopButton { width: 34px; height: 34px; border-radius: 10px; box-shadow: none; font-size: 12px; background: var(--pet-control-subtle); }
 #desktopMascotMicButton { grid-area: mic; }
-#desktopMascotSendButton { grid-area: send; }
+#desktopMascotSendButton, #desktopMascotStopButton { grid-area: send; }
+#desktopMascotStopButton[hidden], #desktopMascotSendButton[hidden] { display: none; }
 #desktopMascotMicButton[aria-pressed="true"] { color: var(--pet-accent-ink); background: var(--pet-accent); }
+#desktopMascotMicButton.is-vad-waiting { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pet-accent-ink) 28%, transparent); }
+#desktopMascotMicButton.is-vad-speaking { animation: mascot-mic-listening .72s ease-in-out infinite; }
+#desktopMascotMicButton.is-vad-processing { cursor: wait; opacity: .78; }
+@keyframes mascot-mic-listening { 50% { transform: scale(.9); filter: brightness(1.14); } }
 #desktopMascotSendButton { color: var(--pet-accent-ink); background: linear-gradient(145deg, color-mix(in srgb, var(--pet-accent) 72%, white), var(--pet-accent)); border-color: var(--pet-accent-line); }
+#desktopMascotStopButton { color: var(--pet-danger-text); background: var(--pet-danger-fill); border-color: rgba(239,170,168,.24); }
 #desktopMascotChatButton:active, #desktopMascotSettingsButton:active,
-#desktopMascotMicButton:active, #desktopMascotSendButton:active,
+#desktopMascotMicButton:active, #desktopMascotSendButton:active, #desktopMascotStopButton:active,
 #desktopMascotModeButton:active, #desktopMascotWorkTarget:active,
 #desktopMascotWorkHistoryButton:active { transform: scale(.94); transition-duration: 70ms; }
-#desktopMascotSendButton:disabled { opacity: .5; cursor: wait; }
+#desktopMascotSendButton:disabled, #desktopMascotStopButton:disabled { opacity: .5; cursor: wait; }
 #desktopMascotModeButton:disabled, #desktopMascotWorkTarget:disabled { opacity: .45; cursor: wait; }
 #desktopMascotWorkPanel {
   -webkit-app-region: no-drag;
@@ -396,6 +402,10 @@ body.is-work-mode #desktopMascotInput { min-height: 42px; max-height: 78px; padd
 .desktop-mascot-work-request, .desktop-mascot-work-result { margin: 7px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .desktop-mascot-work-request { color: var(--pet-text); font: 650 11px/1.5 system-ui, sans-serif; }
 .desktop-mascot-work-result { max-height: 112px; overflow-y: auto; padding-top: 8px; border-top: 1px solid var(--pet-border); color: var(--pet-text-secondary); font: 550 10px/1.55 system-ui, sans-serif; }
+.desktop-mascot-work-latest { margin: 7px 0 0; color: var(--pet-text-secondary); font: 650 10px/1.5 system-ui, sans-serif; }
+.desktop-mascot-work-history-details { margin-top: 5px; color: var(--pet-text-muted); font: 650 9px/1.45 system-ui, sans-serif; }
+.desktop-mascot-work-history-details summary { width: fit-content; cursor: pointer; user-select: none; }
+.desktop-mascot-work-history-details[open] summary { color: var(--pet-text-secondary); }
 .desktop-mascot-work-activities { margin: 7px 0 0; padding: 0; list-style: none; color: var(--pet-text-secondary); font: 600 9.5px/1.5 system-ui, sans-serif; }
 .desktop-mascot-work-activities li::before { content: "·"; margin-right: 5px; color: var(--pet-accent); }
 .desktop-mascot-work-stop {
@@ -428,6 +438,22 @@ body.is-work-mode #desktopMascotInput { min-height: 42px; max-height: 78px; padd
   pointer-events: none;
 }
 #desktopMascotDock.is-status #desktopMascotHint { opacity: 1; transform: none; }
+#desktopMascotBubble.is-speaking::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--pet-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pet-accent) 18%, transparent);
+  animation: mascot-speaking-pulse .9s ease-in-out infinite;
+}
+@keyframes mascot-speaking-pulse { 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) {
+  #desktopMascotBubble.is-speaking::after { animation: none; }
+  #desktopMascotMicButton.is-vad-speaking { animation: none; }
+}
 #desktopMascotPetZone {
   -webkit-app-region: no-drag;
   position: fixed;
@@ -464,7 +490,7 @@ body.is-position-locked #desktopMascotPetZone { cursor: pointer; }
   50% { opacity: 1; transform: scale(1.15); }
 }
 #desktopMascotChatButton:focus-visible, #desktopMascotSettingsButton:focus-visible,
-#desktopMascotMicButton:focus-visible, #desktopMascotSendButton:focus-visible,
+#desktopMascotMicButton:focus-visible, #desktopMascotSendButton:focus-visible, #desktopMascotStopButton:focus-visible,
 #desktopMascotModeButton:focus-visible, #desktopMascotWorkTarget:focus-visible,
 #desktopMascotWorkHistoryButton:focus-visible, #desktopMascotWorkPanelClose:focus-visible,
 .desktop-mascot-work-stop:focus-visible,
@@ -516,7 +542,7 @@ body.is-position-locked #desktopMascotPetZone { cursor: pointer; }
 @media (prefers-reduced-transparency: reduce) {
   #desktopMascotBubble, #desktopMascotComposer, #desktopMascotWorkPanel,
   #desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton,
-  #desktopMascotWorkTarget, #desktopMascotWorkHistoryButton {
+  #desktopMascotStopButton, #desktopMascotWorkTarget, #desktopMascotWorkHistoryButton {
     backdrop-filter: none;
     background: var(--pet-reduced-surface);
   }
@@ -527,7 +553,7 @@ body.is-position-locked #desktopMascotPetZone { cursor: pointer; }
 @media (prefers-contrast: more) {
   #desktopMascotBubble, #desktopMascotComposer, #desktopMascotWorkPanel,
   #desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton,
-  #desktopMascotSendButton, #desktopMascotModeButton, #desktopMascotWorkTarget,
+  #desktopMascotSendButton, #desktopMascotStopButton, #desktopMascotModeButton, #desktopMascotWorkTarget,
   #desktopMascotWorkHistoryButton { border-color: var(--pet-contrast-border); }
   #desktopMascotInput::placeholder { color: var(--pet-text-secondary); }
 }

@@ -45,6 +45,9 @@
       "DISTRIBUTION_ASSET_LICENSE.md",
       "THIRD_PARTY_NOTICES.md"
     ],
+    "asarUnpack": [
+      "node_modules/sherpa-onnx-*/**/*"
+    ],
     "win": {
       "icon": "app-icon.ico",
       "target": [
@@ -60,6 +63,7 @@
     }
   },
   "dependencies": {
-    "pngjs": "^7.0.0"
+    "pngjs": "^7.0.0",
+    "sherpa-onnx-node": "^1.13.4"
   }
 }

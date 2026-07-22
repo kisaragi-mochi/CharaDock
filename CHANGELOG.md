@@ -4,8 +4,20 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- Synchronize happy, surprised, and soft expressions to each spoken sentence without pinning the mouth or eyes; drive Style-Bert-VITS2 lip sync from the real audio waveform, add stable threshold hysteresis, and show the sentence currently being spoken before restoring the full reply.
+- Add switchable local sherpa-onnx ASR models (Japanese Parakeet CTC, Japanese ReazonSpeech Zipformer, SenseVoice, Whisper base, and Whisper tiny) with independent verified downloads, plus a verified Silero neural VAD with energy-based fallback.
+- Strip internal Codex citation markers before display and speech, keep VAD recording alive with a 600ms pre-roll across repeated utterances, add conversation/work interruption controls, and show only the latest work update with full progress retained in a disclosure history.
 - Fix Style-Bert-VITS2 playback by allowing generated `data:` audio in the desktop CSP, preserving the API response audio MIME type, and surfacing decoder-specific playback errors.
-- Add selectable voice-input providers: automatic Codex Realtime fallback, Realtime-only, local sherpa-onnx WebSocket ASR, device speech recognition, and OpenAI transcription.
+- Start Style-Bert-VITS2 playback from the first completed visible sentence and continue through an interruptible ordered queue, avoiding the former whole-response synthesis delay and duplicate final playback.
+- Add selectable voice-input providers: automatic Japanese-local recognition, explicit Realtime, embedded sherpa-onnx ASR, device speech recognition, and OpenAI transcription.
+- Add Codex CLI 0.145 `localAudio` input as a selectable provider, with direct VAD-to-turn sending and automatic cleanup of temporary recordings.
+- Add adaptive VAD, silence-stop transcription, optional auto-send, and low/normal/high sensitivity for compact sherpa-onnx/OpenAI voice input; remove unreliable Japanese wake-word activation.
+- Keep the latest chat reply visible, delay thinking fillers until 1.8 seconds, and expand each character's filler variations.
+- Preserve short follow-up context with a bounded in-session conversation backup, and make click reactions invoke bubble/TTS playback directly.
+- Stop automatic Realtime attempts, prefer Japanese-local recognition in automatic mode, and move explicit Realtime sessions to the current experimental V3 voice path.
+- Bundle the sherpa-onnx native runtime while downloading and SHA-256-verifying the optional 116MB multilingual Japanese model only on request.
+- Populate conversation/work Codex model dropdowns from app-server `model/list` instead of requiring model IDs to be typed manually.
+- Restore mouse following across the complete transparent mascot window, including its touch and compact-chat overlays.
 - Expand per-character motion controls with follow speed, breathing, body lean/bounce, hair spring, and hair sway, all with live preview.
 - Limit mouse following to the time the cursor is actually over the mascot and return its gaze to center immediately on leave.
 - Read touch/click reactions aloud through the selected system or Style-Bert-VITS2 voice.

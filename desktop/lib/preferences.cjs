@@ -22,8 +22,11 @@ const DEFAULTS = Object.freeze({
   styleBertVits2ModelId: 0,
   styleBertVits2Speed: 1,
   speechInputProvider: "auto",
-  sherpaOnnxUrl: "ws://localhost:6006",
+  sherpaModelId: "reazonspeech-ja-int8",
   speechLanguage: "ja-JP",
+  voiceActivationMode: "vad",
+  vadSensitivity: "normal",
+  voiceAutoSend: true,
   onboardingComplete: false,
   positionLocked: false,
   edgeSnap: true,
@@ -58,6 +61,8 @@ class Preferences {
         if (!Object.prototype.hasOwnProperty.call(parsed, "codexChatModel")) this.data.codexChatModel = parsed.codexModel;
         if (!Object.prototype.hasOwnProperty.call(parsed, "codexWorkModel")) this.data.codexWorkModel = parsed.codexModel;
       }
+      if (!["manual", "vad"].includes(this.data.voiceActivationMode)) this.data.voiceActivationMode = "vad";
+      if (!["low", "normal", "high"].includes(this.data.vadSensitivity)) this.data.vadSensitivity = "normal";
       if (typeof parsed.encryptedApiKey === "string") this.data.encryptedApiKey = parsed.encryptedApiKey;
     } catch (error) {
       if (error?.code !== "ENOENT") console.warn("Preferences load failed:", error);
