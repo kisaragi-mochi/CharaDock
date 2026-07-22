@@ -45,6 +45,7 @@ class CodexAppServerClient {
     commandArgs = [],
     pathMapper = null,
     model = "",
+    reasoningEffort = "",
     developerInstructions = CODEX_MASCOT_INSTRUCTIONS,
     sandbox = "read-only",
     approvalPolicy = "never",
@@ -60,6 +61,7 @@ class CodexAppServerClient {
     this.commandArgs = Array.isArray(commandArgs) ? commandArgs : [];
     this.pathMapper = typeof pathMapper === "function" ? pathMapper : (value) => value;
     this.model = model;
+    this.reasoningEffort = String(reasoningEffort || "").trim();
     this.developerInstructions = String(developerInstructions || "");
     this.sandbox = sandbox;
     this.approvalPolicy = approvalPolicy;
@@ -88,6 +90,14 @@ class CodexAppServerClient {
     const normalized = String(model || "").trim();
     if (normalized !== this.model) {
       this.model = normalized;
+      this.threadId = null;
+    }
+  }
+
+  setReasoningEffort(reasoningEffort) {
+    const normalized = String(reasoningEffort || "").trim();
+    if (normalized !== this.reasoningEffort) {
+      this.reasoningEffort = normalized;
       this.threadId = null;
     }
   }
@@ -382,6 +392,8 @@ class CodexAppServerClient {
         threadId,
         input,
       };
+      if (this.model) params.model = this.model;
+      if (this.reasoningEffort) params.effort = this.reasoningEffort;
       const sandboxPolicy = this.usesPermissionProfile ? null : workspaceSandboxPolicy(this.sandbox, this.cwd);
       if (sandboxPolicy) params.sandboxPolicy = sandboxPolicy;
       if (outputSchema) params.outputSchema = outputSchema;

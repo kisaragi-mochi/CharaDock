@@ -4,6 +4,14 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- Fix Style-Bert-VITS2 playback by allowing generated `data:` audio in the desktop CSP, preserving the API response audio MIME type, and surfacing decoder-specific playback errors.
+- Add selectable voice-input providers: automatic Codex Realtime fallback, Realtime-only, local sherpa-onnx WebSocket ASR, device speech recognition, and OpenAI transcription.
+- Expand per-character motion controls with follow speed, breathing, body lean/bounce, hair spring, and hair sway, all with live preview.
+- Limit mouse following to the time the cursor is actually over the mascot and return its gaze to center immediately on leave.
+- Read touch/click reactions aloud through the selected system or Style-Bert-VITS2 voice.
+- Add separate Codex app-server model and reasoning-effort settings for conversation and work, while migrating the former shared model setting.
+- Fix unreadable native select options in Windows light mode and move voice-input provider selection alongside the desktop audio controls.
+
 - Add a responsive OS-adaptive GitHub Pages landing page, rebuild the README around the current product experience, and add pinned Actions workflows for Pages deployment and Windows installer/portable draft releases with SHA-256 manifests.
 - Use fully composited hair-on character previews in README and Pages, and describe the human cast consistently as desktop companions rather than pets.
 - Remove 366 Google Fonts unicode-subset files and their fetch pipeline; the browser editor now uses the operating-system font stack while the required offline MediaPipe runtime remains vendored.

@@ -3,10 +3,17 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  audioMimeType,
   splitTtsText,
   styleBertVoiceEndpoint,
   synthesizeStyleBertVits2,
 } = require("../lib/style-bert-vits2.cjs");
+
+test("Style-Bert-VITS2 audio MIME type follows the response or file signature", () => {
+  assert.equal(audioMimeType(Buffer.from("RIFF"), "audio/x-wav; charset=binary"), "audio/x-wav");
+  assert.equal(audioMimeType(Buffer.from("OggS"), "application/octet-stream"), "audio/ogg");
+  assert.equal(audioMimeType(Buffer.from("ID3x"), "application/octet-stream"), "audio/mpeg");
+});
 
 test("Style-Bert-VITS2 endpoint accepts only local HTTP servers", () => {
   assert.equal(styleBertVoiceEndpoint("http://localhost:5000/docs").href, "http://localhost:5000/voice");

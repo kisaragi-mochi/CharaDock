@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*; media-src 'self' blob: data:; object-src 'none'; base-uri 'none'" />
   <title>PuruPet Desktop</title>
   <link rel="stylesheet" href="./control.css" />
 </head>
@@ -108,7 +108,7 @@
             <label>幅 (%)<input id="bubbleWidthInput" type="number" min="35" max="90" step="1" /></label>
           </div>
           <section class="motion-editor" aria-labelledby="motionEditorTitle">
-            <header><div><h3 id="motionEditorTitle">デスクトップ表示と動き</h3><p>PuruPuruの表示サイズと、顔がマウスを追う可動範囲をキャラごとに調整します。</p></div></header>
+            <header><div><h3 id="motionEditorTitle">デスクトップ表示と動き</h3><p>表示サイズと顔の可動範囲を調整します。変更はキャラクターへすぐ反映されます。</p></div></header>
             <div class="motion-slider-grid">
               <label><span>キャラクターサイズ <output id="avatarSizeOutput">100%</output></span><input id="avatarSizeInput" type="range" min="30" max="300" step="1" /></label>
               <label><span>左を向く幅 <output id="rangeLeftOutput">60%</output></span><input id="rangeLeftInput" type="range" min="0" max="300" step="1" /></label>
@@ -116,6 +116,17 @@
               <label><span>上を向く幅 <output id="rangeUpOutput">30%</output></span><input id="rangeUpInput" type="range" min="0" max="300" step="1" /></label>
               <label><span>下を向く幅 <output id="rangeDownOutput">30%</output></span><input id="rangeDownInput" type="range" min="0" max="300" step="1" /></label>
             </div>
+            <details class="motion-advanced">
+              <summary>動きの質感を詳しく調整</summary>
+              <div class="motion-slider-grid">
+                <label><span>追従の速さ <output id="followSpeedOutput">25%</output></span><input id="followSpeedInput" type="range" min="4" max="100" step="1" /></label>
+                <label><span>呼吸の強さ <output id="breathStrengthOutput">40%</output></span><input id="breathStrengthInput" type="range" min="0" max="100" step="1" /></label>
+                <label><span>体の傾き <output id="rollStrengthOutput">8%</output></span><input id="rollStrengthInput" type="range" min="0" max="100" step="1" /></label>
+                <label><span>上下の弾み <output id="pyokoStrengthOutput">12%</output></span><input id="pyokoStrengthInput" type="range" min="0" max="100" step="1" /></label>
+                <label><span>髪のしなり <output id="hairSpringOutput">40%</output></span><input id="hairSpringInput" type="range" min="0" max="200" step="1" /></label>
+                <label><span>髪の揺れ幅 <output id="hairWarpOutput">38%</output></span><input id="hairWarpInput" type="range" min="0" max="100" step="1" /></label>
+              </div>
+            </details>
           </section>
           <div class="profile-actions">
             <button id="saveCharacterProfileButton" class="button button-primary" type="button">このキャラに保存</button>
@@ -124,8 +135,8 @@
           </div>
         </section>
         <div class="card feature-card">
-          <div><span class="card-icon">◌</span><div><h2>動きと反応</h2><p>自動まばたき、呼吸、髪揺れ、フォーカス中のマウス追従、音量リップシンクを利用します。</p></div></div>
-          <label class="switch-row"><span>フォーカス中、マウスを目で追う</span><input id="mouseFollowToggle" type="checkbox" /><i></i></label>
+          <div><span class="card-icon">◌</span><div><h2>動きと反応</h2><p>自動まばたき、呼吸、髪揺れ、アプリ上のマウス追従、音量リップシンクを利用します。</p></div></div>
+          <label class="switch-row"><span><strong>マウスを目で追う</strong><small>カーソルがキャラクター上にある間だけ追従</small></span><input id="mouseFollowToggle" type="checkbox" /><i></i></label>
         </div>
       </section>
 
@@ -152,8 +163,22 @@
 
         <div class="settings-grid">
           <section class="card settings-card" id="codexSettings">
-            <header><div><h2>Codex設定</h2><p>空欄ならCodex側の既定モデルを使用します。</p></div></header>
-            <label>モデル（任意）<input id="codexModelInput" type="text" autocomplete="off" placeholder="既定モデル" /></label>
+            <header><div><h2>Codex設定</h2><p>会話と作業でモデルと推論の深さを分けられます。空欄ならCodex側の既定値です。</p></div></header>
+            <div class="codex-mode-settings">
+              <h3>会話</h3>
+              <label>モデル（任意）<input id="codexChatModelInput" type="text" autocomplete="off" placeholder="Codex既定（例: gpt-5.6-sol）" /></label>
+              <label>推論の深さ<select id="codexChatReasoningEffortSelect">
+                <option value="">Codex既定</option><option value="none">なし</option><option value="minimal">最小</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">非常に高い</option><option value="max">最大</option><option value="ultra">Ultra</option>
+              </select></label>
+            </div>
+            <div class="codex-mode-settings">
+              <h3>作業</h3>
+              <label>モデル（任意）<input id="codexWorkModelInput" type="text" autocomplete="off" placeholder="Codex既定（例: gpt-5.6-sol）" /></label>
+              <label>推論の深さ<select id="codexWorkReasoningEffortSelect">
+                <option value="">Codex既定</option><option value="none">なし</option><option value="minimal">最小</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">非常に高い</option><option value="max">最大</option><option value="ultra">Ultra</option>
+              </select></label>
+            </div>
+            <p class="hint">深くするほど応答に時間がかかる場合があります。利用できる値はモデルによって異なります。</p>
             <div class="stack-actions">
               <button id="codexLoginButton" class="button button-secondary" type="button">ChatGPTでログイン</button>
               <p id="codexAccountState" class="hint">アカウント状態を確認しています…</p>
@@ -180,6 +205,20 @@
             <label class="switch-row"><span><strong>位置をロック</strong><small>誤操作でキャラクターが動くのを防止</small></span><input id="positionLockedToggle" type="checkbox" /><i></i></label>
             <label class="switch-row"><span><strong>画面端へ吸着</strong><small>近くまで移動すると端へ揃える</small></span><input id="edgeSnapToggle" type="checkbox" /><i></i></label>
             <label class="switch-row"><span><strong>PC起動時に開始</strong><small>Windows・macOSで有効</small></span><input id="launchAtLoginToggle" type="checkbox" /><i></i></label>
+            <div class="tts-settings speech-input-settings">
+              <h3>音声入力</h3>
+              <label>認識方式<select id="speechInputProviderSelect">
+                <option value="auto">自動（Realtimeを優先）</option>
+                <option value="realtime">Codex Realtime</option>
+                <option value="sherpa-onnx">sherpa-onnx（ローカル）</option>
+                <option value="browser">端末音声認識</option>
+                <option value="openai">OpenAI文字起こし</option>
+              </select></label>
+              <div id="sherpaOnnxSettings" class="tts-provider-settings" hidden>
+                <label>sherpa-onnx WebSocket URL<input id="sherpaOnnxUrlInput" type="text" inputmode="url" autocomplete="off" placeholder="ws://localhost:6006" /></label>
+                <p class="hint">non-streaming WebSocket serverへ録音した音声を送ります。</p>
+              </div>
+            </div>
             <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>端末音声またはローカルのStyle-Bert-VITS2を使用</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
             <div class="tts-settings">
               <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2</option></select></label>

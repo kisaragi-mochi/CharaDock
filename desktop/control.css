@@ -285,7 +285,7 @@ input[type="text"], input[type="password"], input[type="number"], textarea, sele
 }
 input:hover, textarea:hover, select:hover { border-color: rgba(255, 255, 255, .16); }
 input:focus, textarea:focus, select:focus { border-color: color-mix(in srgb, var(--accent) 68%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent); }
-select option { color: #fff; background: var(--surface); }
+select option { color: #f8f5fa; background: #252229; }
 .motion-editor { display: grid; gap: 14px; padding: 16px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 13px; }
 .motion-editor h3 { margin: 0; font-size: 13px; }
 .motion-editor header p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
@@ -294,6 +294,13 @@ select option { color: #fff; background: var(--surface); }
 .motion-slider-grid label:first-child { grid-column: 1 / -1; }
 .motion-slider-grid label > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .motion-slider-grid output { color: var(--accent); font: 750 10px system-ui; }
+.motion-advanced { padding-top: 2px; border-top: 1px solid var(--line); }
+.motion-advanced summary { width: fit-content; padding: 8px 0 0; color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 700; }
+.motion-advanced[open] summary { margin-bottom: 14px; color: var(--accent); }
+.speech-input-settings { display: grid; gap: 12px; margin-top: 14px; }
+.speech-input-settings h3, .codex-mode-settings h3 { margin: 0; color: var(--text); font-size: 12px; }
+.codex-mode-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; background: var(--field); border: 1px solid var(--line); border-radius: 13px; }
+.codex-mode-settings h3 { grid-column: 1 / -1; }
 input[type="range"] {
   --range-progress: 0%;
   width: 100%;
@@ -462,6 +469,7 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.16); box-s
   .message.is-user .message-avatar { color: #333338; background: #e3e3e6; }
   .composer { background: rgba(255,255,255,.82); }
   .composer textarea, input[type="text"], input[type="password"], input[type="number"], textarea, select { color: #1d1d1f; }
+  select option { color: #1d1d1f; background: #fff; }
   .composer textarea::placeholder { color: #929298; }
   .expression-strip button, .icon-text-button { color: #5f5f65; }
   .icon-text-button:hover, .icon-text-button[aria-pressed="true"] { color: #222226; background: #e8e8eb; }

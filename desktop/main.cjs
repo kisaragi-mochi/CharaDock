@@ -39,6 +39,7 @@ const {
 const { screenShareConversationAction } = require("./lib/screen-share-intent.cjs");
 const { MascotStaticServer } = require("./lib/static-server.cjs");
 const { styleBertVoiceEndpoint, synthesizeStyleBertVits2 } = require("./lib/style-bert-vits2.cjs");
+const { sherpaOnnxEndpoint } = require("./lib/sherpa-onnx.cjs");
 
 const AVATAR_IMAGE_FILES = Object.freeze({
   backHair: "back-hair.png",
@@ -92,9 +93,7 @@ let mascotClickThroughState = null;
 let cursorFollowWasActive = false;
 let latestInput = { voiceRaw: 0 };
 let lastVoiceInputAt = 0;
-let lastMascotHoverAt = 0;
-let lastCursorMoveAt = 0;
-let lastCursorPoint = null;
+let mascotHovered = false;
 let generationInProgress = false;
 let nextWorkRunId = 1;
 let activeWorkRunId = null;
@@ -117,6 +116,7 @@ const WORK_MODE_INSTRUCTIONS = [
   "Reflect the selected avatar persona only in brief user-facing progress narration and the final report.",
   "Report progress and the final result concisely in Japanese.",
 ].join("\n");
+const CODEX_REASONING_EFFORTS = new Set(["", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
 const BROWSER_MODE_INSTRUCTIONS = [
   "Use the provided browser namespace only after the user granted one-turn browser permission.",
   "Browser access is read-only: open pages, read visible content, follow links, go back, and inspect screenshots.",
@@ -165,6 +165,12 @@ function characterMotionDefaults(character) {
     rangeRight: finite(state.rangeRight, 60),
     rangeUp: finite(state.rangeUp, 30),
     rangeDown: finite(state.rangeDown, 30),
+    followSpeed: finite(state.followSpeed, 25),
+    breathStrength: finite(state.breathStrength, 40),
+    rollStrength: finite(state.rollStrength, 8),
+    pyokoStrength: finite(state.pyokoStrength, 12),
+    hairSpring: finite(state.hairSpring, 40),
+    hairWarp: finite(state.hairWarp, 38),
   };
   characterMotionCache.set(directory, motion);
   return motion;
@@ -400,6 +406,12 @@ function sanitizedMotion(motion, fallback) {
     rangeRight: number("rangeRight", 0, 300),
     rangeUp: number("rangeUp", 0, 300),
     rangeDown: number("rangeDown", 0, 300),
+    followSpeed: number("followSpeed", 4, 100),
+    breathStrength: number("breathStrength", 0, 100),
+    rollStrength: number("rollStrength", 0, 100),
+    pyokoStrength: number("pyokoStrength", 0, 100),
+    hairSpring: number("hairSpring", 0, 200),
+    hairWarp: number("hairWarp", 0, 100),
   };
 }
 
@@ -419,7 +431,7 @@ function buildAvatarSnapshot(characterId, motionOverride = null) {
   const settings = JSON.parse(fs.readFileSync(path.join(directory, "default-settings.json"), "utf8"));
   settings.state ||= {};
   settings.state.idleMotionEnabled = true;
-  for (const key of ["avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown"]) {
+  for (const key of ["avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown", "followSpeed", "breathStrength", "rollStrength", "pyokoStrength", "hairSpring", "hairWarp"]) {
     settings.state[key] = motion[key];
   }
   return {
@@ -475,6 +487,25 @@ function validWorkDirectory() {
   } catch {
     return "";
   }
+}
+
+function normalizedReasoningEffort(value) {
+  const normalized = String(value || "").trim();
+  return CODEX_REASONING_EFFORTS.has(normalized) ? normalized : "";
+}
+
+function conversationCodexSettings() {
+  return {
+    model: String(preferences.data.codexChatModel || preferences.data.codexModel || "").trim(),
+    reasoningEffort: normalizedReasoningEffort(preferences.data.codexChatReasoningEffort),
+  };
+}
+
+function workCodexSettings() {
+  return {
+    model: String(preferences.data.codexWorkModel || preferences.data.codexModel || "").trim(),
+    reasoningEffort: normalizedReasoningEffort(preferences.data.codexWorkReasoningEffort),
+  };
 }
 
 function codexWorkspaceRuntime(directory) {
@@ -587,7 +618,7 @@ function ensureWorkClient() {
     resetWorkClient();
     workCodexClient = new CodexAppServerClient({
       ...runtime,
-      model: preferences.data.codexModel,
+      ...workCodexSettings(),
       developerInstructions: WORK_MODE_INSTRUCTIONS,
       sandbox: "workspace-write",
       approvalPolicy: "never",
@@ -823,6 +854,7 @@ function createMascotWindow() {
     alwaysOnTop: Boolean(preferences.data.alwaysOnTop),
     webPreferences: {
       preload: path.join(__dirname, "preload-mascot.cjs"),
+      autoplayPolicy: "no-user-gesture-required",
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -862,6 +894,7 @@ function createControlWindow() {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload-control.cjs"),
+      autoplayPolicy: "no-user-gesture-required",
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -1028,23 +1061,19 @@ function registerShortcuts() {
 }
 
 function mascotCanTrackCursor() {
-  const settingsVisible = Boolean(controlWindow && !controlWindow.isDestroyed() && controlWindow.isVisible());
   return Boolean(
-    !settingsVisible &&
-    mascotWindow && !mascotWindow.isDestroyed() && mascotWindow.isVisible() && mascotWindow.isFocused(),
+    mascotWindow && !mascotWindow.isDestroyed() && mascotWindow.isVisible(),
   );
 }
 
 function stopCursorFollow() {
   cursorFollowWasActive = false;
-  lastMascotHoverAt = 0;
+  mascotHovered = false;
   localServer?.pushInput({ targetX: 0, targetY: 0, angleX: 0, angleY: 0, voiceRaw: 0 });
 }
 
 function currentCursorInput() {
-  const appFocused = mascotCanTrackCursor();
-  const hoverFollow = Date.now() - lastMascotHoverAt < 420;
-  if (!appFocused || (!preferences.data.mouseFollow && !hoverFollow) || !mascotWindow || mascotWindow.isDestroyed()) {
+  if (!mascotCanTrackCursor() || !preferences.data.mouseFollow || !mascotHovered || !mascotWindow || mascotWindow.isDestroyed()) {
     return { targetX: 0, targetY: 0, angleX: 0, angleY: 0 };
   }
   const bounds = mascotWindow.getBounds();
@@ -1056,23 +1085,11 @@ function currentCursorInput() {
   return { targetX: x, targetY: y, angleX: x, angleY: y };
 }
 
-function cursorMovementActive() {
-  const point = screen.getCursorScreenPoint();
-  if (!lastCursorPoint || point.x !== lastCursorPoint.x || point.y !== lastCursorPoint.y) {
-    lastCursorPoint = point;
-    lastCursorMoveAt = Date.now();
-  }
-  return Date.now() - lastCursorMoveAt < 1600;
-}
-
 function startCursorLoop() {
   clearInterval(cursorTimer);
   cursorTimer = setInterval(() => {
     const voiceActive = Date.now() - lastVoiceInputAt < 550;
-    const appFocused = mascotCanTrackCursor();
-    const hoverFollow = appFocused && Date.now() - lastMascotHoverAt < 420;
-    const movingFollow = appFocused && preferences.data.mouseFollow && cursorMovementActive();
-    const followActive = movingFollow || hoverFollow;
+    const followActive = mascotCanTrackCursor() && preferences.data.mouseFollow && mascotHovered;
     const hasCursorOffset = ["targetX", "targetY", "angleX", "angleY"]
       .some((key) => Math.abs(Number(localServer.input?.[key]) || 0) > 0.001);
     if (!followActive && !voiceActive && !cursorFollowWasActive && !hasCursorOffset) return;
@@ -1125,7 +1142,7 @@ async function runSmokeTest() {
   await Promise.all([waitForPageLoad(controlWindow), waitForPageLoad(mascotWindow)]);
   await new Promise((resolve) => setTimeout(resolve, 1800));
   const expectedMotion = activeCharacter().motion;
-  for (const key of ["avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown"]) {
+  for (const key of ["avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown", "followSpeed", "breathStrength", "rollStrength", "pyokoStrength", "hairSpring", "hairWarp"]) {
     if (localServer.snapshot?.settings?.state?.[key] !== expectedMotion[key]) {
       throw new Error(`character motion snapshot check failed: ${key}`);
     }
@@ -1372,7 +1389,7 @@ async function runSmokeTest() {
   const characterControlImage = await controlWindow.capturePage();
   fs.writeFileSync(path.join(outputDir, "control-character.png"), characterControlImage.toPNG());
   const motionControlsReady = await controlWindow.webContents.executeJavaScript(`(() => {
-    const keys = ['avatarSize', 'rangeLeft', 'rangeRight', 'rangeUp', 'rangeDown'];
+    const keys = ['avatarSize', 'rangeLeft', 'rangeRight', 'rangeUp', 'rangeDown', 'followSpeed', 'breathStrength', 'rollStrength', 'pyokoStrength', 'hairSpring', 'hairWarp'];
     const ready = keys.every((key) => document.querySelector('#' + key + 'Input')?.value && document.querySelector('#' + key + 'Output')?.textContent);
     document.querySelector('.profile-editor').scrollIntoView({ block: 'start' });
     return ready;
@@ -1704,9 +1721,9 @@ function registerIpc() {
   });
   ipcMain.handle("mascotInline:hover", (event, hovered) => {
     assertTrustedSender(event, "mascot");
-    lastMascotHoverAt = hovered ? Date.now() : 0;
-    if (!hovered && !preferences.data.mouseFollow) {
-      localServer.pushInput({ targetX: 0, targetY: 0, angleX: 0, angleY: 0, voiceRaw: 0 });
+    mascotHovered = Boolean(hovered);
+    if (!mascotHovered) {
+      localServer.pushInput({ targetX: 0, targetY: 0, angleX: 0, angleY: 0, voiceRaw: Number(latestInput.voiceRaw) || 0 });
     }
     return true;
   });
@@ -1735,7 +1752,7 @@ function registerIpc() {
           { forceMouth: 0, forceEyesClosed: true, emotion: "soft", durationMs: 1350 },
         ];
     const reaction = reactions[Math.floor(Math.random() * reactions.length)];
-    showMascotSpeech(text, { durationMs: 2600, ttsEnabled: false });
+    showMascotSpeech(text, { durationMs: 4200 });
     localServer.pushInput({ ...currentCursorInput(), ...reaction });
     return { text, zone: headTouch ? "head" : "body", emotion: reaction.emotion };
   });
@@ -1769,11 +1786,24 @@ function registerIpc() {
     const ttsProvider = ["system", "style-bert-vits2"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
     const styleBertVits2Url = String(patch?.styleBertVits2Url || preferences.data.styleBertVits2Url || "http://localhost:5000").trim().slice(0, 300);
     if (ttsProvider === "style-bert-vits2") styleBertVoiceEndpoint(styleBertVits2Url);
+    const speechInputProvider = ["auto", "realtime", "sherpa-onnx", "browser", "openai"].includes(patch?.speechInputProvider)
+      ? patch.speechInputProvider : "auto";
+    const codexChatReasoningEffort = normalizedReasoningEffort(patch?.codexChatReasoningEffort ?? preferences.data.codexChatReasoningEffort);
+    const codexWorkReasoningEffort = normalizedReasoningEffort(patch?.codexWorkReasoningEffort ?? preferences.data.codexWorkReasoningEffort);
+    const rawSherpaOnnxUrl = String(patch?.sherpaOnnxUrl || preferences.data.sherpaOnnxUrl || "ws://localhost:6006").trim().slice(0, 300);
+    let sherpaOnnxUrl = preferences.data.sherpaOnnxUrl || "ws://localhost:6006";
+    try { sherpaOnnxUrl = sherpaOnnxEndpoint(rawSherpaOnnxUrl).href; } catch (error) {
+      if (speechInputProvider === "sherpa-onnx") throw error;
+    }
     const allowed = {
       backend: ["codex", "openai"].includes(patch?.backend) ? patch.backend : preferences.data.backend,
       openaiModel: String(patch?.openaiModel || preferences.data.openaiModel).slice(0, 120),
       transcriptionModel: String(patch?.transcriptionModel || preferences.data.transcriptionModel).slice(0, 120),
       codexModel: String(patch?.codexModel ?? preferences.data.codexModel).slice(0, 120),
+      codexChatModel: String(patch?.codexChatModel ?? preferences.data.codexChatModel).trim().slice(0, 120),
+      codexChatReasoningEffort,
+      codexWorkModel: String(patch?.codexWorkModel ?? preferences.data.codexWorkModel).trim().slice(0, 120),
+      codexWorkReasoningEffort,
       alwaysOnTop: Boolean(patch?.alwaysOnTop),
       clickThrough: Boolean(patch?.clickThrough),
       mouseFollow: Boolean(patch?.mouseFollow),
@@ -1783,6 +1813,8 @@ function registerIpc() {
       styleBertVits2Url,
       styleBertVits2ModelId: Math.min(9999, Math.max(0, Math.round(Number(patch?.styleBertVits2ModelId) || 0))),
       styleBertVits2Speed: Math.min(2, Math.max(.5, Number(patch?.styleBertVits2Speed) || 1)),
+      speechInputProvider,
+      sherpaOnnxUrl,
       speechLanguage: String(patch?.speechLanguage || "ja-JP").slice(0, 32),
       positionLocked: Boolean(patch?.positionLocked),
       edgeSnap: Boolean(patch?.edgeSnap),
@@ -1802,8 +1834,12 @@ function registerIpc() {
     });
     if (displayId && displayId !== previousDisplayId) moveMascotToDisplay(displayId);
     applyLoginItemSetting(allowed.launchAtLogin);
-    codexClient.setModel(allowed.codexModel);
-    workCodexClient?.setModel(allowed.codexModel);
+    const chatSettings = conversationCodexSettings();
+    const workerSettings = workCodexSettings();
+    codexClient.setModel(chatSettings.model);
+    codexClient.setReasoningEffort(chatSettings.reasoningEffort);
+    workCodexClient?.setModel(workerSettings.model);
+    workCodexClient?.setReasoningEffort(workerSettings.reasoningEffort);
     rebuildTrayMenu();
     const result = publicAppState();
     if (allowed.mouseFollow !== previousMouseFollow) {
@@ -1862,6 +1898,12 @@ function registerIpc() {
           rangeRight: number(payload?.motion?.rangeRight, characterMotionDefaults(character).rangeRight, 0, 300),
           rangeUp: number(payload?.motion?.rangeUp, characterMotionDefaults(character).rangeUp, 0, 300),
           rangeDown: number(payload?.motion?.rangeDown, characterMotionDefaults(character).rangeDown, 0, 300),
+          followSpeed: number(payload?.motion?.followSpeed, characterMotionDefaults(character).followSpeed, 4, 100),
+          breathStrength: number(payload?.motion?.breathStrength, characterMotionDefaults(character).breathStrength, 0, 100),
+          rollStrength: number(payload?.motion?.rollStrength, characterMotionDefaults(character).rollStrength, 0, 100),
+          pyokoStrength: number(payload?.motion?.pyokoStrength, characterMotionDefaults(character).pyokoStrength, 0, 100),
+          hairSpring: number(payload?.motion?.hairSpring, characterMotionDefaults(character).hairSpring, 0, 200),
+          hairWarp: number(payload?.motion?.hairWarp, characterMotionDefaults(character).hairWarp, 0, 100),
         },
       };
     }
@@ -2331,7 +2373,7 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
         : { cwd: app.getPath("documents"), command: codexCommand };
       browserCodexClient = new CodexAppServerClient({
         ...browserRuntime,
-        model: preferences.data.codexModel,
+        ...(workMode ? workCodexSettings() : conversationCodexSettings()),
         developerInstructions: [
           workMode ? WORK_MODE_INSTRUCTIONS : "You are the user's friendly desktop character companion. Answer concisely in natural Japanese and do not modify local files or run commands.",
           BROWSER_MODE_INSTRUCTIONS,
@@ -2446,7 +2488,7 @@ async function generateCharacterFromImage(payload) {
 
   const generator = new CodexAppServerClient({
     ...codexWorkspaceRuntime(jobDirectory),
-    model: preferences.data.codexModel,
+    ...workCodexSettings(),
     developerInstructions: [
       "You are a constrained avatar-asset generation worker.",
       "Use $build-purupuru-avatar and complete its validated output contract.",
@@ -2522,7 +2564,7 @@ async function boot() {
   codexClient = new CodexAppServerClient({
     cwd: codexWorkingDirectory,
     command: codexCommand,
-    model: preferences.data.codexModel,
+    ...conversationCodexSettings(),
     webSearchMode: "live",
   });
   codexClient.setPersona(personaInstructions());

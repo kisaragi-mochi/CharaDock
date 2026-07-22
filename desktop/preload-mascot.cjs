@@ -80,6 +80,10 @@ window.addEventListener("DOMContentLoaded", () => {
   let realtimeDataChannel = null;
   let realtimeRemoteAudio = null;
   let realtimeStream;
+  let recordedSpeechStream;
+  let recordedSpeechRecorder;
+  let recordedSpeechChunks = [];
+  let recordedSpeechProvider = "openai";
   let realtimeUnavailable = false;
   let lastStreamPulseAt = 0;
   let workActivityTimer;
@@ -333,9 +337,13 @@ window.addEventListener("DOMContentLoaded", () => {
         if (token !== ttsPlaybackToken) return;
         await new Promise((resolve, reject) => {
           ttsAudio = new Audio(source);
+          ttsAudio.preload = "auto";
           ttsAudio.onplay = startTtsPulse;
           ttsAudio.onended = resolve;
-          ttsAudio.onerror = () => reject(new Error("生成した音声を再生できません。"));
+          ttsAudio.onerror = () => {
+            const detail = ({ 1: "再生が中断されました", 2: "音声データを読み込めません", 3: "音声形式をデコードできません", 4: "音声形式に対応していません" })[ttsAudio.error?.code];
+            reject(new Error(`生成した音声を再生できません${detail ? `（${detail}）` : ""}。`));
+          };
           ttsAudio.play().catch(reject);
         });
       }
@@ -583,6 +591,97 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const ensureFallbackRecognition = () => speechRecognition ? true : startFallbackRecognition();
 
+  const decodeRecordedAudio = async (blob) => {
+    const context = new AudioContext();
+    try {
+      const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+      const samples = new Float32Array(decoded.length);
+      for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+        const values = decoded.getChannelData(channel);
+        for (let index = 0; index < values.length; index += 1) samples[index] += values[index] / decoded.numberOfChannels;
+      }
+      return { samples, sampleRate: Math.round(decoded.sampleRate) };
+    } finally {
+      await context.close().catch(() => {});
+    }
+  };
+
+  const transcribeWithSherpaOnnx = async (blob) => {
+    const { samples, sampleRate } = await decodeRecordedAudio(blob);
+    if (!samples.length) throw new Error("録音された音声が空です");
+    if (samples.byteLength > 60 * 1024 * 1024) throw new Error("録音が長すぎます。短く区切ってください");
+    const packet = new ArrayBuffer(8 + samples.byteLength);
+    const view = new DataView(packet);
+    view.setInt32(0, sampleRate, true);
+    view.setInt32(4, samples.byteLength, true);
+    for (let index = 0; index < samples.length; index += 1) view.setFloat32(8 + index * 4, samples[index], true);
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(appState?.sherpaOnnxUrl || "ws://localhost:6006");
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try { socket.send("Done"); } catch {}
+        socket.close();
+        callback(value);
+      };
+      const timeout = setTimeout(() => finish(reject, new Error("sherpa-onnxの認識が時間切れになりました")), 45_000);
+      socket.onopen = () => {
+        for (let offset = 0; offset < packet.byteLength; offset += 10_240) {
+          socket.send(packet.slice(offset, Math.min(packet.byteLength, offset + 10_240)));
+        }
+      };
+      socket.onmessage = (event) => {
+        try {
+          const result = JSON.parse(String(event.data || ""));
+          const text = String(result.text ?? result.result ?? "").trim();
+          if (!text) throw new Error("音声を認識できませんでした");
+          finish(resolve, text);
+        } catch (error) {
+          finish(reject, new Error(`sherpa-onnxの応答を読み取れません: ${error.message}`));
+        }
+      };
+      socket.onerror = () => finish(reject, new Error("sherpa-onnxへ接続できません"));
+      socket.onclose = () => finish(reject, new Error("sherpa-onnxが結果を返す前に接続を終了しました"));
+    });
+  };
+
+  const toggleRecordedSpeech = async (provider) => {
+    if (recordedSpeechRecorder?.state === "recording") {
+      recordedSpeechRecorder.stop();
+      return;
+    }
+    recordedSpeechProvider = provider;
+    recordedSpeechChunks = [];
+    recordedSpeechStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
+    recordedSpeechRecorder = new MediaRecorder(recordedSpeechStream);
+    recordedSpeechRecorder.ondataavailable = (event) => { if (event.data.size) recordedSpeechChunks.push(event.data); };
+    recordedSpeechRecorder.onstop = async () => {
+      micButton.setAttribute("aria-pressed", "false");
+      try {
+        setStatus(provider === "sherpa-onnx" ? "sherpa-onnxで認識中…" : "OpenAIで文字起こし中…", 30_000);
+        const blob = new Blob(recordedSpeechChunks, { type: recordedSpeechRecorder.mimeType || "audio/webm" });
+        if (recordedSpeechProvider === "sherpa-onnx") input.value = await transcribeWithSherpaOnnx(blob);
+        else {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          input.value = await ipcRenderer.invoke("mascotInline:transcribe", { bytes, mimeType: blob.type });
+        }
+        resizeInput();
+        input.focus();
+        setStatus("音声を入力しました");
+      } catch (error) {
+        setStatus(error.message, 5000);
+      } finally {
+        for (const track of recordedSpeechStream?.getTracks?.() || []) track.stop();
+        recordedSpeechStream = null;
+      }
+    };
+    recordedSpeechRecorder.start();
+    micButton.setAttribute("aria-pressed", "true");
+    setStatus("録音中…もう一度押すと認識", 30_000);
+  };
+
   const closeRealtime = () => {
     try { realtimeDataChannel?.close(); } catch {}
     try { realtimePeer?.close(); } catch {}
@@ -631,8 +730,25 @@ window.addEventListener("DOMContentLoaded", () => {
       setStatus("音声入力を終了しました");
       return;
     }
+    if (recordedSpeechRecorder?.state === "recording") {
+      recordedSpeechRecorder.stop();
+      return;
+    }
     appState = await ipcRenderer.invoke("mascotInline:getState").catch(() => appState);
-    if (appState?.backend === "codex" && !realtimeUnavailable) {
+    const provider = appState?.speechInputProvider || "auto";
+    if (provider === "browser") {
+      ensureFallbackRecognition();
+      return;
+    }
+    if (provider === "sherpa-onnx" || provider === "openai") {
+      await toggleRecordedSpeech(provider).catch((error) => setStatus(`音声入力: ${error.message}`, 5000));
+      return;
+    }
+    if (provider === "realtime" && appState?.backend !== "codex") {
+      setStatus("Codex RealtimeはCodex接続時のみ利用できます", 5000);
+      return;
+    }
+    if ((provider === "auto" || provider === "realtime") && appState?.backend === "codex" && !realtimeUnavailable) {
       try {
         await startRealtime();
         return;
@@ -640,8 +756,16 @@ window.addEventListener("DOMContentLoaded", () => {
         ipcRenderer.invoke("mascotInline:realtimeStop").catch(() => {});
         closeRealtime();
         realtimeUnavailable ||= /まだ提供されていません/.test(error.message);
+        if (provider === "realtime") {
+          setStatus(`Codex Realtimeを開始できません: ${error.message}`, 5000);
+          return;
+        }
         setStatus(`端末音声認識へ切替: ${error.message}`, 5000);
       }
+    }
+    if (provider === "realtime") {
+      setStatus("Codex Realtimeは現在利用できません", 5000);
+      return;
     }
     ensureFallbackRecognition();
   });
@@ -728,8 +852,12 @@ window.addEventListener("DOMContentLoaded", () => {
     if (method === "thread/realtime/error") {
       realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtime();
-      setStatus(`${params.message || "Codex Realtime接続エラー"} 端末音声へ切替`, 5000);
-      ensureFallbackRecognition();
+      if ((appState?.speechInputProvider || "auto") === "realtime") {
+        setStatus(params.message || "Codex Realtime接続エラー", 5000);
+      } else {
+        setStatus(`${params.message || "Codex Realtime接続エラー"} 端末音声へ切替`, 5000);
+        ensureFallbackRecognition();
+      }
       return;
     }
     if (method === "thread/realtime/closed") closeRealtime();

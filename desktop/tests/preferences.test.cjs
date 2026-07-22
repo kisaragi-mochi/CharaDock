@@ -49,8 +49,23 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.styleBertVits2Url, "http://localhost:5000");
   assert.equal(state.styleBertVits2ModelId, 0);
   assert.equal(state.styleBertVits2Speed, 1);
+  assert.equal(state.speechInputProvider, "auto");
+  assert.equal(state.sherpaOnnxUrl, "ws://localhost:6006");
+  assert.equal(state.codexChatModel, "");
+  assert.equal(state.codexChatReasoningEffort, "");
+  assert.equal(state.codexWorkModel, "");
+  assert.equal(state.codexWorkReasoningEffort, "");
   assert.equal(state.hasWorkDirectory, false);
   assert.equal(state.workDirectoryName, "");
+});
+
+test("preferences migrate the former Codex model to chat and work", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({ codexModel: "legacy-model" }));
+  const state = new Preferences(file).publicState();
+  assert.equal(state.codexChatModel, "legacy-model");
+  assert.equal(state.codexWorkModel, "legacy-model");
 });
 
 test("preferences expose only the work folder name to renderer windows", () => {

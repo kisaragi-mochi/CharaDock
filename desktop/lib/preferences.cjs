@@ -8,6 +8,10 @@ const DEFAULTS = Object.freeze({
   openaiModel: "gpt-5.6-luna",
   transcriptionModel: "gpt-4o-mini-transcribe",
   codexModel: "",
+  codexChatModel: "",
+  codexChatReasoningEffort: "",
+  codexWorkModel: "",
+  codexWorkReasoningEffort: "",
   alwaysOnTop: true,
   clickThrough: false,
   mouseFollow: true,
@@ -17,6 +21,8 @@ const DEFAULTS = Object.freeze({
   styleBertVits2Url: "http://localhost:5000",
   styleBertVits2ModelId: 0,
   styleBertVits2Speed: 1,
+  speechInputProvider: "auto",
+  sherpaOnnxUrl: "ws://localhost:6006",
   speechLanguage: "ja-JP",
   onboardingComplete: false,
   positionLocked: false,
@@ -46,6 +52,11 @@ class Preferences {
       const parsed = JSON.parse(fs.readFileSync(this.filePath, "utf8"));
       for (const key of PUBLIC_KEYS) {
         if (Object.prototype.hasOwnProperty.call(parsed, key)) this.data[key] = parsed[key];
+      }
+      // Migrate the former single Codex model setting without discarding it.
+      if (typeof parsed.codexModel === "string") {
+        if (!Object.prototype.hasOwnProperty.call(parsed, "codexChatModel")) this.data.codexChatModel = parsed.codexModel;
+        if (!Object.prototype.hasOwnProperty.call(parsed, "codexWorkModel")) this.data.codexWorkModel = parsed.codexModel;
       }
       if (typeof parsed.encryptedApiKey === "string") this.data.encryptedApiKey = parsed.encryptedApiKey;
     } catch (error) {

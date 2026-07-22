@@ -12,7 +12,7 @@ npm install
 npm run desktop
 ```
 
-起動時は透明なキャラクターだけが表示されます。右下の `✦` へマウスを重ねるかクリックすると小さな会話欄が開き、離れると自動で収納されます。返答は顔へテールを向けた短いバブルへストリーミング表示されます。キャラクターへマウスを重ねている間は視線がカーソルを追い、離れると呼吸・揺れ・視線移動の待機モーションへ戻ります。顔付近をクリックするとキャラごとの短い反応が返ります。
+起動時は透明なキャラクターだけが表示されます。右下の `✦` へマウスを重ねるかクリックすると小さな会話欄が開き、離れると自動で収納されます。返答は顔へテールを向けた短いバブルへストリーミング表示されます。キャラクターへマウスを重ねている間は視線がカーソルを追い、離れると呼吸・揺れ・視線移動の待機モーションへ戻ります。顔付近をクリックするとキャラごとの短い反応が表示され、読み上げが有効なら選択中の音声でも再生されます。
 
 小さな会話欄の左端にある `会話` を押すと、設定画面を開かずに `作業` モードへ切り替えられます。初回だけWindowsのフォルダー選択が開き、選択した作業先は細いチップで表示されます。チップを押すと作業先を変更でき、`作業` を押すと会話モードへ戻ります。作業モードはCodex app-server接続時のみ利用でき、選択フォルダーだけを書き込み可能なworkspace-writeセッションとして動作します。
 
@@ -43,6 +43,8 @@ that Windows permits app-server child-process execution.
 managed ChatGPT OAuthを開始し、既定ブラウザでログインした後、画面が
 `ChatGPTログイン済み` へ自動更新されます。認証トークンの保存・更新はCodex側が
 担当し、このアプリはトークンを受け取りません。
+Codex設定では、会話と作業それぞれにモデルと推論の深さを指定できます。空欄なら
+Codex側の既定値を使い、深い推論ほど応答に時間がかかる場合があります。
 
 ### OpenAI API
 
@@ -56,19 +58,19 @@ it remains in memory for the current app session only.
 
 - **Mic link** continuously measures microphone volume locally and sends only a
   numeric level to the mascot renderer for three-stage lip sync.
-- **Voice input** normally starts the experimental Codex app-server Realtime
-  WebRTC session when Codex is selected. Live user transcripts are written into
-  the composer and the spoken response is played while its transcript streams
-  into the mascot bubble. Realtime availability depends on the signed-in
-  account; an unavailable session automatically falls back to Chromium speech
-  recognition. If that is also unavailable, a short clip can use OpenAI
-  transcription when an API key exists.
-- Reply read-aloud uses the operating system speech voice. A generated amplitude
+- **Voice input** can use automatic Codex Realtime fallback, Codex Realtime only,
+  a local sherpa-onnx non-streaming WebSocket server, Chromium device speech
+  recognition, or OpenAI transcription. The selected provider works from both
+  the control chat and the compact mascot composer.
+- Reply read-aloud uses the operating system speech voice or a local
+  Style-Bert-VITS2 server. A generated amplitude
   envelope drives the character's mouth while it speaks.
 - Codex and OpenAI replies stream into both the control chat and the desktop
   speech bubble, with a light mouth pulse while text arrives.
 - When the mouse rests, breathing, swaying, blinking, hair spring, and small
   autonomous gaze changes form the idle loop.
+- Cursor following is active only while the pointer is over the mascot; follow
+  speed, breathing, body lean/bounce, and hair motion are saved per character.
 - The hooded character clips its hair layer to the hood opening; other custom
   characters use face-following spring hair.
 

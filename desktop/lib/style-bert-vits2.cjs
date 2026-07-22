@@ -43,6 +43,14 @@ function splitTtsText(value, maxLength = 100, maxChunks = 10) {
   return chunks.filter(Boolean);
 }
 
+function audioMimeType(bytes, responseType = "") {
+  const type = String(responseType || "").split(";", 1)[0].trim().toLowerCase();
+  if (type.startsWith("audio/")) return type;
+  if (bytes.subarray(0, 4).toString("ascii") === "OggS") return "audio/ogg";
+  if (bytes.subarray(0, 3).toString("ascii") === "ID3" || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) return "audio/mpeg";
+  return "audio/wav";
+}
+
 async function synthesizeStyleBertVits2({
   text,
   url,
@@ -76,9 +84,10 @@ async function synthesizeStyleBertVits2({
     }
     const bytes = Buffer.from(await response.arrayBuffer());
     if (!bytes.length || bytes.length > 20 * 1024 * 1024) throw new Error("Style-Bert-VITS2の音声データが正しくありません。");
-    audioDataUrls.push(`data:audio/wav;base64,${bytes.toString("base64")}`);
+    const mimeType = audioMimeType(bytes, response.headers.get("content-type"));
+    audioDataUrls.push(`data:${mimeType};base64,${bytes.toString("base64")}`);
   }
   return { audioDataUrls };
 }
 
-module.exports = { splitTtsText, styleBertVoiceEndpoint, synthesizeStyleBertVits2 };
+module.exports = { audioMimeType, splitTtsText, styleBertVoiceEndpoint, synthesizeStyleBertVits2 };

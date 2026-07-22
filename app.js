@@ -6964,8 +6964,6 @@
     }
     state.targetX = obsExternalInput.angleX;
     state.targetY = obsExternalInput.angleY;
-    state.angleX = obsExternalInput.angleX;
-    state.angleY = obsExternalInput.angleY;
   }
 
   function applyObsExternalExpression(nowMs) {

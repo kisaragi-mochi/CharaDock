@@ -138,6 +138,41 @@ test("Codex client checks image-generation capability", async () => {
   assert.deepEqual(request, { method: "modelProvider/capabilities/read", params: {} });
 });
 
+test("Codex client sends per-turn model and reasoning effort overrides", async () => {
+  const client = new CodexAppServerClient({ model: "chat-model", reasoningEffort: "high" });
+  client.ensureStarted = async () => {};
+  client.ensureThread = async () => "thread-1";
+  let turnParams;
+  client.request = async (method, params) => {
+    if (method === "turn/start") {
+      turnParams = params;
+      setImmediate(() => client.handleLine(JSON.stringify({
+        method: "item/agentMessage/delta",
+        params: { turnId: "turn-1", delta: "ok" },
+      })));
+      setImmediate(() => client.handleLine(JSON.stringify({
+        method: "turn/completed",
+        params: { turn: { id: "turn-1", status: "completed" } },
+      })));
+      return { turn: { id: "turn-1" } };
+    }
+    return {};
+  };
+  const pending = client.sendMessage("hello");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(turnParams.model, "chat-model");
+  assert.equal(turnParams.effort, "high");
+  await pending;
+});
+
+test("changing reasoning effort resets the current Codex thread", () => {
+  const client = new CodexAppServerClient({ reasoningEffort: "low" });
+  client.threadId = "thread-1";
+  client.setReasoningEffort("high");
+  assert.equal(client.reasoningEffort, "high");
+  assert.equal(client.threadId, null);
+});
+
 test("Codex client starts WebRTC realtime and forwards transcript events", async () => {
   const client = new CodexAppServerClient();
   const calls = [];

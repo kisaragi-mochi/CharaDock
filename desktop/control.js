@@ -15,6 +15,7 @@
   let speechRecognition = null;
   let mediaRecorder = null;
   let recordedChunks = [];
+  let recordingProvider = "openai";
   let realtimePeerConnection = null;
   let realtimeDataChannel = null;
   let realtimeRemoteAudio = null;
@@ -33,7 +34,10 @@
   let onboardingWasOpen = false;
   let onboardingFocusReturn = null;
   let motionPreviewTimer = 0;
-  const motionFields = ["avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown"];
+  const motionFields = [
+    "avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown",
+    "followSpeed", "breathStrength", "rollStrength", "pyokoStrength", "hairSpring", "hairWarp",
+  ];
 
   function setStatus(element, message, error = false) {
     element.textContent = String(message || "");
@@ -272,7 +276,10 @@
     if (backend) backend.checked = true;
     $("#openaiModelInput").value = state.openaiModel || "";
     $("#transcriptionModelInput").value = state.transcriptionModel || "";
-    $("#codexModelInput").value = state.codexModel || "";
+    $("#codexChatModelInput").value = state.codexChatModel || state.codexModel || "";
+    $("#codexChatReasoningEffortSelect").value = state.codexChatReasoningEffort || "";
+    $("#codexWorkModelInput").value = state.codexWorkModel || state.codexModel || "";
+    $("#codexWorkReasoningEffortSelect").value = state.codexWorkReasoningEffort || "";
     $("#alwaysOnTopToggle").checked = Boolean(state.alwaysOnTop);
     $("#clickThroughToggle").checked = Boolean(state.clickThrough);
     $("#mouseFollowToggle").checked = Boolean(state.mouseFollow);
@@ -283,6 +290,9 @@
     $("#styleBertVits2ModelIdInput").value = Number(state.styleBertVits2ModelId) || 0;
     $("#styleBertVits2SpeedInput").value = Number(state.styleBertVits2Speed) || 1;
     $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
+    $("#speechInputProviderSelect").value = state.speechInputProvider || "auto";
+    $("#sherpaOnnxUrlInput").value = state.sherpaOnnxUrl || "ws://localhost:6006";
+    $("#sherpaOnnxSettings").hidden = $("#speechInputProviderSelect").value !== "sherpa-onnx";
     $("#positionLockedToggle").checked = Boolean(state.positionLocked);
     $("#edgeSnapToggle").checked = Boolean(state.edgeSnap);
     const displaySelect = $("#displaySelect");
@@ -290,9 +300,15 @@
     for (const display of state.displays || []) displaySelect.appendChild(new Option(display.label, display.id));
     displaySelect.value = state.preferredDisplayId || "";
     const voiceMode = $("#speechInputMode");
-    const canTryRealtime = state.backend === "codex" && !realtimeUnavailable;
-    voiceMode.textContent = canTryRealtime ? "Codex Realtime" : "端末音声認識";
-    voiceMode.classList.toggle("is-fallback", !canTryRealtime);
+    const providerLabels = {
+      auto: state.backend === "codex" && !realtimeUnavailable ? "自動 · Realtime優先" : "自動 · 端末音声認識",
+      realtime: "Codex Realtime",
+      "sherpa-onnx": "sherpa-onnx",
+      browser: "端末音声認識",
+      openai: "OpenAI文字起こし",
+    };
+    voiceMode.textContent = providerLabels[state.speechInputProvider || "auto"];
+    voiceMode.classList.toggle("is-fallback", !["auto", "realtime"].includes(state.speechInputProvider || "auto"));
     $("#apiKeyState").textContent = state.hasApiKey
       ? `APIキー設定済み（${state.apiKeyPersistence === "encrypted" ? "暗号化保存" : "今回のみ"}）`
       : "APIキー未設定";
@@ -375,7 +391,10 @@
       backend: $("input[name='backend']:checked")?.value || "codex",
       openaiModel: $("#openaiModelInput").value.trim(),
       transcriptionModel: $("#transcriptionModelInput").value.trim(),
-      codexModel: $("#codexModelInput").value.trim(),
+      codexChatModel: $("#codexChatModelInput").value.trim(),
+      codexChatReasoningEffort: $("#codexChatReasoningEffortSelect").value,
+      codexWorkModel: $("#codexWorkModelInput").value.trim(),
+      codexWorkReasoningEffort: $("#codexWorkReasoningEffortSelect").value,
       alwaysOnTop: $("#alwaysOnTopToggle").checked,
       clickThrough: $("#clickThroughToggle").checked,
       mouseFollow: $("#mouseFollowToggle").checked,
@@ -385,6 +404,8 @@
       styleBertVits2Url: $("#styleBertVits2UrlInput").value.trim(),
       styleBertVits2ModelId: Number($("#styleBertVits2ModelIdInput").value),
       styleBertVits2Speed: Number($("#styleBertVits2SpeedInput").value),
+      speechInputProvider: $("#speechInputProviderSelect").value,
+      sherpaOnnxUrl: $("#sherpaOnnxUrlInput").value.trim(),
       speechLanguage: state?.speechLanguage || "ja-JP",
       positionLocked: $("#positionLockedToggle").checked,
       edgeSnap: $("#edgeSnapToggle").checked,
@@ -495,6 +516,62 @@
     }
   }
 
+  async function decodeRecordedAudio(blob) {
+    audioContext ||= new AudioContext();
+    await audioContext.resume();
+    const decoded = await audioContext.decodeAudioData(await blob.arrayBuffer());
+    const samples = new Float32Array(decoded.length);
+    for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+      const values = decoded.getChannelData(channel);
+      for (let index = 0; index < values.length; index += 1) samples[index] += values[index] / decoded.numberOfChannels;
+    }
+    return { samples, sampleRate: Math.round(decoded.sampleRate) };
+  }
+
+  async function transcribeWithSherpaOnnx(blob) {
+    const { samples, sampleRate } = await decodeRecordedAudio(blob);
+    if (!samples.length) throw new Error("録音された音声が空です。");
+    if (samples.byteLength > 60 * 1024 * 1024) throw new Error("録音が長すぎます。短く区切ってください。");
+    const packet = new ArrayBuffer(8 + samples.byteLength);
+    const view = new DataView(packet);
+    view.setInt32(0, sampleRate, true);
+    view.setInt32(4, samples.byteLength, true);
+    for (let index = 0; index < samples.length; index += 1) view.setFloat32(8 + index * 4, samples[index], true);
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(state.sherpaOnnxUrl || "ws://localhost:6006");
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try { socket.send("Done"); } catch {}
+        socket.close();
+        callback(value);
+      };
+      const timeout = setTimeout(() => finish(reject, new Error("sherpa-onnxの認識が時間切れになりました。")), 45_000);
+      socket.binaryType = "arraybuffer";
+      socket.onopen = () => {
+        const chunkSize = 10_240;
+        for (let offset = 0; offset < packet.byteLength; offset += chunkSize) {
+          socket.send(packet.slice(offset, Math.min(packet.byteLength, offset + chunkSize)));
+        }
+      };
+      socket.onmessage = (event) => {
+        try {
+          const raw = String(event.data || "");
+          const parsed = JSON.parse(raw);
+          const text = String(parsed.text ?? parsed.result ?? "").trim();
+          if (!text) throw new Error("音声を認識できませんでした。");
+          finish(resolve, text);
+        } catch (error) {
+          finish(reject, new Error(`sherpa-onnxの応答を読み取れません: ${error.message}`));
+        }
+      };
+      socket.onerror = () => finish(reject, new Error("sherpa-onnxへ接続できません。サーバーとURLを確認してください。"));
+      socket.onclose = () => finish(reject, new Error("sherpa-onnxが結果を返す前に接続を終了しました。"));
+    });
+  }
+
   function closeRealtimeAudio() {
     try { realtimeDataChannel?.close(); } catch {}
     try { realtimePeerConnection?.close(); } catch {}
@@ -598,7 +675,11 @@
     if (method === "thread/realtime/error") {
       realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtimeAudio();
-      await startFallbackSpeechInput(`${params.message || "Codex Realtime音声接続を開始できませんでした。"} 端末音声認識へ自動で切り替えます。`);
+      if ((state.speechInputProvider || "auto") === "realtime") {
+        setStatus($("#chatStatus"), params.message || "Codex Realtime音声接続を開始できませんでした。", true);
+      } else {
+        await startFallbackSpeechInput(`${params.message || "Codex Realtime音声接続を開始できませんでした。"} 端末音声認識へ自動で切り替えます。`);
+      }
       return;
     }
     if (method === "thread/realtime/closed") {
@@ -607,22 +688,28 @@
     }
   }
 
-  async function toggleRecordedSpeechInput() {
+  async function toggleRecordedSpeechInput(provider = "openai") {
     if (mediaRecorder?.state === "recording") {
       mediaRecorder.stop();
       return;
     }
     const stream = await ensureAudioStream();
     recordedChunks = [];
+    recordingProvider = provider;
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = (event) => { if (event.data.size) recordedChunks.push(event.data); };
     mediaRecorder.onstop = async () => {
       $("#speechInputButton").setAttribute("aria-pressed", "false");
       try {
-        setStatus($("#chatStatus"), "OpenAIで音声を文字にしています…");
         const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        $("#chatInput").value = await api.transcribe({ bytes, mimeType: blob.type });
+        if (recordingProvider === "sherpa-onnx") {
+          setStatus($("#chatStatus"), "sherpa-onnxで音声を文字にしています…");
+          $("#chatInput").value = await transcribeWithSherpaOnnx(blob);
+        } else {
+          setStatus($("#chatStatus"), "OpenAIで音声を文字にしています…");
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          $("#chatInput").value = await api.transcribe({ bytes, mimeType: blob.type });
+        }
         setStatus($("#chatStatus"), "音声を入力欄へ追加しました。");
       } catch (error) {
         setStatus($("#chatStatus"), error.message, true);
@@ -630,7 +717,7 @@
     };
     mediaRecorder.start();
     $("#speechInputButton").setAttribute("aria-pressed", "true");
-    setStatus($("#chatStatus"), "録音中…もう一度押すと文字に変換します。");
+    setStatus($("#chatStatus"), `${provider === "sherpa-onnx" ? "sherpa-onnx用に" : ""}録音中…もう一度押すと文字に変換します。`);
   }
 
   async function toggleSpeechInput() {
@@ -646,7 +733,24 @@
       await stopCodexRealtimeVoice();
       return;
     }
-    if (state.backend === "codex" && !realtimeUnavailable) {
+    const provider = state.speechInputProvider || "auto";
+    if (provider === "browser") {
+      if (!startBrowserSpeechRecognition()) setStatus($("#chatStatus"), "この端末では音声認識を利用できません。", true);
+      return;
+    }
+    if (provider === "sherpa-onnx") {
+      await toggleRecordedSpeechInput("sherpa-onnx");
+      return;
+    }
+    if (provider === "openai") {
+      await toggleRecordedSpeechInput("openai");
+      return;
+    }
+    if (provider === "realtime" && state.backend !== "codex") {
+      setStatus($("#chatStatus"), "Codex RealtimeはCodex app-server接続時のみ利用できます。", true);
+      return;
+    }
+    if ((provider === "realtime" || provider === "auto") && state.backend === "codex" && !realtimeUnavailable) {
       try {
         await startCodexRealtimeVoice();
         return;
@@ -654,9 +758,17 @@
         api.stopCodexRealtime().catch(() => {});
         closeRealtimeAudio();
         realtimeUnavailable ||= /まだ提供されていません/.test(error.message);
-        await startFallbackSpeechInput(`Codex Realtimeを利用できません。端末音声認識へ自動で切り替えます: ${error.message}`);
+        if (provider === "realtime") {
+          setStatus($("#chatStatus"), `Codex Realtimeを利用できません: ${error.message}`, true);
+        } else {
+          await startFallbackSpeechInput(`Codex Realtimeを利用できません。端末音声認識へ自動で切り替えます: ${error.message}`);
+        }
         return;
       }
+    }
+    if (provider === "realtime") {
+      setStatus($("#chatStatus"), "Codex Realtimeは現在利用できません。設定から別の認識方式を選んでください。", true);
+      return;
     }
     await startFallbackSpeechInput(realtimeUnavailable
       ? "Codex Realtimeは現在未提供のため、端末音声認識を使います。"
@@ -684,6 +796,7 @@
     return new Promise((resolve, reject) => {
       if (token !== speechPlaybackToken) return resolve();
       speechAudio = new Audio(source);
+      speechAudio.preload = "auto";
       speechAudio.onplay = () => {
         let phase = 0;
         clearInterval(speechPulseTimer);
@@ -693,7 +806,10 @@
         }, 80);
       };
       speechAudio.onended = resolve;
-      speechAudio.onerror = () => reject(new Error("生成した音声を再生できません。"));
+      speechAudio.onerror = () => {
+        const detail = ({ 1: "再生が中断されました", 2: "音声データを読み込めません", 3: "音声形式をデコードできません", 4: "音声形式に対応していません" })[speechAudio.error?.code];
+        reject(new Error(`生成した音声を再生できません${detail ? `（${detail}）` : ""}。`));
+      };
       speechAudio.play().catch(reject);
     });
   }
@@ -921,6 +1037,13 @@
       }
       saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
     });
+    $("#speechInputProviderSelect").addEventListener("change", () => {
+      $("#sherpaOnnxSettings").hidden = $("#speechInputProviderSelect").value !== "sherpa-onnx";
+      saveSettings().catch((error) => setStatus($("#connectionStatus"), error.message, true));
+    });
+    $("#sherpaOnnxUrlInput").addEventListener("change", () => {
+      saveSettings().catch((error) => setStatus($("#connectionStatus"), error.message, true));
+    });
     ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput"]
       .forEach((selector) => $(selector).addEventListener("change", () => {
         saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
@@ -938,7 +1061,7 @@
       sessionStorage.setItem("purupet.characterScroll", String(document.scrollingElement?.scrollTop || 0));
       saveSettings().catch((error) => setStatus($("#characterProfileStatus"), error.message, true));
     });
-    ["#openaiModelInput", "#transcriptionModelInput", "#codexModelInput"]
+    ["#openaiModelInput", "#transcriptionModelInput", "#codexChatModelInput", "#codexChatReasoningEffortSelect", "#codexWorkModelInput", "#codexWorkReasoningEffortSelect"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
     $("#displaySelect").addEventListener("change", saveSettings);
     motionFields.forEach((key) => $(`#${key}Input`).addEventListener("input", () => {

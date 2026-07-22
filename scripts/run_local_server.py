@@ -27,9 +27,10 @@ REQUEST_BODY_READ_TIMEOUT_SECONDS = 2.0
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'wasm-unsafe-eval'; "
-    "connect-src 'self'; "
+    "connect-src 'self' ws://localhost:* ws://127.0.0.1:*; "
     "worker-src 'self' blob:; "
     "img-src 'self' data: blob:; "
+    "media-src 'self' blob: data:; "
     "style-src 'self'; "
     "object-src 'none'; "
     "base-uri 'none'; "
