@@ -250,6 +250,14 @@
                   <label>速度（0.5–2.0×）<input id="styleBertVits2SpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
                 </div>
               </div>
+              <label class="switch-row"><span><strong>英単語を日本語読みする</strong><small>ユーザー辞書とCMUdictの発音を読み上げ時だけ使用</small></span><input id="englishPronunciationToggle" type="checkbox" /><i></i></label>
+              <details class="pronunciation-settings">
+                <summary>英単語のユーザー辞書</summary>
+                <label>1行に1件、英字=読み
+                  <textarea id="englishPronunciationDictionaryInput" rows="4" maxlength="12000" spellcheck="false" placeholder="PuruPet=プルペット&#10;FooBar=フーバー"></textarea>
+                </label>
+                <p class="hint">ユーザー辞書を最優先し、未登録語は技術用語辞書、略語、CMUdictの順で読みを決めます。表示文、URL、ファイル名は変更しません。</p>
+              </details>
               <button id="ttsTestButton" class="button button-quiet" type="button">この音声を試す</button>
               <p id="ttsStatus" class="hint" role="status"></p>
             </div>

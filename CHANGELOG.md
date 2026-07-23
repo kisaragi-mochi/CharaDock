@@ -5,7 +5,7 @@ All notable changes to PuruPet Desktop will be documented here.
 ## Unreleased
 
 - Retain browser or foreground-computer permission for five minutes after a completed turn, reuse it only for explicit operational follow-ups, and revoke it on ordinary conversation, stop phrases, expiry, window close, or a different browser host.
-- Normalize common Latin product/technical words only at the TTS boundary so they are pronounced as Japanese words, expand short all-caps abbreviations as letter names, and preserve the original on-screen text and code-like identifiers.
+- Normalize Latin words only at the TTS boundary with a configurable user dictionary, built-in technical readings, Japanese acronym names, and a CMUdict-to-Katakana fallback; preserve the original on-screen text and code-like identifiers.
 - Keep the mascot continuously visible during screen/computer captures by temporarily excluding its window from Windows capture instead of hiding and restoring it.
 - Expand the consented visible browser with referenced control clicks, safe text entry, option selection, keys, scrolling, and waits; disable built-in web search for the browser turn and reject any answer that did not use the dedicated browser tools.
 - Add consent-gated Windows foreground control for one conversation turn, with screenshot-guided click, Unicode typing, hotkey, scroll, wait, a 30-operation cap, visible progress, interruption, and strict blocking instructions for destructive or sensitive actions.

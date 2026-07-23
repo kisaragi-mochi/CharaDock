@@ -63,6 +63,7 @@
     }
   },
   "dependencies": {
+    "cmu-pronouncing-dictionary": "3.0.0",
     "pngjs": "^7.0.0",
     "sherpa-onnx-node": "^1.13.4"
   }

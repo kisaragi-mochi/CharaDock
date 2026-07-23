@@ -1206,6 +1206,12 @@ function waitForNextPageLoad(window, timeoutMs = 10_000) {
 async function runSmokeTest() {
   await Promise.all([waitForPageLoad(controlWindow), waitForPageLoad(mascotWindow)]);
   await new Promise((resolve) => setTimeout(resolve, 1800));
+  if (normalizeSpeechPronunciation("Hello world") !== "ハロー ワールド") {
+    throw new Error("CMUdict pronunciation fallback check failed");
+  }
+  if (normalizeSpeechPronunciation("browser FooBar", { userDictionary: "browser=ブラウザーカスタム\nFooBar=フーバー" }) !== "ブラウザーカスタム フーバー") {
+    throw new Error("user pronunciation dictionary check failed");
+  }
   const sherpaRuntime = embeddedSherpaOnnx.runtimeInfo();
   if (!sherpaRuntime.version) throw new Error("embedded sherpa-onnx runtime check failed");
   const expectedMotion = activeCharacter().motion;
@@ -1589,6 +1595,8 @@ async function runSmokeTest() {
       document.querySelector('#styleBertVits2UrlInput') &&
       document.querySelector('#styleBertVits2ModelIdInput') &&
       document.querySelector('#styleBertVits2SpeedInput') &&
+      document.querySelector('#englishPronunciationToggle') &&
+      document.querySelector('#englishPronunciationDictionaryInput') &&
       document.querySelector('#ttsTestButton'));
   })()`);
   if (!audioSettingReady) throw new Error("audio output setting check failed");
@@ -1743,6 +1751,13 @@ async function runSmokeTest() {
   app.quit();
 }
 
+function configuredSpeechText(text) {
+  return normalizeSpeechPronunciation(text, {
+    enabled: preferences.data.englishPronunciationEnabled !== false,
+    userDictionary: preferences.data.englishPronunciationDictionary || "",
+  });
+}
+
 function showMascotSpeech(text, { durationMs = 9000, ttsEnabled = preferences.data.ttsEnabled, persistent = true } = {}) {
   if (!mascotWindow || mascotWindow.isDestroyed()) return;
   const readAloud = Boolean(ttsEnabled);
@@ -1754,7 +1769,7 @@ function showMascotSpeech(text, { durationMs = 9000, ttsEnabled = preferences.da
     speechLanguage: preferences.data.speechLanguage || "ja-JP",
     persistent: Boolean(persistent),
     expression: speechExpression(text),
-    spokenText: normalizeSpeechPronunciation(text),
+    spokenText: configuredSpeechText(text),
   });
   if (!readAloud) localServer.pushInput({ ...currentCursorInput(), ...responseExpression(text) });
 }
@@ -1764,7 +1779,7 @@ function synthesizeConfiguredTts(text) {
     return Promise.resolve({ audioDataUrls: [] });
   }
   return synthesizeStyleBertVits2({
-    text: normalizeSpeechPronunciation(text),
+    text: configuredSpeechText(text),
     url: preferences.data.styleBertVits2Url,
     modelId: preferences.data.styleBertVits2ModelId,
     speed: preferences.data.styleBertVits2Speed,
@@ -1976,6 +1991,7 @@ function registerIpc() {
       ttsEnabled: Boolean(preferences.data.ttsEnabled),
       ttsProvider: preferences.data.ttsProvider || "system",
       speechLanguage: preferences.data.speechLanguage || "ja-JP",
+      spokenText: configuredSpeechText(text),
     };
   });
   ipcMain.handle("mascotInline:transcribe", async (event, payload) => {
@@ -2009,6 +2025,10 @@ function registerIpc() {
   ipcMain.handle("mascotInline:synthesizeTts", (event, text) => {
     assertTrustedSender(event, "mascot");
     return synthesizeConfiguredTts(String(text || "").slice(0, 1000));
+  });
+  ipcMain.handle("tts:normalizeText", (event, text) => {
+    assertTrustedSender(event);
+    return configuredSpeechText(String(text || "").slice(0, 4000));
   });
   ipcMain.handle("app:getState", (event) => {
     assertTrustedSender(event);
@@ -2057,6 +2077,8 @@ function registerIpc() {
       styleBertVits2Url,
       styleBertVits2ModelId: Math.min(9999, Math.max(0, Math.round(Number(patch?.styleBertVits2ModelId) || 0))),
       styleBertVits2Speed: Math.min(2, Math.max(.5, Number(patch?.styleBertVits2Speed) || 1)),
+      englishPronunciationEnabled: patch?.englishPronunciationEnabled !== false,
+      englishPronunciationDictionary: String(patch?.englishPronunciationDictionary || "").slice(0, 12_000),
       speechInputProvider,
       sherpaModelId,
       speechLanguage: String(patch?.speechLanguage || "ja-JP").slice(0, 32),
@@ -2307,7 +2329,7 @@ function pushMascotExpression(expression) {
 function expressiveSpeechSegments(segments) {
   return (Array.isArray(segments) ? segments : []).map((text) => ({
     text: String(text || "").trim(),
-    spokenText: normalizeSpeechPronunciation(text),
+    spokenText: configuredSpeechText(text),
     expression: speechExpression(text),
   })).filter((segment) => segment.text);
 }

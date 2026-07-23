@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   downloadSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelDownload", modelId),
   removeSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelRemove", modelId),
   synthesizeTts: (text) => ipcRenderer.invoke("tts:synthesize", text),
+  normalizeTtsText: (text) => ipcRenderer.invoke("tts:normalizeText", text),
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
   onChatStream: (callback) => {

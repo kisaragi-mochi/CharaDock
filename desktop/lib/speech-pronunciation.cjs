@@ -3,6 +3,8 @@
 // Japanese voices often spell Latin text one character at a time. Keep this
 // mapping deliberately small and predictable: known product/technical words
 // are read as words, while all-caps abbreviations are read as letter names.
+const { cmuWordToKatakana } = require("./cmu-katakana.cjs");
+
 const WORD_PRONUNCIATIONS = Object.freeze(new Map([
   ["style-bert-vits2", "スタイルバートビッツツー"],
   ["sherpa-onnx", "シェルパオニキス"],
@@ -35,6 +37,21 @@ const WORD_PRONUNCIATIONS = Object.freeze(new Map([
   ["sherpa", "シェルパ"],
   ["onnx", "オニキス"],
   ["app", "アプリ"],
+  ["beautiful", "ビューティフル"],
+  ["pronunciation", "プロナンシエーション"],
+  ["test", "テスト"],
+  ["hello", "ハロー"],
+  ["world", "ワールド"],
+  ["this", "ディス"],
+  ["that", "ザット"],
+  ["with", "ウィズ"],
+  ["from", "フロム"],
+  ["the", "ザ"],
+  ["and", "アンド"],
+  ["for", "フォー"],
+  ["of", "オブ"],
+  ["to", "トゥ"],
+  ["is", "イズ"],
 ]));
 
 const LETTER_NAMES = Object.freeze({
@@ -44,18 +61,49 @@ const LETTER_NAMES = Object.freeze({
   V: "ブイ", W: "ダブリュー", X: "エックス", Y: "ワイ", Z: "ゼット",
 });
 
-function normalizeSpeechPronunciation(value) {
+function parseUserPronunciations(value, maxEntries = 200) {
+  const entries = [];
+  for (const rawLine of String(value || "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.includes("=") ? line.indexOf("=") : line.indexOf("\t");
+    if (separator < 1) continue;
+    const word = line.slice(0, separator).trim().slice(0, 80);
+    const reading = line.slice(separator + 1).trim().slice(0, 160);
+    if (!word || !reading || !/[A-Za-z]/.test(word)) continue;
+    entries.push([word, reading]);
+    if (entries.length >= maxEntries) break;
+  }
+  return entries.sort((a, b) => b[0].length - a[0].length);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyUserPronunciations(text, dictionary) {
+  return parseUserPronunciations(dictionary).reduce((result, [word, reading]) => result.replace(
+    new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(word)}(?![A-Za-z0-9])`, "gi"),
+    () => reading,
+  ), text);
+}
+
+function normalizeSpeechPronunciation(value, { enabled = true, userDictionary = "" } = {}) {
   const text = String(value || "");
-  if (!text) return "";
-  return text.replace(/[A-Za-z][A-Za-z0-9+#._-]*/g, (token) => {
+  if (!text || !enabled) return text;
+  return applyUserPronunciations(text, userDictionary).replace(/[A-Za-z][A-Za-z0-9+#._'-]*/g, (token) => {
     const known = WORD_PRONUNCIATIONS.get(token.toLowerCase());
     if (known) return known;
     // File names, versions, hashes, and paths should remain intact rather than
     // being turned into misleading words.
     if (/[._\\/]/.test(token) || /\d/.test(token) && !/^vits2$/i.test(token)) return token;
     if (/^[A-Z]{2,8}$/.test(token)) return [...token].map((letter) => LETTER_NAMES[letter]).join("");
+    if (/^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(token) && token.length <= 32) {
+      const cmuReading = cmuWordToKatakana(token);
+      if (cmuReading) return cmuReading;
+    }
     return token;
   });
 }
 
-module.exports = { normalizeSpeechPronunciation };
+module.exports = { normalizeSpeechPronunciation, parseUserPronunciations };

@@ -364,6 +364,8 @@
     $("#styleBertVits2ModelIdInput").value = Number(state.styleBertVits2ModelId) || 0;
     $("#styleBertVits2SpeedInput").value = Number(state.styleBertVits2Speed) || 1;
     $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
+    $("#englishPronunciationToggle").checked = state.englishPronunciationEnabled !== false;
+    $("#englishPronunciationDictionaryInput").value = state.englishPronunciationDictionary || "";
     $("#speechInputProviderSelect").value = state.speechInputProvider || "auto";
     $("#sherpaOnnxSettings").hidden = $("#speechInputProviderSelect").value !== "sherpa-onnx";
     const recordedSpeechSelected = ["auto", "codex-audio", "sherpa-onnx", "openai"].includes($("#speechInputProviderSelect").value);
@@ -485,6 +487,8 @@
       styleBertVits2Url: $("#styleBertVits2UrlInput").value.trim(),
       styleBertVits2ModelId: Number($("#styleBertVits2ModelIdInput").value),
       styleBertVits2Speed: Number($("#styleBertVits2SpeedInput").value),
+      englishPronunciationEnabled: $("#englishPronunciationToggle").checked,
+      englishPronunciationDictionary: $("#englishPronunciationDictionaryInput").value,
       speechInputProvider: $("#speechInputProviderSelect").value,
       sherpaModelId: $("#sherpaModelSelect").value || state?.sherpaModelId,
       speechLanguage: state?.speechLanguage || "ja-JP",
@@ -901,7 +905,8 @@
       return;
     }
     if (!window.speechSynthesis) return;
-    const utterance = new SpeechSynthesisUtterance(text);
+    const spokenText = await api.normalizeTtsText(text).catch(() => text);
+    const utterance = new SpeechSynthesisUtterance(spokenText);
     utterance.lang = state.speechLanguage || "ja-JP";
     utterance.rate = 1.03;
     utterance.pitch = 1.05;
@@ -1106,7 +1111,7 @@
       if (input.checked && input.value !== "codex") await stopCodexRealtimeVoice({ quiet: true });
       await saveSettings();
     }));
-    ["#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#positionLockedToggle", "#edgeSnapToggle"]
+    ["#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#englishPronunciationToggle", "#positionLockedToggle", "#edgeSnapToggle"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
     $("#ttsProviderSelect").addEventListener("change", () => {
       $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
@@ -1149,7 +1154,7 @@
       state.sherpaModel = await api.removeSherpaModel($("#sherpaModelSelect").value);
       syncSherpaModelUi(state.sherpaModel);
     });
-    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput"]
+    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#englishPronunciationDictionaryInput"]
       .forEach((selector) => $(selector).addEventListener("change", () => {
         saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
       }));

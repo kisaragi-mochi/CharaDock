@@ -367,6 +367,12 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.16); box-s
 .tts-provider-settings[hidden] { display: none; }
 .tts-settings .hint { min-height: 1.4em; margin: 0; }
 .tts-settings .hint.is-error { color: var(--danger); }
+.pronunciation-settings { padding-top: 2px; border-top: 1px solid var(--line); }
+.pronunciation-settings summary { width: fit-content; padding-top: 9px; color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 700; }
+.pronunciation-settings[open] summary { margin-bottom: 11px; color: var(--accent); }
+.pronunciation-settings label { display: grid; gap: 7px; }
+.pronunciation-settings textarea { min-height: 92px; resize: vertical; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.pronunciation-settings .hint { margin-top: 8px; line-height: 1.55; }
 .input-action { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
 .input-action button { padding: 0 14px; color: #f0f0f2; background: #343437; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 700; }
 .input-action button:active { transform: scale(.96); }

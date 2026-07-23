@@ -49,6 +49,8 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.styleBertVits2Url, "http://localhost:5000");
   assert.equal(state.styleBertVits2ModelId, 0);
   assert.equal(state.styleBertVits2Speed, 1);
+  assert.equal(state.englishPronunciationEnabled, true);
+  assert.equal(state.englishPronunciationDictionary, "");
   assert.equal(state.speechInputProvider, "auto");
   assert.equal(state.sherpaModelId, "reazonspeech-ja-int8");
   assert.equal(state.voiceActivationMode, "vad");
@@ -60,6 +62,21 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.codexWorkReasoningEffort, "");
   assert.equal(state.hasWorkDirectory, false);
   assert.equal(state.workDirectoryName, "");
+});
+
+test("preferences persist and sanitize English pronunciation settings", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  const preferences = new Preferences(file);
+  preferences.patch({ englishPronunciationEnabled: false, englishPronunciationDictionary: "Foo=フー" });
+  const restored = new Preferences(file).publicState();
+  assert.equal(restored.englishPronunciationEnabled, false);
+  assert.equal(restored.englishPronunciationDictionary, "Foo=フー");
+
+  fs.writeFileSync(file, JSON.stringify({ englishPronunciationEnabled: "yes", englishPronunciationDictionary: 42 }));
+  const sanitized = new Preferences(file).publicState();
+  assert.equal(sanitized.englishPronunciationEnabled, true);
+  assert.equal(sanitized.englishPronunciationDictionary, "");
 });
 
 test("preferences migrate the former Codex model to chat and work", () => {

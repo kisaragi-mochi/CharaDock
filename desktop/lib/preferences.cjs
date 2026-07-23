@@ -21,6 +21,8 @@ const DEFAULTS = Object.freeze({
   styleBertVits2Url: "http://localhost:5000",
   styleBertVits2ModelId: 0,
   styleBertVits2Speed: 1,
+  englishPronunciationEnabled: true,
+  englishPronunciationDictionary: "",
   speechInputProvider: "auto",
   sherpaModelId: "reazonspeech-ja-int8",
   speechLanguage: "ja-JP",
@@ -63,6 +65,9 @@ class Preferences {
       }
       if (!["manual", "vad"].includes(this.data.voiceActivationMode)) this.data.voiceActivationMode = "vad";
       if (!["low", "normal", "high"].includes(this.data.vadSensitivity)) this.data.vadSensitivity = "normal";
+      if (typeof this.data.englishPronunciationEnabled !== "boolean") this.data.englishPronunciationEnabled = true;
+      if (typeof this.data.englishPronunciationDictionary !== "string") this.data.englishPronunciationDictionary = "";
+      this.data.englishPronunciationDictionary = this.data.englishPronunciationDictionary.slice(0, 12_000);
       if (typeof parsed.encryptedApiKey === "string") this.data.encryptedApiKey = parsed.encryptedApiKey;
     } catch (error) {
       if (error?.code !== "ENOENT") console.warn("Preferences load failed:", error);

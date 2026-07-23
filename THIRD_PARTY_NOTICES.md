@@ -36,6 +36,21 @@ The packaged Electron runtime also supplies `LICENSE.electron.txt` and
 The MIT permission notices for Electron and pngjs are retained with the
 corresponding installed packages and packaged runtime license files.
 
+### CMU Pronouncing Dictionary
+
+- Project: CMU Pronouncing Dictionary (CMUdict)
+- Provider: Carnegie Mellon University
+- Source: https://github.com/cmusphinx/cmudict
+- Runtime package: `cmu-pronouncing-dictionary` 3.0.0
+- Package copyright: Zeke Sikelianos and contributors
+- Package license: ISC License
+- Dictionary terms: public domain; use is unrestricted
+
+CMUdict supplies ARPABET pronunciations for the local English-to-Katakana
+fallback used only at the text-to-speech boundary. The original displayed text
+is not replaced. The ISC permission and warranty notice is retained with the
+installed package.
+
 ### sherpa-onnx
 
 - Project: sherpa-onnx
