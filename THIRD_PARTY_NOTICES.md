@@ -51,6 +51,49 @@ fallback used only at the text-to-speech boundary. The original displayed text
 is not replaced. The ISC permission and warranty notice is retained with the
 installed package.
 
+### piper-plus (optional external runtime)
+
+- Project: piper-plus
+- Author: ayutaz and contributors
+- Source: https://github.com/ayutaz/piper-plus
+- License: MIT License
+
+piper-plus's MIT-licensed multilingual WebAssembly G2P runtime is bundled for
+Japanese phonemization. The native piper-plus executable and voice models are
+not bundled. On Windows, the user may choose to download the pinned official
+`piper-windows-x64.zip` runtime and Tsukuyomi-chan FP16 model from their original
+distribution servers. Each file is verified against a fixed SHA-256 digest and
+stored in the app user-data directory. A separately obtained compatible runtime
+and voice model can still be selected manually.
+
+The optional sample voice is based on the Tsukuyomi-chan Corpus. Its required
+credit and use restrictions are shown prominently in the model download UI:
+
+> 本ソフトウェアの音声合成には、フリー素材キャラクター「つくよみちゃん」（© Rei Yumesaki）が無料公開している音声データを使用しています。
+>
+> ■つくよみちゃんコーパス（CV.夢前黎）
+> https://tyc.rei-yumesaki.net/material/corpus/
+
+The corpus terms prohibit using this voice for attacks or criticism of people,
+calls to support or oppose political positions, religions, or ideologies,
+publication of strong content without appropriate zoning, or publication that
+permits the generated audio to be reused as material. The complete current
+terms at the URL above control.
+
+### Kokoro 82M (optional model)
+
+- Project: Kokoro
+- Author: hexgrad and contributors
+- Source: https://github.com/hexgrad/kokoro
+- Model: https://huggingface.co/hexgrad/Kokoro-82M
+- License: Apache License 2.0
+
+Kokoro model and Japanese voice files are not bundled. The user may download
+the pinned q8 ONNX WebGPU/CPU files and five Japanese voice style files from
+the original model repository. Every file is verified against a fixed SHA-256
+digest and stored in the app user-data directory. Inference and Japanese G2P
+then run locally.
+
 ### sherpa-onnx
 
 - Project: sherpa-onnx
@@ -68,6 +111,47 @@ against its pinned SHA-256 digest, and stored in the app user-data directory.
 The Silero VAD ONNX model used for neural voice activity detection is also not
 bundled. It is downloaded on first use from the official sherpa-onnx release,
 verified against a pinned SHA-256 digest, and stored beside the ASR models.
+
+Supertonic 3 model files are not bundled. The user may download the official
+sherpa-onnx int8 archive on demand; it is verified against a pinned SHA-256
+digest and stored in the app user-data directory. The model archive includes
+the Supertonic 3 MIT license and copyright notice (Copyright (c) 2025 Supertone
+Inc.).
+
+### Irodori TTS WebGPU runtime
+
+- Project: irodori-tts-webgpu
+- Copyright: 2026 NOGUCHI Shoji
+- Source: https://github.com/ngc-shj/irodori-tts-webgpu
+- License: MIT License
+
+PuruPet includes a modified, environment-specific copy of the inference core.
+The MIT copyright and permission notice are retained in the vendored source.
+Irodori model files and reference audio are not bundled. The user may download
+only the required FP16 ONNX artifacts and tokenizer from the original model
+repository; every file is pinned to one repository commit and verified against
+its SHA-256 digest. The user selects a consented reference WAV from local
+storage and inference stays on the device. The upstream model/runtime notice
+identifies Irodori-TTS and Semantic-DACVAE weights as MIT and the llm-jp
+tokenizer as Apache-2.0. Voice cloning or impersonation without explicit
+consent, deepfakes, and misleading speech are prohibited by the ethical-use
+notice carried from the model card.
+
+### ONNX Runtime Web
+
+- Project: ONNX Runtime
+- Provider: Microsoft
+- Source: https://github.com/microsoft/onnxruntime
+- Runtime package: `onnxruntime-web` 1.23.0
+- License: MIT License
+
+### Tokenizers.js
+
+- Project: Tokenizers.js
+- Provider: Hugging Face
+- Source: https://github.com/huggingface/tokenizers.js
+- Runtime package: `@huggingface/tokenizers` 0.1.3
+- License: Apache License 2.0
 
 ### MediaPipe Tasks Vision
 

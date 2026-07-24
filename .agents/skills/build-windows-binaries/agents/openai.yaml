@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Windows Binaries"
+  short_description: "Build Electron installer and portable binaries from WSL"
+  default_prompt: "Use $build-windows-binaries to build and verify the Windows installer and portable executable."

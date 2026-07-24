@@ -31,6 +31,7 @@
   let generatorBusy = false;
   let codexAccount = null;
   let codexModels = [];
+  let realtimeVoices = { voices: [], defaultVoice: "cove", loaded: false };
   let onboardingStep = 0;
   let onboardingWasOpen = false;
   let onboardingFocusReturn = null;
@@ -91,6 +92,49 @@
     hint.textContent = `${model.description || "日本語音声認識モデル"}。初回ダウンロード約${downloadMb}MB。認識処理と音声データは端末内で完結します。`;
   }
 
+  function downloadSizeLabel(bytes) {
+    const value = Number(bytes) || 0;
+    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)}GB`;
+    return `${Math.max(1, Math.round(value / 1024 / 1024))}MB`;
+  }
+
+  function syncTtsSampleModelUi(prefix, model = {}) {
+    const status = $(`#${prefix}ModelDownloadStatus`);
+    const progress = $(`#${prefix}ModelDownloadProgress`);
+    const download = $(`#${prefix}ModelDownloadButton`);
+    const remove = $(`#${prefix}ModelRemoveButton`);
+    const hint = $(`#${prefix}ModelDownloadHint`);
+    if (!status || !progress || !download || !remove || !hint) return;
+    const transfer = model.progress || {};
+    const total = Number(transfer.totalBytes || model.downloadBytes) || 1;
+    const received = Number(transfer.receivedBytes) || 0;
+    const size = downloadSizeLabel(model.downloadBytes);
+    if (model.downloading || ["downloading", "extracting"].includes(transfer.phase)) {
+      progress.hidden = false;
+      if (transfer.phase === "extracting") {
+        progress.removeAttribute("value");
+        setStatus(status, "モデルを展開しています…");
+      } else {
+        const percent = Math.min(100, Math.round(received / total * 100));
+        progress.value = percent;
+        const current = transfer.currentFile ? ` · ${transfer.currentFile}` : "";
+        setStatus(status, `モデルをダウンロードしています… ${percent}%${current}`);
+      }
+    } else {
+      progress.hidden = true;
+      progress.value = 0;
+      if (model.supported === false) setStatus(status, "このサンプルの自動導入はWindows版で利用できます。");
+      else if (model.installed) setStatus(status, `${model.label || "サンプルモデル"} · 導入済み`);
+      else setStatus(status, "サンプルモデルはまだダウンロードされていません。");
+    }
+    download.hidden = Boolean(model.installed);
+    download.disabled = Boolean(model.downloading) || model.supported === false;
+    remove.hidden = !model.installed;
+    remove.disabled = Boolean(model.downloading);
+    download.textContent = `ダウンロード（約${size}）`;
+    hint.textContent = `${model.description || "ローカル音声合成モデル"} 初回ダウンロード約${size}。音声生成は端末内で完結します。`;
+  }
+
   function setCodexModelOptions(select, selectedValue) {
     const value = String(selectedValue || "");
     select.replaceChildren(new Option("Codex既定", ""));
@@ -115,6 +159,48 @@
       setCodexModelOptions($("#codexChatModelInput"), state.codexChatModel || state.codexModel || "");
       setCodexModelOptions($("#codexWorkModelInput"), state.codexWorkModel || state.codexModel || "");
       setStatus($("#connectionStatus"), `モデル一覧を取得できません: ${error.message}`, true);
+    }
+  }
+
+  function syncRealtimeVoiceUi() {
+    const select = $("#realtimeVoiceSelect");
+    const status = $("#realtimeVoiceStatus");
+    if (!select || !status || !state) return;
+    const selected = state.realtimeVoice || state.characterTts?.realtimeVoice || realtimeVoices.defaultVoice || "cove";
+    select.replaceChildren();
+    const addGroup = (label, voices) => {
+      if (!voices.length) return;
+      const group = document.createElement("optgroup");
+      group.label = label;
+      for (const voice of voices) {
+        const display = `${voice.charAt(0).toUpperCase()}${voice.slice(1)}${voice === realtimeVoices.defaultVoice ? "（標準）" : ""}`;
+        group.appendChild(new Option(display, voice));
+      }
+      select.appendChild(group);
+    };
+    addGroup("Realtime V3音声", realtimeVoices.voices);
+    if (![...select.options].some((option) => option.value === selected)) {
+      select.appendChild(new Option(`${selected.charAt(0).toUpperCase()}${selected.slice(1)}（保存済み）`, selected));
+    }
+    select.value = selected;
+    select.disabled = state.backend !== "codex";
+    if (state.backend !== "codex") setStatus(status, "Realtime音声はCodex app-server接続時に使用します。");
+    else if (realtimeVoices.loaded) setStatus(status, `${realtimeVoices.voices.length}種類のRealtime音声を利用できます。`);
+    else setStatus(status, "保存済みの声を表示しています。接続時に音声一覧を更新します。");
+  }
+
+  async function refreshRealtimeVoices() {
+    try {
+      const result = await api.getRealtimeVoices();
+      realtimeVoices = {
+        voices: Array.isArray(result?.voices) ? result.voices : [],
+        defaultVoice: result?.defaultVoice || "cove",
+        loaded: true,
+      };
+      syncRealtimeVoiceUi();
+    } catch (error) {
+      syncRealtimeVoiceUi();
+      setStatus($("#realtimeVoiceStatus"), `音声一覧を取得できません: ${error.message}`, true);
     }
   }
 
@@ -186,9 +272,9 @@
       button.addEventListener("click", async () => {
         showOptimisticCharacterSelection(character.id, "#characterGrid .character-card");
         try {
+          if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
           state = await api.setCharacter(character.id);
-          renderCharacters();
-          syncCharacterEditor();
+          syncUi();
           setStatus($("#chatStatus"), `${state.characters.find((item) => item.id === character.id)?.name || character.name}に切り替えました。`);
         } catch (error) {
           renderCharacters();
@@ -326,6 +412,59 @@
     $("#generateCharacterButton").disabled = !available || !generatorFile || !$("#avatarRightsConfirm").checked || generatorBusy;
   }
 
+  function syncPiperPlusUi(info = state?.piperPlus || {}) {
+    $("#piperPlusExecutableName").textContent = info.runtimeName || "未選択";
+    $("#piperPlusModelName").textContent = info.modelName || "未選択";
+    const status = $("#piperPlusStatus");
+    if (!info.runtimeReady) setStatus(status, "piper-plusの実行ファイルを選択してください。");
+    else if (!info.modelReady) setStatus(status, "音声モデルは未導入です。後から選択できます。");
+    else if (!info.configReady) setStatus(status, "モデルの設定JSONが同じフォルダーに見つかりません。", true);
+    else setStatus(status, "ローカル音声合成の準備ができています。");
+    syncTtsSampleModelUi("piperPlus", info.sampleModel);
+  }
+
+  function syncSupertonicUi(info = state?.supertonic || {}) {
+    $("#supertonicModelName").textContent = info.directoryName || "未選択";
+    const status = $("#supertonicStatus");
+    if (info.ready) setStatus(status, "Supertonic 3のローカル音声合成を利用できます。");
+    else if (info.directoryName) setStatus(status, `モデルファイルが不足しています（${(info.missingFiles || []).length}件）。`, true);
+    else setStatus(status, "モデルは未導入です。後からフォルダーを選択できます。");
+    syncTtsSampleModelUi("supertonic", info.sampleModel);
+  }
+
+  function syncKokoroUi(info = state?.kokoro || {}) {
+    const status = $("#kokoroStatus");
+    if (!info.ready) setStatus(status, "Kokoroの日本語モデルは未導入です。");
+    else if ($("#kokoroDeviceSelect").value === "webgpu" && info.webgpuAvailable === false) {
+      setStatus(status, "このPCではWebGPUを利用できません。自動またはCPUを選んでください。", true);
+    } else if (info.webgpuAvailable === true && $("#kokoroDeviceSelect").value !== "wasm") {
+      setStatus(status, "KokoroをWebGPUで利用できます。初回生成時にモデルをGPUへ読み込みます。");
+    } else if ($("#kokoroDeviceSelect").value === "auto") {
+      setStatus(status, "Kokoroを利用できます。WebGPUが使えない場合はCPUへ自動で切り替わります。");
+    } else setStatus(status, "KokoroをCPUで利用できます。");
+    syncTtsSampleModelUi("kokoro", info.sampleModel);
+  }
+
+  function syncIrodoriUi(info = state?.irodori || {}) {
+    $("#irodoriModelName").textContent = info.directoryName || "未選択";
+    const select = $("#irodoriVoiceSelect");
+    const voices = Array.isArray(info.voices) ? info.voices : [];
+    select.replaceChildren();
+    if (!voices.length) select.append(new Option("未追加", ""));
+    for (const voice of voices) select.append(new Option(`${voice.name}${voice.ready ? "" : "（ファイルなし）"}`, voice.id));
+    select.value = info.voiceId || "";
+    select.disabled = !voices.length;
+    $("#irodoriVoiceRenameButton").disabled = !info.voiceId;
+    $("#irodoriVoiceRemoveButton").disabled = !info.voiceId;
+    const status = $("#irodoriStatus");
+    if (info.webgpuAvailable === false) setStatus(status, "WebGPUを利用できません。GPUドライバーを確認してください。", true);
+    else if (!info.modelReady) setStatus(status, "FP16モデルは未導入です。後からフォルダーを選択できます。");
+    else if (!info.referenceReady) setStatus(status, "本人の許可がある参照音声を追加してください。");
+    else if (info.webgpuAvailable === true) setStatus(status, "Irodori TTSのWebGPU音声合成を利用できます。");
+    else setStatus(status, "モデルと参照音声を確認しました。初回生成時にWebGPUを確認します。");
+    syncTtsSampleModelUi("irodori", info.sampleModel);
+  }
+
   function updateGeneratorProgress(payload = {}) {
     const progress = $("#generatorProgress");
     progress.classList.toggle("is-active", !["done", "error"].includes(payload.phase) && generatorBusy);
@@ -359,11 +498,31 @@
     $("#mouseFollowToggle").checked = Boolean(state.mouseFollow);
     $("#launchAtLoginToggle").checked = Boolean(state.launchAtLogin);
     $("#ttsToggle").checked = Boolean(state.ttsEnabled);
+    $("#characterTtsLabel").textContent = state.characterTts?.characterName || "このキャラクター";
+    syncRealtimeVoiceUi();
     $("#ttsProviderSelect").value = state.ttsProvider || "system";
     $("#styleBertVits2UrlInput").value = state.styleBertVits2Url || "http://localhost:5000";
     $("#styleBertVits2ModelIdInput").value = Number(state.styleBertVits2ModelId) || 0;
     $("#styleBertVits2SpeedInput").value = Number(state.styleBertVits2Speed) || 1;
     $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
+    $("#piperPlusSpeedInput").value = Number(state.piperPlusSpeed) || 1;
+    $("#piperPlusSettings").hidden = $("#ttsProviderSelect").value !== "piper-plus";
+    syncPiperPlusUi();
+    $("#supertonicVoiceSelect").value = state.supertonicVoice || "F1";
+    $("#supertonicSpeedInput").value = Number(state.supertonicSpeed) || 1;
+    $("#supertonicStepsInput").value = Number(state.supertonicSteps) || 8;
+    $("#supertonicSettings").hidden = $("#ttsProviderSelect").value !== "supertonic-3";
+    syncSupertonicUi();
+    $("#kokoroVoiceSelect").value = state.kokoroVoice || "jf_alpha";
+    $("#kokoroSpeedInput").value = Number(state.kokoroSpeed) || 1;
+    $("#kokoroDeviceSelect").value = state.kokoroDevice || "auto";
+    $("#kokoroSettings").hidden = $("#ttsProviderSelect").value !== "kokoro";
+    syncKokoroUi();
+    $("#irodoriSpeedInput").value = Number(state.irodoriSpeed) || 1;
+    $("#irodoriStepsInput").value = Number(state.irodoriSteps) || 16;
+    $("#irodoriSeedInput").value = Number(state.irodoriSeed) || 0;
+    $("#irodoriSettings").hidden = $("#ttsProviderSelect").value !== "irodori-webgpu";
+    syncIrodoriUi();
     $("#englishPronunciationToggle").checked = state.englishPronunciationEnabled !== false;
     $("#englishPronunciationDictionaryInput").value = state.englishPronunciationDictionary || "";
     $("#speechInputProviderSelect").value = state.speechInputProvider || "auto";
@@ -383,7 +542,7 @@
     const voiceMode = $("#speechInputMode");
     const providerLabels = {
       auto: state.sherpaModel?.installed ? `自動 · ${state.sherpaModel.label || "日本語sherpa"}` : "自動 · 端末音声認識",
-      realtime: "Codex Realtime · 実験的",
+      realtime: "GPT-Live / Codex Voice · 実験的",
       "codex-audio": "Codex音声入力",
       "sherpa-onnx": "sherpa-onnx",
       browser: "端末音声認識",
@@ -462,6 +621,7 @@
       await new Promise((resolve) => setTimeout(resolve, 2000));
       if (await refreshCodexAccount()) {
         await refreshCodexModels();
+        await refreshRealtimeVoices();
         setStatus($("#connectionStatus"), "ChatGPTログインを確認しました。");
         return;
       }
@@ -484,9 +644,21 @@
       launchAtLogin: $("#launchAtLoginToggle").checked,
       ttsEnabled: $("#ttsToggle").checked,
       ttsProvider: $("#ttsProviderSelect").value,
+      realtimeVoice: $("#realtimeVoiceSelect").value,
       styleBertVits2Url: $("#styleBertVits2UrlInput").value.trim(),
       styleBertVits2ModelId: Number($("#styleBertVits2ModelIdInput").value),
       styleBertVits2Speed: Number($("#styleBertVits2SpeedInput").value),
+      piperPlusSpeed: Number($("#piperPlusSpeedInput").value),
+      supertonicVoice: $("#supertonicVoiceSelect").value,
+      supertonicSpeed: Number($("#supertonicSpeedInput").value),
+      supertonicSteps: Number($("#supertonicStepsInput").value),
+      kokoroVoice: $("#kokoroVoiceSelect").value,
+      kokoroSpeed: Number($("#kokoroSpeedInput").value),
+      kokoroDevice: $("#kokoroDeviceSelect").value,
+      irodoriVoiceId: $("#irodoriVoiceSelect").value,
+      irodoriSpeed: Number($("#irodoriSpeedInput").value),
+      irodoriSteps: Number($("#irodoriStepsInput").value),
+      irodoriSeed: Number($("#irodoriSeedInput").value),
       englishPronunciationEnabled: $("#englishPronunciationToggle").checked,
       englishPronunciationDictionary: $("#englishPronunciationDictionaryInput").value,
       speechInputProvider: $("#speechInputProviderSelect").value,
@@ -650,6 +822,7 @@
   }
 
   async function startCodexRealtimeVoice() {
+    stopSpeechPlayback();
     const stream = await ensureAudioStream();
     const peer = new RTCPeerConnection();
     realtimePeerConnection = peer;
@@ -675,7 +848,7 @@
     await api.startCodexRealtime({ sdp: peer.localDescription?.sdp || offer.sdp });
     realtimeStarting = false;
     $("#speechInputButton").setAttribute("aria-pressed", "true");
-    $("#speechInputMode").textContent = "Codex Realtime";
+    $("#speechInputMode").textContent = "GPT-Live / Codex Voice";
     $("#speechInputMode").classList.remove("is-fallback");
     setStatus($("#chatStatus"), "Codex Realtimeへ接続中…そのまま話してください。");
   }
@@ -862,11 +1035,15 @@
     stopSpeechPulse();
   }
 
-  function playGeneratedAudio(source, token) {
+  function playGeneratedAudio(source, token, playbackRate = 1) {
     return new Promise((resolve, reject) => {
       if (token !== speechPlaybackToken) return resolve();
       speechAudio = new Audio(source);
       speechAudio.preload = "auto";
+      speechAudio.muted = false;
+      speechAudio.volume = 1;
+      speechAudio.playbackRate = Math.min(2, Math.max(.5, Number(playbackRate) || 1));
+      speechAudio.preservesPitch = true;
       speechAudio.onplay = () => {
         let phase = 0;
         clearInterval(speechPulseTimer);
@@ -888,11 +1065,14 @@
     if (!state.ttsEnabled) return;
     stopSpeechPlayback();
     const token = speechPlaybackToken;
-    if (state.ttsProvider === "style-bert-vits2") {
+    if (["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(state.ttsProvider)) {
       try {
-        setStatus($("#ttsStatus"), "Style-Bert-VITS2で生成しています…");
+        const providerName = { "piper-plus": "piper-plus", "supertonic-3": "Supertonic 3", "irodori-webgpu": "Irodori TTS", kokoro: "Kokoro", "style-bert-vits2": "Style-Bert-VITS2" }[state.ttsProvider];
+        setStatus($("#ttsStatus"), `${providerName}で生成しています…`);
         const result = await api.synthesizeTts(text);
-        for (const source of result?.audioDataUrls || []) await playGeneratedAudio(source, token);
+        const sources = result?.audioDataUrls || [];
+        if (!sources.length) throw new Error(`${providerName}から音声データが返されませんでした。音声出力がONか確認してください。`);
+        for (const source of sources) await playGeneratedAudio(source, token, result?.playbackRate);
         if (token === speechPlaybackToken) setStatus($("#ttsStatus"), "接続と再生を確認しました。");
       } catch (error) {
         if (token === speechPlaybackToken) setStatus($("#ttsStatus"), error.message, true);
@@ -1115,7 +1295,11 @@
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
     $("#ttsProviderSelect").addEventListener("change", () => {
       $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
-      if (!$("#styleBertVits2Settings").hidden) {
+      $("#piperPlusSettings").hidden = $("#ttsProviderSelect").value !== "piper-plus";
+      $("#supertonicSettings").hidden = $("#ttsProviderSelect").value !== "supertonic-3";
+      $("#kokoroSettings").hidden = $("#ttsProviderSelect").value !== "kokoro";
+      $("#irodoriSettings").hidden = $("#ttsProviderSelect").value !== "irodori-webgpu";
+      if ($("#ttsProviderSelect").value !== "system") {
         setTimeout(() => {
           const scroller = $(".main-panel");
           const container = $("#ttsProviderSelect").closest(".tts-settings");
@@ -1128,6 +1312,119 @@
       }
       saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
     });
+    $("#realtimeVoiceSelect").addEventListener("change", async () => {
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        await saveSettings();
+        setStatus($("#realtimeVoiceStatus"), "このキャラクターのRealtime音声を保存しました。次の接続から使用します。");
+      } catch (error) {
+        setStatus($("#realtimeVoiceStatus"), error.message, true);
+      }
+    });
+    $("#piperPlusExecutableButton").addEventListener("click", async () => {
+      try {
+        state = await api.choosePiperPlusExecutable();
+        syncUi();
+      } catch (error) {
+        setStatus($("#piperPlusStatus"), error.message, true);
+      }
+    });
+    $("#piperPlusModelButton").addEventListener("click", async () => {
+      try {
+        state = await api.choosePiperPlusModel();
+        syncUi();
+      } catch (error) {
+        setStatus($("#piperPlusStatus"), error.message, true);
+      }
+    });
+    $("#supertonicModelButton").addEventListener("click", async () => {
+      try {
+        state = await api.chooseSupertonicModel();
+        syncUi();
+      } catch (error) {
+        setStatus($("#supertonicStatus"), error.message, true);
+      }
+    });
+    $("#irodoriModelButton").addEventListener("click", async () => {
+      try {
+        state = await api.chooseIrodoriModel();
+        syncUi();
+      } catch (error) {
+        setStatus($("#irodoriStatus"), error.message, true);
+      }
+    });
+    $("#irodoriReferenceButton").addEventListener("click", async () => {
+      try {
+        state = await api.chooseIrodoriReference();
+        syncUi();
+      } catch (error) {
+        setStatus($("#irodoriStatus"), error.message, true);
+      }
+    });
+    $("#irodoriVoiceSelect").addEventListener("change", async () => {
+      try {
+        state = await api.selectIrodoriVoice($("#irodoriVoiceSelect").value);
+        syncUi();
+      } catch (error) {
+        setStatus($("#irodoriStatus"), error.message, true);
+      }
+    });
+    $("#irodoriVoiceRenameButton").addEventListener("click", async () => {
+      const voice = state.irodori?.voices?.find((item) => item.id === state.irodori.voiceId);
+      if (!voice) return;
+      const name = window.prompt("参照音声の名前", voice.name);
+      if (name == null || !name.trim()) return;
+      try {
+        state = await api.renameIrodoriVoice({ id: voice.id, name });
+        syncUi();
+      } catch (error) {
+        setStatus($("#irodoriStatus"), error.message, true);
+      }
+    });
+    $("#irodoriVoiceRemoveButton").addEventListener("click", async () => {
+      const voice = state.irodori?.voices?.find((item) => item.id === state.irodori.voiceId);
+      if (!voice || !window.confirm(`参照音声「${voice.name}」をアプリ内から削除しますか？`)) return;
+      try {
+        state = await api.removeIrodoriVoice(voice.id);
+        syncUi();
+      } catch (error) {
+        setStatus($("#irodoriStatus"), error.message, true);
+      }
+    });
+    for (const { prefix, provider } of [
+      { prefix: "piperPlus", provider: "piper-plus" },
+      { prefix: "supertonic", provider: "supertonic-3" },
+      { prefix: "kokoro", provider: "kokoro" },
+      { prefix: "irodori", provider: "irodori-webgpu" },
+    ]) {
+      $(`#${prefix}ModelDownloadButton`).addEventListener("click", async () => {
+        try {
+          if (provider === "piper-plus" && !window.confirm("つくよみちゃんコーパスのクレジットと利用条件を確認し、同意してダウンロードしますか？")) return;
+          const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", kokoro: "kokoro" }[provider];
+          syncTtsSampleModelUi(prefix, {
+            ...(state[stateKey]?.sampleModel || {}),
+            downloading: true,
+            progress: { phase: "downloading", receivedBytes: 0, totalBytes: state[stateKey]?.sampleModel?.downloadBytes || 1 },
+          });
+          state = await api.downloadTtsModel(provider);
+          syncUi();
+        } catch (error) {
+          syncUi();
+          setStatus($(`#${prefix}ModelDownloadStatus`), error.message, true);
+        }
+      });
+      $(`#${prefix}ModelRemoveButton`).addEventListener("click", async () => {
+        const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", kokoro: "kokoro" }[provider];
+        const label = state[stateKey]?.sampleModel?.label || "ダウンロード済みモデル";
+        if (!window.confirm(`${label}を端末から削除しますか？`)) return;
+        try {
+          state = await api.removeTtsModel(provider);
+          syncUi();
+        } catch (error) {
+          setStatus($(`#${prefix}ModelDownloadStatus`), error.message, true);
+        }
+      });
+    }
     $("#speechInputProviderSelect").addEventListener("change", () => {
       $("#sherpaOnnxSettings").hidden = $("#speechInputProviderSelect").value !== "sherpa-onnx";
       $("#voiceActivationSettings").hidden = !["auto", "codex-audio", "sherpa-onnx", "openai"].includes($("#speechInputProviderSelect").value);
@@ -1154,7 +1451,7 @@
       state.sherpaModel = await api.removeSherpaModel($("#sherpaModelSelect").value);
       syncSherpaModelUi(state.sherpaModel);
     });
-    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#englishPronunciationDictionaryInput"]
+    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#piperPlusSpeedInput", "#supertonicVoiceSelect", "#supertonicSpeedInput", "#supertonicStepsInput", "#kokoroVoiceSelect", "#kokoroSpeedInput", "#kokoroDeviceSelect", "#irodoriSpeedInput", "#irodoriStepsInput", "#irodoriSeedInput", "#englishPronunciationDictionaryInput"]
       .forEach((selector) => $(selector).addEventListener("change", () => {
         saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
       }));
@@ -1199,6 +1496,7 @@
         if (backend === "codex") {
           refreshCodexAccount();
           refreshCodexModels();
+          refreshRealtimeVoices();
         }
       } catch (error) {
         setStatus($("#connectionStatus"), error.message, true);
@@ -1296,10 +1594,24 @@
 
   async function init() {
     if (!api) throw new Error("Electron bridge is unavailable");
+    const characterVoiceCard = $("#characterVoiceCard");
+    $("#characterGrid").insertAdjacentElement("afterend", characterVoiceCard);
     state = await api.getState();
     api.onSherpaModelProgress((model) => {
       state.sherpaModel = model;
       syncSherpaModelUi(model);
+    });
+    api.onTtsModelProgress((model) => {
+      const mapping = {
+        "piper-plus": ["piperPlus", "piperPlus"],
+        "supertonic-3": ["supertonic", "supertonic"],
+        kokoro: ["kokoro", "kokoro"],
+        "irodori-webgpu": ["irodori", "irodori"],
+      }[model?.provider];
+      if (!mapping) return;
+      state[mapping[0]] ||= {};
+      state[mapping[0]].sampleModel = model;
+      syncTtsSampleModelUi(mapping[1], model);
     });
     bindEvents();
     syncUi();
@@ -1310,6 +1622,7 @@
     });
     refreshCodexAccount();
     refreshCodexModels();
+    refreshRealtimeVoices();
   }
 
   init().catch((error) => {

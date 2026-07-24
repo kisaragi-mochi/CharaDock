@@ -140,6 +140,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let ttsEnvelope = 0;
   let ttsBusy = false;
   let streamTtsQueue = [];
+  let streamTtsQueueSignal = null;
   let streamTtsDraining = false;
   let streamTtsFinished = false;
   let streamTtsConfig = { enabled: false, provider: "system", language: "ja-JP" };
@@ -324,6 +325,7 @@ window.addEventListener("DOMContentLoaded", () => {
     permissionActions.dataset.permissionType = "";
     bubble.classList.remove("is-permission");
   };
+  const isGeneratedTtsProvider = (provider) => ["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(provider);
   const showPermission = (result) => {
     clearTimeout(hideTimer);
     stopTtsPlayback();
@@ -347,7 +349,7 @@ window.addEventListener("DOMContentLoaded", () => {
       scheduleBubbleHide(1800);
     }, Math.max(10_000, Number(result?.permissionRequest?.expiresInMs) || 60_000));
     if (appState?.ttsEnabled && question) {
-      if (appState.ttsProvider === "style-bert-vits2") playStyleBertSpeech(question);
+      if (isGeneratedTtsProvider(appState.ttsProvider)) playGeneratedSpeech(question, appState.ttsProvider);
       else speakSystemText(question, appState.speechLanguage || "ja-JP");
     }
   };
@@ -405,6 +407,8 @@ window.addEventListener("DOMContentLoaded", () => {
     ttsPlaybackToken += 1;
     thinkingFillerActive = false;
     streamTtsQueue = [];
+    streamTtsQueueSignal?.();
+    streamTtsQueueSignal = null;
     streamTtsDraining = false;
     streamTtsFinished = false;
     ttsBusy = false;
@@ -493,10 +497,14 @@ window.addEventListener("DOMContentLoaded", () => {
     ttsBusy = Boolean(busy);
     bubble.classList.toggle("is-speaking", ttsBusy);
   };
-  const playAudioSource = (source, text, token, onStart) => new Promise((resolve, reject) => {
+  const playAudioSource = (source, text, token, onStart, playbackRate = 1) => new Promise((resolve, reject) => {
     if (token !== ttsPlaybackToken) return resolve();
     ttsAudio = new Audio(source);
     ttsAudio.preload = "auto";
+    ttsAudio.muted = false;
+    ttsAudio.volume = 1;
+    ttsAudio.playbackRate = Math.min(2, Math.max(.5, Number(playbackRate) || 1));
+    ttsAudio.preservesPitch = true;
     ttsAudio.onplay = () => {
       onStart?.();
       startMeasuredTtsPulse(ttsAudio, text);
@@ -532,10 +540,21 @@ window.addEventListener("DOMContentLoaded", () => {
     utterance.onerror = () => { stopTtsPulse(); resolve(); };
     window.speechSynthesis.speak(utterance);
   });
-  const playSpeechSegment = async (segment, provider, language, token) => {
+  const prepareSpeechSegment = async (segment, provider, token) => {
     const text = String(segment?.text || segment || "").trim();
     const spokenText = String(segment?.spokenText || text).trim();
-    if (!text) return;
+    if (!text || token !== ttsPlaybackToken) return null;
+    if (!isGeneratedTtsProvider(provider)) return { segment, text, spokenText, sources: null, playbackRate: 1 };
+    const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", spokenText);
+    const sources = result?.audioDataUrls || [];
+    if (!sources.length) throw new Error("音声合成から音声データが返されませんでした。");
+    return { segment, text, spokenText, sources, playbackRate: result?.playbackRate };
+  };
+  const prepareQueuedSpeechSegment = (segment, provider, token) => prepareSpeechSegment(segment, provider, token)
+    .then((prepared) => ({ prepared }), (error) => ({ error }));
+  const playPreparedSpeechSegment = async (prepared, provider, language, token) => {
+    if (!prepared || token !== ttsPlaybackToken) return;
+    const { segment, text, spokenText, sources, playbackRate } = prepared;
     let activated = false;
     const activate = () => {
       if (activated) return;
@@ -545,15 +564,18 @@ window.addEventListener("DOMContentLoaded", () => {
       syncBubbleOverflow();
       if (segment?.expression) ipcRenderer.invoke("mascotInline:expression", segment.expression).catch(() => {});
     };
-    if (provider === "style-bert-vits2") {
-      const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", spokenText);
-      for (const source of result?.audioDataUrls || []) {
+    if (isGeneratedTtsProvider(provider)) {
+      for (const source of sources) {
         if (token !== ttsPlaybackToken) return;
-        await playAudioSource(source, spokenText, token, activate);
+        await playAudioSource(source, spokenText, token, activate, playbackRate);
       }
       return;
     }
     await speakSystemSegment(spokenText, language, token, activate);
+  };
+  const playSpeechSegment = async (segment, provider, language, token) => {
+    const prepared = await prepareSpeechSegment(segment, provider, token);
+    await playPreparedSpeechSegment(prepared, provider, language, token);
   };
   const finishTtsPlayback = () => {
     stopTtsPulse();
@@ -573,9 +595,34 @@ window.addEventListener("DOMContentLoaded", () => {
     streamTtsDraining = true;
     setTtsBusy(true);
     try {
-      while (token === ttsPlaybackToken && streamTtsQueue.length) {
-        const segment = streamTtsQueue.shift();
-        await playSpeechSegment(segment, streamTtsConfig.provider, streamTtsConfig.language, token);
+      let preparedPromise = null;
+      while (token === ttsPlaybackToken && (preparedPromise || streamTtsQueue.length)) {
+        preparedPromise ||= prepareQueuedSpeechSegment(streamTtsQueue.shift(), streamTtsConfig.provider, token);
+        const preparedResult = await preparedPromise;
+        preparedPromise = null;
+        if (preparedResult.error) throw preparedResult.error;
+        const { prepared } = preparedResult;
+        if (!prepared || token !== ttsPlaybackToken) continue;
+
+        let playbackDone = false;
+        const playback = playPreparedSpeechSegment(prepared, streamTtsConfig.provider, streamTtsConfig.language, token)
+          .finally(() => {
+            playbackDone = true;
+            streamTtsQueueSignal?.();
+            streamTtsQueueSignal = null;
+          });
+
+        // Keep at most one synthesis ahead. This overlaps GPU inference with
+        // playback without launching concurrent Irodori sessions or retaining
+        // a long answer's worth of WAV data in memory.
+        while (token === ttsPlaybackToken && !playbackDone && !preparedPromise) {
+          if (streamTtsQueue.length) {
+            preparedPromise = prepareQueuedSpeechSegment(streamTtsQueue.shift(), streamTtsConfig.provider, token);
+            break;
+          }
+          await new Promise((resolve) => { streamTtsQueueSignal = resolve; });
+        }
+        await playback;
       }
     } catch (error) {
       if (token === ttsPlaybackToken) {
@@ -597,6 +644,8 @@ window.addEventListener("DOMContentLoaded", () => {
       const text = String(segment?.text || segment || "").trim();
       if (text) streamTtsQueue.push(typeof segment === "object" ? { ...segment, text } : { text });
     }
+    streamTtsQueueSignal?.();
+    streamTtsQueueSignal = null;
     drainStreamTtsQueue();
   };
   const playStandaloneSpeech = async (text, provider, language, expression = null, spokenText = text) => {
@@ -610,7 +659,7 @@ window.addEventListener("DOMContentLoaded", () => {
       if (token === ttsPlaybackToken) finishTtsPlayback();
     }
   };
-  const playStyleBertSpeech = (text, expression, spokenText) => playStandaloneSpeech(text, "style-bert-vits2", "ja-JP", expression, spokenText);
+  const playGeneratedSpeech = (text, provider, expression, spokenText) => playStandaloneSpeech(text, provider, "ja-JP", expression, spokenText);
   const speakSystemText = (text, language, expression, spokenText) => playStandaloneSpeech(text, "system", language, expression, spokenText);
   const showSpeech = (payload) => {
     clearPermission();
@@ -629,8 +678,8 @@ window.addEventListener("DOMContentLoaded", () => {
     scheduleBubbleHide(bubbleHideDuration);
     stopTtsPlayback();
     thinkingFillerActive = false;
-    if (payload?.ttsEnabled && bubbleText.textContent && payload?.ttsProvider === "style-bert-vits2") {
-      playStyleBertSpeech(bubbleText.textContent, payload?.expression, payload?.spokenText);
+    if (payload?.ttsEnabled && bubbleText.textContent && isGeneratedTtsProvider(payload?.ttsProvider)) {
+      playGeneratedSpeech(bubbleText.textContent, payload.ttsProvider, payload?.expression, payload?.spokenText);
     } else if (payload?.ttsEnabled && bubbleText.textContent && window.speechSynthesis) {
       speakSystemText(bubbleText.textContent, payload.speechLanguage, payload?.expression, payload?.spokenText);
     }
@@ -1211,6 +1260,7 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   const startRealtime = async () => {
+    stopTtsPlayback();
     realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
     realtimePeer = new RTCPeerConnection();
     for (const track of realtimeStream.getAudioTracks()) realtimePeer.addTrack(track, realtimeStream);
@@ -1440,8 +1490,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!text || !sending) return;
     stopTtsPlayback();
     thinkingFillerActive = true;
-    const playback = payload?.ttsProvider === "style-bert-vits2"
-      ? playStyleBertSpeech(text)
+    const playback = isGeneratedTtsProvider(payload?.ttsProvider)
+      ? playGeneratedSpeech(text, payload.ttsProvider)
       : speakSystemText(text, payload?.speechLanguage);
     Promise.resolve(playback).finally(() => {
       if (!thinkingFillerActive) return;

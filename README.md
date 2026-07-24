@@ -53,7 +53,7 @@ PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruP
 - 長文読み上げ中は現在話している文を表示し、完了後は全文へ戻るコンパクトな吹き出し
 - Codex Realtime、Codex 0.145音声入力、ローカルsherpa-onnx、端末音声認識、OpenAI文字起こしを選択可能
 - VADによる無音区切り・認識後の自動送信・3段階の感度調整を選択可能
-- Windows標準音声またはローカルStyle-Bert-VITS2による読み上げ、文ごとの表情同期、実音声波形リップシンク
+- Windows標準音声、Style-Bert-VITS2、piper-plus、Supertonic 3、Kokoro、Irodori TTS WebGPUによる読み上げ、文ごとの表情同期、実音声波形リップシンク
 - ユーザー辞書、技術用語辞書、略語、CMUdictの順で英字語を日本語読みし、未登録の一般英単語にも対応（表示文は変更しない）
 - キャラクターをクリックしたときの反応も、選択中の音声で読み上げ
 - 応答待ちが2.6秒を超えたときだけ、キャラクターらしい短い音声フィラーを一度再生。再生を終えてから回答へつなぐ
@@ -61,9 +61,15 @@ PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruP
 
 Style-Bert-VITS2は設定の「デスクトップ → 音声方式」から選択します。ローカルAPIのURL（既定 `http://localhost:5000`）、モデルID、速度だけを指定でき、`/docs`のURLを入力した場合も自動的に`/voice`へ接続します。長い返答は画面へ表示された文ごと（最大90文字）に生成キューへ追加し、最初の文が生成できた時点から表示順に再生します。
 
+piper-plusも同じ音声方式から選択できます。Windows版では、公式C++ランタイムと「つくよみちゃん」FP16モデル（合計約72MB）を設定画面から取得し、SHA-256検証後に自動選択できます。つくよみちゃんコーパスのクレジットと利用条件はダウンロード前から同じ画面に表示します。別のpiper-plus専用`.onnx`と設定JSONを手動指定することもできます。生成した一時WAVは再生データへ変換した直後に削除されます。
+
+Supertonic 3は同梱sherpa-onnxランタイムでCPU推論します。公式int8モデル（約129MB）を設定画面から取得して自動選択でき、F1–F5/M1–M5の声、速度、生成ステップを選択できます。ネイティブ推論はアプリ本体と別の短命プロセスで実行し、WAV文字列だけを戻します。Irodori TTSは必要なFP16 ONNXファイルだけ（約1.26GB）を設定画面から取得し、Electron内の専用WebGPUレンダラーでローカル推論します。WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを追加でき、48kHz WAVへ変換してアプリ管理領域へコピーします。複数の名前付き参照音声を管理でき、元ファイルを削除しても利用できます。長文は句点ごと、句読点がない箇所も最大48文字で分け、現在の区間を再生しながら次の1区間を合成します。速度はピッチを保った再生速度として調整します。テキストと参照音声は外部サーバーへ送信しません。音声方式とIrodori/Supertonic/Kokoroの声はキャラクターごとに保存され、Irodori/Supertonicは手動モデルフォルダーの指定も残しています。
+
+Kokoroは日本語5音声をキャラクターごとに選択できます。設定画面からWebGPU推奨FP32とCPU用q8モデル（合計約421MB）を取得し、「自動」ではWebGPUを優先します。GPUが非有限値や無音を返す環境では同じ発話をCPUで再生成し、以後はCPU設定を保持します。日本語G2Pと推論はアプリ内で完結します。
+
 英単語の日本語読みも同じ設定内で無効化でき、`英字=読み`を1行ずつ登録するユーザー辞書で固有名詞や好みの読みを上書きできます。未登録の一般英単語はCMUdictの英語発音からカタカナ読みを端末内で生成します。URL、ファイル名、バージョンなどのコードらしい文字列と画面上の原文は変更しません。
 
-音声入力は「デスクトップ → 音声入力」から選択します。`自動`は、選択したsherpa-onnxモデルがダウンロード済みならローカル認識を、未導入なら端末の日本語音声認識を使います。sherpa-onnxでは、日本語Parakeet CTC、ReazonSpeech Zipformer、SenseVoice、Whisper base、従来のWhisper tinyを切り替えられ、各モデルは必要なものだけ初回にダウンロードします。認識言語は日本語へ固定され、録音音声と認識処理は端末内で完結します。VADには約0.6MBのSileroモデルを使用し、準備できない場合だけ従来の音量検出へ戻ります。実験的なCodex Realtimeを自動起動することはありません。Codex CLI 0.145以降では`Codex音声入力`を選ぶと、録音を通常のCodexターンへ直接添付できますが、上流側の提供状況に依存します。OpenAI文字起こしもAPIへ`ja`を指定し、端末音声認識も`ja-JP`を使用します。感度は「低・標準・高」から選べます。
+音声入力は「デスクトップ → 音声入力」から選択します。`自動`は、選択したsherpa-onnxモデルがダウンロード済みならローカル認識を、未導入なら端末の日本語音声認識を使います。sherpa-onnxでは、日本語Parakeet CTC、ReazonSpeech Zipformer、SenseVoice、Whisper base、従来のWhisper tinyを切り替えられ、各モデルは必要なものだけ初回にダウンロードします。認識言語は日本語へ固定され、録音音声と認識処理は端末内で完結します。VADには約0.6MBのSileroモデルを使用し、準備できない場合だけ従来の音量検出へ戻ります。実験的なCodex Realtimeを自動起動することはありません。Realtimeではapp-serverが返す音声一覧からキャラクターごとに声を保存し、GPT-Liveの音声を直接再生します。この間は通常のTTSを重ねず、少し遅れて届く文字起こしを吹き出しへ逐次表示します。Codex CLI 0.145以降では`Codex音声入力`を選ぶと、録音を通常のCodexターンへ直接添付できますが、上流側の提供状況に依存します。OpenAI文字起こしもAPIへ`ja`を指定し、端末音声認識も`ja-JP`を使用します。感度は「低・標準・高」から選べます。
 
 ### 安全な作業モード
 
@@ -145,7 +151,7 @@ npm run desktop
 
 アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、PuruPetは受け取りません。会話と作業は別スレッド・別権限で、app-serverから取得したモデル一覧のプルダウンから、それぞれのモデルと推論の深さを変更できます。推論の深さは固定の秒数ではなく、モデルへ渡すreasoning effortです。
 
-Codex Realtimeは実験機能です。ChatGPT側で利用できず404になる場合は、その起動中の再試行を止め、利用可能な端末音声認識へ切り替えます。`realtime_conversation`とapp-serverの`experimentalApi`はアプリ側で有効化済みです。
+GPT-Live / Codex Voiceは実験機能です。公式ChatGPTデスクトップのVoice提供状況とは別に、Codex app-server経由の利用可否はアカウントや上流実装に依存します。音声セッションは新しい空のタスクとして開始し、利用できず404になる場合は、その起動中の再試行を止めて端末音声認識へ切り替えます。`realtime_conversation`とapp-serverの`experimentalApi`はアプリ側で有効化済みです。
 
 ### OpenAI API
 

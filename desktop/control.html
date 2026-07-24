@@ -210,7 +210,7 @@
               <h3>音声入力</h3>
               <label>認識方式<select id="speechInputProviderSelect">
                 <option value="auto">自動（日本語・ローカル優先）</option>
-                <option value="realtime">Codex Realtime（実験的）</option>
+                <option value="realtime">GPT-Live / Codex Voice（実験的）</option>
                 <option value="codex-audio">Codex音声入力（提供状況依存）</option>
                 <option value="sherpa-onnx">sherpa-onnx（ローカル）</option>
                 <option value="browser">端末音声認識</option>
@@ -240,15 +240,125 @@
                 <p id="sherpaModelHint" class="hint">選択したモデルを初回だけ取得します。認識処理と音声データは端末内で完結します。</p>
               </div>
             </div>
-            <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>端末音声またはローカルのStyle-Bert-VITS2を使用</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
-            <div class="tts-settings">
-              <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2</option></select></label>
+            <section id="characterVoiceCard" class="card settings-card character-voice-card">
+              <header><div><p class="eyebrow">キャラクターの声</p><h2><span id="characterTtsLabel">このキャラクター</span>の音声</h2><p>選択中のキャラクターだけに、音声方式と声を保存します。</p></div></header>
+              <div class="tts-settings realtime-voice-settings">
+                <h3>GPT-Live / Codex Voice</h3>
+                <label>Realtimeの声<select id="realtimeVoiceSelect"><option value="cove">Cove（標準）</option></select></label>
+                <p id="realtimeVoiceStatus" class="hint">Realtime用の音声一覧を確認しています…</p>
+                <p class="hint">音声入力がRealtimeの間は、この声で直接応答します。下の通常読み上げ方式は使用しません。</p>
+              </div>
+              <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>読み上げのON/OFFは全キャラクター共通です</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
+              <div class="tts-settings">
+              <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2</option><option value="piper-plus">piper-plus（ローカル）</option><option value="supertonic-3">Supertonic 3（ローカル）</option><option value="kokoro">Kokoro（WebGPU / CPU）</option><option value="irodori-webgpu">Irodori TTS（WebGPU）</option></select></label>
               <div id="styleBertVits2Settings" class="tts-provider-settings" hidden>
                 <label>API URL<input id="styleBertVits2UrlInput" type="text" inputmode="url" autocomplete="off" placeholder="http://localhost:5000" /></label>
                 <div class="size-actions">
                   <label>モデルID<input id="styleBertVits2ModelIdInput" type="number" min="0" max="9999" step="1" /></label>
                   <label>速度（0.5–2.0×）<input id="styleBertVits2SpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
                 </div>
+              </div>
+              <div id="piperPlusSettings" class="tts-provider-settings" hidden>
+                <div class="local-model-download">
+                  <p id="piperPlusModelDownloadStatus" class="hint">サンプルモデルを確認しています…</p>
+                  <progress id="piperPlusModelDownloadProgress" max="100" value="0" hidden></progress>
+                  <div class="size-actions">
+                    <button id="piperPlusModelDownloadButton" class="button button-secondary" type="button">サンプルをダウンロード</button>
+                    <button id="piperPlusModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                  </div>
+                  <p id="piperPlusModelDownloadHint" class="hint">声: つくよみちゃん。利用規約とクレジットを確認して初回だけ取得します。</p>
+                </div>
+                <div class="model-terms">
+                  <strong>つくよみちゃん音声のクレジット・利用条件</strong>
+                  <p>本ソフトウェアの音声合成には、フリー素材キャラクター「つくよみちゃん」（© Rei Yumesaki）が無料公開している音声データを使用しています。</p>
+                  <p>つくよみちゃんコーパス（CV.夢前黎） · https://tyc.rei-yumesaki.net/material/corpus/</p>
+                  <p>人への批判・攻撃、政治・宗教・思想への賛否の呼びかけ、強い表現のゾーニングなしの公開、素材としての二次利用を許す公開には使用できません。</p>
+                </div>
+                <label>速度（0.5–2.0×）<input id="piperPlusSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                <p id="piperPlusStatus" class="hint">piper-plusの準備状況を確認しています…</p>
+                <details class="tts-advanced">
+                  <summary>手動ファイルを使う</summary>
+                  <div class="piper-file-row"><span><strong>実行ファイル</strong><small id="piperPlusExecutableName">未選択</small></span><button id="piperPlusExecutableButton" class="button button-quiet" type="button">選択</button></div>
+                  <div class="piper-file-row"><span><strong>音声モデル</strong><small id="piperPlusModelName">未選択</small></span><button id="piperPlusModelButton" class="button button-quiet" type="button">選択</button></div>
+                </details>
+              </div>
+              <div id="supertonicSettings" class="tts-provider-settings" hidden>
+                <div class="local-model-download">
+                  <p id="supertonicModelDownloadStatus" class="hint">サンプルモデルを確認しています…</p>
+                  <progress id="supertonicModelDownloadProgress" max="100" value="0" hidden></progress>
+                  <div class="size-actions">
+                    <button id="supertonicModelDownloadButton" class="button button-secondary" type="button">サンプルをダウンロード</button>
+                    <button id="supertonicModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                  </div>
+                  <p id="supertonicModelDownloadHint" class="hint">公式sherpa-onnx用int8モデルを初回だけ取得します。</p>
+                </div>
+                <div class="size-actions">
+                  <label>声<select id="supertonicVoiceSelect"><option>F1</option><option>F2</option><option>F3</option><option>F4</option><option>F5</option><option>M1</option><option>M2</option><option>M3</option><option>M4</option><option>M5</option></select></label>
+                  <label>速度（0.5–2.0×）<input id="supertonicSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                </div>
+                <label>生成ステップ（2–20）<input id="supertonicStepsInput" type="number" min="2" max="20" step="1" /></label>
+                <p id="supertonicStatus" class="hint">Supertonic 3の準備状況を確認しています…</p>
+                <details class="tts-advanced">
+                  <summary>手動モデルを使う</summary>
+                  <div class="piper-file-row"><span><strong>モデルフォルダー</strong><small id="supertonicModelName">未選択</small></span><button id="supertonicModelButton" class="button button-quiet" type="button">選択</button></div>
+                </details>
+              </div>
+              <div id="kokoroSettings" class="tts-provider-settings" hidden>
+                <div class="local-model-download">
+                  <p id="kokoroModelDownloadStatus" class="hint">日本語モデルを確認しています…</p>
+                  <progress id="kokoroModelDownloadProgress" max="100" value="0" hidden></progress>
+                  <div class="size-actions">
+                    <button id="kokoroModelDownloadButton" class="button button-secondary" type="button">日本語モデルをダウンロード</button>
+                    <button id="kokoroModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                  </div>
+                  <p id="kokoroModelDownloadHint" class="hint">Kokoro 82Mの日本語5音声、WebGPU推奨FP32、CPU用q8モデル（合計約421MB）を初回だけ取得します。</p>
+                </div>
+                <div class="size-actions">
+                  <label>声<select id="kokoroVoiceSelect">
+                    <option value="jf_alpha">Alpha（女性）</option>
+                    <option value="jf_gongitsune">Gongitsune（女性）</option>
+                    <option value="jf_nezumi">Nezumi（女性）</option>
+                    <option value="jf_tebukuro">Tebukuro（女性）</option>
+                    <option value="jm_kumo">Kumo（男性）</option>
+                  </select></label>
+                  <label>速度（0.5–2.0×）<input id="kokoroSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                </div>
+                <label>処理方法<select id="kokoroDeviceSelect">
+                  <option value="auto">自動（WebGPU優先）</option>
+                  <option value="webgpu">WebGPUのみ</option>
+                  <option value="wasm">CPUのみ</option>
+                </select></label>
+                <p id="kokoroStatus" class="hint">Kokoroの準備状況を確認しています…</p>
+                <p class="hint">日本語G2Pと音声生成は端末内で完結します。WebGPUで失敗した場合、「自動」ではCPUへ切り替わります。</p>
+              </div>
+              <div id="irodoriSettings" class="tts-provider-settings" hidden>
+                <div class="local-model-download">
+                  <p id="irodoriModelDownloadStatus" class="hint">サンプルモデルを確認しています…</p>
+                  <progress id="irodoriModelDownloadProgress" max="100" value="0" hidden></progress>
+                  <div class="size-actions">
+                    <button id="irodoriModelDownloadButton" class="button button-secondary" type="button">FP16モデルをダウンロード</button>
+                    <button id="irodoriModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                  </div>
+                  <p id="irodoriModelDownloadHint" class="hint">必要なFP16ファイルだけ取得します。WebGPU対応GPUと約1.3GBの保存容量を使います。</p>
+                </div>
+                <label>参照音声<select id="irodoriVoiceSelect"><option value="">未追加</option></select></label>
+                <div class="voice-library-actions">
+                  <button id="irodoriReferenceButton" class="button button-secondary" type="button">音声を追加</button>
+                  <button id="irodoriVoiceRenameButton" class="button button-quiet" type="button">名前を変更</button>
+                  <button id="irodoriVoiceRemoveButton" class="button button-quiet" type="button">削除</button>
+                </div>
+                <p class="hint">WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。</p>
+                <div class="size-actions">
+                  <label>再生速度（0.5–2.0×）<input id="irodoriSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                  <label>生成ステップ（4–40）<input id="irodoriStepsInput" type="number" min="4" max="40" step="1" /></label>
+                </div>
+                <label>シード<input id="irodoriSeedInput" type="number" min="0" max="2147483647" step="1" /></label>
+                <p id="irodoriStatus" class="hint">Irodori TTSの準備状況を確認しています…</p>
+                <p class="hint">テキストと参照音声は端末内で処理されます。本人の許可がある声、または利用権を持つ音声だけを使用してください。</p>
+                <details class="tts-advanced">
+                  <summary>手動モデルを使う</summary>
+                  <div class="piper-file-row"><span><strong>FP16モデル</strong><small id="irodoriModelName">未選択</small></span><button id="irodoriModelButton" class="button button-quiet" type="button">選択</button></div>
+                </details>
               </div>
               <label class="switch-row"><span><strong>英単語を日本語読みする</strong><small>ユーザー辞書とCMUdictの発音を読み上げ時だけ使用</small></span><input id="englishPronunciationToggle" type="checkbox" /><i></i></label>
               <details class="pronunciation-settings">
@@ -260,7 +370,8 @@
               </details>
               <button id="ttsTestButton" class="button button-quiet" type="button">この音声を試す</button>
               <p id="ttsStatus" class="hint" role="status"></p>
-            </div>
+              </div>
+            </section>
           </section>
           <section class="card settings-card">
             <h2>キャラクターウィンドウ</h2>

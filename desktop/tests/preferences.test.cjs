@@ -46,13 +46,31 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.preferredDisplayId, "");
   assert.equal(state.interactionMode, "chat");
   assert.equal(state.ttsProvider, "system");
+  assert.equal(state.realtimeVoice, "cove");
   assert.equal(state.styleBertVits2Url, "http://localhost:5000");
   assert.equal(state.styleBertVits2ModelId, 0);
   assert.equal(state.styleBertVits2Speed, 1);
+  assert.equal(state.piperPlusSpeed, 1);
+  assert.equal(state.piperPlusExecutablePath, undefined);
+  assert.equal(state.piperPlusModelPath, undefined);
   assert.equal(state.englishPronunciationEnabled, true);
   assert.equal(state.englishPronunciationDictionary, "");
   assert.equal(state.speechInputProvider, "auto");
   assert.equal(state.sherpaModelId, "reazonspeech-ja-int8");
+  assert.equal(state.supertonicVoice, "F1");
+  assert.equal(state.supertonicSpeed, 1);
+  assert.equal(state.supertonicSteps, 8);
+  assert.equal(state.supertonicModelDirectory, undefined);
+  assert.equal(state.irodoriSteps, 16);
+  assert.equal(state.irodoriSpeed, 1);
+  assert.equal(state.irodoriVoiceId, "");
+  assert.equal(state.irodoriSeed, 0);
+  assert.equal(state.irodoriModelDirectory, undefined);
+  assert.equal(state.irodoriReferenceAudioPath, undefined);
+  assert.equal(state.kokoroVoice, "jf_alpha");
+  assert.equal(state.kokoroSpeed, 1);
+  assert.equal(state.kokoroDevice, "auto");
+  assert.equal(state.kokoroModelDirectory, undefined);
   assert.equal(state.voiceActivationMode, "vad");
   assert.equal(state.vadSensitivity, "normal");
   assert.equal(state.voiceAutoSend, true);
@@ -62,6 +80,21 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.codexWorkReasoningEffort, "");
   assert.equal(state.hasWorkDirectory, false);
   assert.equal(state.workDirectoryName, "");
+});
+
+test("preferences store a separate realtime voice for each character", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({
+    realtimeVoice: "sol",
+    characterTtsProfiles: {
+      "amber-avatar": { provider: "system", realtimeVoice: "ember" },
+      "sage-avatar": { provider: "kokoro", realtimeVoice: "not-a-voice" },
+    },
+  }));
+  const preferences = new Preferences(file);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].realtimeVoice, "ember");
+  assert.equal(preferences.data.characterTtsProfiles["sage-avatar"].realtimeVoice, "sol");
 });
 
 test("preferences persist and sanitize English pronunciation settings", () => {

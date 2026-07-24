@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-const REALTIME_UNAVAILABLE_MESSAGE = "ChatGPT側でCodex Realtimeがこのアカウントにまだ提供されていません。";
+const REALTIME_UNAVAILABLE_MESSAGE = "ChatGPT側でGPT-Live / Codex Voiceがこのアカウントにまだ提供されていません。";
 
 function isRealtimeUnavailableError(value) {
   const message = String(value?.message || value || "");
@@ -10,7 +10,7 @@ function isRealtimeUnavailableError(value) {
 function userFacingRealtimeError(value) {
   if (isRealtimeUnavailableError(value)) return REALTIME_UNAVAILABLE_MESSAGE;
   const message = String(value?.message || value || "").trim();
-  return message || "Codex Realtime音声接続を開始できませんでした。";
+  return message || "GPT-Live / Codex Voiceを開始できませんでした。";
 }
 
 module.exports = {

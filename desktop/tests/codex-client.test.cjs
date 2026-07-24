@@ -157,6 +157,19 @@ test("Codex client lists all visible model picker pages", async () => {
   assert.equal(calls[1].params.cursor, "page-2");
 });
 
+test("Codex client lists realtime voices through the experimental app-server method", async () => {
+  const client = new CodexAppServerClient();
+  client.ensureStarted = async () => {};
+  let request;
+  client.request = async (method, params) => {
+    request = { method, params };
+    return { voices: { v2: ["marin", "cedar"], v1: ["cove"], defaultV2: "marin", defaultV1: "cove" } };
+  };
+  const result = await client.listRealtimeVoices();
+  assert.deepEqual(result.voices.v2, ["marin", "cedar"]);
+  assert.deepEqual(request, { method: "thread/realtime/listVoices", params: {} });
+});
+
 test("Codex conversation reuses one thread so follow-up turns keep context", async () => {
   const client = new CodexAppServerClient();
   client.ensureStarted = async () => {};
@@ -229,12 +242,13 @@ test("Codex client starts WebRTC realtime and forwards transcript events", async
     calls.push({ method, params });
     return {};
   };
-  const result = await client.startRealtime({ sdp: "v=0\r\n...", prompt: "日本語", onEvent: (event) => events.push(event) });
+  const result = await client.startRealtime({ sdp: "v=0\r\n...", prompt: "日本語", voice: "maple", onEvent: (event) => events.push(event) });
   assert.equal(result.threadId, "thread-voice");
   assert.equal(calls[0].method, "thread/realtime/start");
   assert.equal(calls[0].params.outputModality, "audio");
   assert.equal(calls[0].params.version, "v3");
   assert.equal(calls[0].params.codexResponseHandoffMode, "bemTags");
+  assert.equal(calls[0].params.voice, "maple");
   assert.deepEqual(calls[0].params.transport, { type: "webrtc", sdp: "v=0\r\n..." });
   client.handleLine(JSON.stringify({ method: "thread/realtime/transcript/delta", params: { threadId: "thread-voice", role: "user", delta: "こんにちは" } }));
   assert.equal(events[0].params.delta, "こんにちは");

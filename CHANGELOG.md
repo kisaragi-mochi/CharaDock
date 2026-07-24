@@ -4,6 +4,19 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- List GPT-Live voices from Codex app-server, save a separate Realtime voice per character, pass it to Realtime V3, suppress normal TTS during Live sessions, and stream delayed assistant transcripts into the persistent speech bubble.
+- Improve long Irodori speech by always splitting at Japanese sentence endings, bounding unpunctuated inference chunks to 48 characters, and synthesizing one segment ahead while the current audio plays.
+- Follow the proven Kokoro Web/Kokoro-JS WebGPU path by using the recommended FP32 model and explicitly downloading output tensors; detect zero or non-finite GPU output, regenerate it on CPU, and retain the working CPU setting instead of playing silence.
+- Allow delayed local TTS audio to autoplay after synthesis finishes, and report an error instead of silently succeeding when a provider returns no audio segments.
+- Fix Kokoro Japanese G2P initialization to compile its large WASM asynchronously, avoiding Electron's 8 MB synchronous-compilation limit on both CPU and GPU paths.
+- Add Kokoro 82M with five Japanese voices, verified on-demand q8 model downloads, WebGPU-first inference, automatic CPU fallback, per-character voice selection, and local OpenJTalk-based Japanese G2P.
+- Store Irodori reference audio as app-owned 48 kHz WAV files, accept common compressed audio formats, manage multiple named voices, preserve pitch during speed adjustment, and save the TTS provider/voice per character.
+- Isolate Supertonic 3 native inference in a disposable Node-mode Electron worker so native external buffers cannot crash the main process; return only serialized WAV data to the app.
+- Add 350 ms of piper-plus sentence-tail silence to prevent clipped endings, and relabel/retry experimental realtime voice as GPT-Live / Codex Voice in a new empty voice task.
+- Add verified in-app downloads, live progress, automatic selection, removal, and manual-file fallbacks for the piper-plus Tsukuyomi-chan sample, Supertonic 3 int8, and the required Irodori FP16 artifacts.
+- Add Supertonic 3 as an optional Japanese local TTS provider using the bundled sherpa-onnx CPU runtime, with ten voices, speed, and diffusion-step controls.
+- Add Irodori TTS as an optional local WebGPU provider with a consented reference WAV, deterministic step/seed controls, and no model or voice upload.
+- Add piper-plus as a local TTS provider with adjustable speed, sentence-synchronized playback and lip sync, plus prominent Tsukuyomi-chan credit and usage terms.
 - Retain browser or foreground-computer permission for five minutes after a completed turn, reuse it only for explicit operational follow-ups, and revoke it on ordinary conversation, stop phrases, expiry, window close, or a different browser host.
 - Normalize Latin words only at the TTS boundary with a configurable user dictionary, built-in technical readings, Japanese acronym names, and a CMUdict-to-Katakana fallback; preserve the original on-screen text and code-like identifiers.
 - Keep the mascot continuously visible during screen/computer captures by temporarily excluding its window from Windows capture instead of hiding and restoring it.

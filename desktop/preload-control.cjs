@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   testBackend: (backend) => ipcRenderer.invoke("backend:test", backend),
   getCodexAccount: () => ipcRenderer.invoke("codex:account"),
   getCodexModels: () => ipcRenderer.invoke("codex:models"),
+  getRealtimeVoices: () => ipcRenderer.invoke("codex:realtimeVoices"),
   startCodexLogin: () => ipcRenderer.invoke("codex:login"),
   logoutCodex: () => ipcRenderer.invoke("codex:logout"),
   completeOnboarding: (complete) => ipcRenderer.invoke("onboarding:complete", complete),
@@ -27,6 +28,16 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   downloadSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelDownload", modelId),
   removeSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelRemove", modelId),
   synthesizeTts: (text) => ipcRenderer.invoke("tts:synthesize", text),
+  downloadTtsModel: (provider) => ipcRenderer.invoke("tts:modelDownload", provider),
+  removeTtsModel: (provider) => ipcRenderer.invoke("tts:modelRemove", provider),
+  choosePiperPlusExecutable: () => ipcRenderer.invoke("tts:piperChooseExecutable"),
+  choosePiperPlusModel: () => ipcRenderer.invoke("tts:piperChooseModel"),
+  chooseSupertonicModel: () => ipcRenderer.invoke("tts:supertonicChooseModel"),
+  chooseIrodoriModel: () => ipcRenderer.invoke("tts:irodoriChooseModel"),
+  chooseIrodoriReference: () => ipcRenderer.invoke("tts:irodoriChooseReference"),
+  selectIrodoriVoice: (id) => ipcRenderer.invoke("tts:irodoriSelectVoice", id),
+  renameIrodoriVoice: (payload) => ipcRenderer.invoke("tts:irodoriRenameVoice", payload),
+  removeIrodoriVoice: (id) => ipcRenderer.invoke("tts:irodoriRemoveVoice", id),
   normalizeTtsText: (text) => ipcRenderer.invoke("tts:normalizeText", text),
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
@@ -54,5 +65,10 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("sherpa:modelProgress", listener);
     return () => ipcRenderer.removeListener("sherpa:modelProgress", listener);
+  },
+  onTtsModelProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("tts:modelProgress", listener);
+    return () => ipcRenderer.removeListener("tts:modelProgress", listener);
   },
 });

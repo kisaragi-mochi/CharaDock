@@ -46,7 +46,9 @@
       "THIRD_PARTY_NOTICES.md"
     ],
     "asarUnpack": [
-      "node_modules/sherpa-onnx-*/**/*"
+      "node_modules/sherpa-onnx-*/**/*",
+      "node_modules/onnxruntime-web/dist/**/*",
+      "node_modules/piper-plus/dist/**/*.wasm"
     ],
     "win": {
       "icon": "app-icon.ico",
@@ -63,7 +65,10 @@
     }
   },
   "dependencies": {
+    "@huggingface/tokenizers": "0.1.3",
     "cmu-pronouncing-dictionary": "3.0.0",
+    "onnxruntime-web": "1.27.0",
+    "piper-plus": "0.6.0",
     "pngjs": "^7.0.0",
     "sherpa-onnx-node": "^1.13.4"
   }

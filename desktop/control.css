@@ -269,6 +269,10 @@ p { line-height: 1.65; }
 .generator-unavailable { display: none; position: absolute; inset: 0; z-index: 2; place-items: center; padding: 30px; color: #d0c8d5; background: rgba(20, 17, 25, .86); backdrop-filter: blur(12px); font-size: 12px; font-weight: 650; text-align: center; }
 .avatar-generator.is-unavailable .generator-unavailable { display: grid; }
 .profile-editor { display: grid; gap: 16px; margin-bottom: 14px; }
+.character-voice-card { margin-bottom: 14px; background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 34%), var(--surface); }
+.character-voice-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.character-voice-card > .switch-row { padding: 2px 1px 14px; border-bottom: 1px solid var(--line); }
+.character-voice-card .tts-settings { padding: 16px; }
 .profile-fields { display: grid; grid-template-columns: minmax(170px, .42fr) minmax(270px, 1fr); align-items: start; gap: 12px; }
 .profile-personality textarea { width: 100%; min-height: 94px; resize: vertical; }
 .profile-position-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -299,7 +303,7 @@ select option { color: #f8f5fa; background: #252229; }
 .motion-advanced summary { width: fit-content; padding: 8px 0 0; color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 700; }
 .motion-advanced[open] summary { margin-bottom: 14px; color: var(--accent); }
 .speech-input-settings { display: grid; gap: 12px; margin-top: 14px; }
-.speech-input-settings h3, .codex-mode-settings h3 { margin: 0; color: var(--text); font-size: 12px; }
+.speech-input-settings h3, .codex-mode-settings h3, .realtime-voice-settings h3 { margin: 0; color: var(--text); font-size: 12px; }
 .speech-input-settings progress { width: 100%; height: 7px; accent-color: var(--accent-strong); }
 .codex-mode-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; background: var(--field); border: 1px solid var(--line); border-radius: 13px; }
 .codex-mode-settings h3 { grid-column: 1 / -1; }
@@ -367,6 +371,23 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.16); box-s
 .tts-provider-settings[hidden] { display: none; }
 .tts-settings .hint { min-height: 1.4em; margin: 0; }
 .tts-settings .hint.is-error { color: var(--danger); }
+.local-model-download { display: grid; gap: 9px; padding: 11px; background: color-mix(in srgb, var(--accent-soft) 42%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 13%, var(--line)); border-radius: 11px; }
+.local-model-download progress { width: 100%; height: 7px; accent-color: var(--accent-strong); }
+.model-terms { display: grid; gap: 6px; padding: 10px; color: var(--muted); background: rgba(255, 255, 255, .025); border: 1px solid var(--line); border-radius: 10px; font-size: 10px; line-height: 1.55; }
+.model-terms strong { color: var(--text-secondary); font-size: 10px; }
+.model-terms p { margin: 0; }
+.piper-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.piper-file-row span { display: grid; min-width: 0; gap: 3px; }
+.piper-file-row strong { font-size: 11px; }
+.piper-file-row small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.piper-file-row button { min-width: 72px; }
+.voice-library-actions { display: grid; grid-template-columns: 1.35fr 1fr .75fr; gap: 7px; }
+.voice-library-actions .button { min-width: 0; padding-inline: 8px; }
+.tts-provider-settings code { font-size: .95em; }
+.tts-advanced { padding-top: 1px; border-top: 1px solid var(--line); }
+.tts-advanced summary { width: fit-content; padding-top: 8px; color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 700; }
+.tts-advanced[open] summary { margin-bottom: 11px; color: var(--accent); }
+.tts-advanced[open] { display: grid; gap: 10px; }
 .pronunciation-settings { padding-top: 2px; border-top: 1px solid var(--line); }
 .pronunciation-settings summary { width: fit-content; padding-top: 9px; color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 700; }
 .pronunciation-settings[open] summary { margin-bottom: 11px; color: var(--accent); }

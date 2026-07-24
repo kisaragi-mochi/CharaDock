@@ -118,8 +118,8 @@ class CodexAppServerClient {
   }
 
   async ensureStarted() {
-    if (this.proc && !this.proc.killed) return;
     if (this.startPromise) return this.startPromise;
+    if (this.proc && !this.proc.killed) return;
     this.startPromise = this.start().finally(() => {
       this.startPromise = null;
     });
@@ -331,6 +331,11 @@ class CodexAppServerClient {
     return models;
   }
 
+  async listRealtimeVoices() {
+    await this.ensureStarted();
+    return this.request("thread/realtime/listVoices", {}, 30_000);
+  }
+
   async startChatGPTLogin() {
     await this.ensureStarted();
     const result = await this.request("account/login/start", {
@@ -352,14 +357,15 @@ class CodexAppServerClient {
     return true;
   }
 
-  async startRealtime({ sdp, prompt = "", onEvent } = {}) {
+  async startRealtime({ sdp, prompt = "", voice = "", onEvent } = {}) {
     if (!String(sdp || "").startsWith("v=0")) throw new Error("WebRTCの音声接続情報が正しくありません。");
     await this.ensureStarted();
+    if (this.realtimeHandlers.size) await this.stopRealtime().catch(() => {});
+    this.realtimeHandlers.clear();
+    // GPT-Live/Codex Voice sessions must begin as a new empty voice task.
+    // Reusing a text task can be rejected even when voice is enabled for the account.
+    this.threadId = null;
     const threadId = await this.ensureThread();
-    if (this.realtimeHandlers.has(threadId)) {
-      await this.stopRealtime().catch(() => {});
-      this.realtimeHandlers.delete(threadId);
-    }
     let rejectStartup;
     const startupFailure = new Promise((_, reject) => { rejectStartup = reject; });
     this.realtimeHandlers.set(threadId, (message) => {
@@ -369,7 +375,7 @@ class CodexAppServerClient {
       }
     });
     try {
-      await Promise.race([this.request("thread/realtime/start", {
+      const params = {
         threadId,
         outputModality: "audio",
         version: "v3",
@@ -379,7 +385,9 @@ class CodexAppServerClient {
         clientManagedHandoffs: false,
         flushTranscriptTailOnSessionEnd: true,
         transport: { type: "webrtc", sdp: String(sdp) },
-      }, 60_000), startupFailure]);
+      };
+      if (voice) params.voice = String(voice);
+      await Promise.race([this.request("thread/realtime/start", params, 60_000), startupFailure]);
       return { threadId };
     } catch (error) {
       this.realtimeHandlers.delete(threadId);

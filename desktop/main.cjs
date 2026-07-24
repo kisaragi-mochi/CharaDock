@@ -46,10 +46,28 @@ const { StreamingTextSegmenter } = require("./lib/speech-stream.cjs");
 const { normalizeSpeechPronunciation } = require("./lib/speech-pronunciation.cjs");
 const { cleanAssistantText, latestWorkDisplayText } = require("./lib/assistant-text.cjs");
 const { boundedConversationHistory, recentConversationContext } = require("./lib/conversation-context.cjs");
+const { normalizeRealtimeVoice, normalizeRealtimeVoiceList } = require("./lib/realtime-voice.cjs");
 const { MascotStaticServer } = require("./lib/static-server.cjs");
-const { styleBertVoiceEndpoint, synthesizeStyleBertVits2 } = require("./lib/style-bert-vits2.cjs");
+const { splitTtsText, styleBertVoiceEndpoint, synthesizeStyleBertVits2 } = require("./lib/style-bert-vits2.cjs");
+const {
+  piperPlusStatus,
+  synthesizePiperPlus,
+  validatePiperPlusExecutable,
+  validatePiperPlusModel,
+} = require("./lib/piper-plus.cjs");
 const { EmbeddedSherpaOnnx } = require("./lib/sherpa-embedded.cjs");
 const { EmbeddedSherpaVad } = require("./lib/sherpa-vad.cjs");
+const { supertonicStatus, validateSupertonicDirectory } = require("./lib/supertonic-tts.cjs");
+const { synthesizeSupertonicInWorker } = require("./lib/supertonic-worker-client.cjs");
+const { IRODORI_CHUNK_LENGTH, irodoriModelStatus, splitIrodoriText, validateIrodoriModelDirectory } = require("./lib/irodori-webgpu.cjs");
+const { IrodoriVoiceLibrary } = require("./lib/irodori-voices.cjs");
+const { KOKORO_VOICES, kokoroModelStatus, normalizeKokoroVoice } = require("./lib/kokoro-webgpu.cjs");
+const { EmbeddedTtsModels } = require("./lib/tts-model-download.cjs");
+
+// Local TTS often completes several seconds after the click that requested it,
+// and conversation speech has no click at all. Keep Chromium from discarding
+// that intended playback when its transient user activation expires.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 const AVATAR_IMAGE_FILES = Object.freeze({
   backHair: "back-hair.png",
@@ -92,6 +110,21 @@ let wslCodexCommand = "";
 let openAIClient;
 let embeddedSherpaOnnx;
 let embeddedSherpaVad;
+let embeddedTtsModels;
+let irodoriVoiceLibrary;
+let irodoriWindow;
+let irodoriReadyPromise;
+let resolveIrodoriReady;
+let irodoriWebGpuAvailable = null;
+let nextIrodoriRequestId = 1;
+const pendingIrodoriRequests = new Map();
+const pendingIrodoriConversions = new Map();
+let kokoroWindow;
+let kokoroReadyPromise;
+let resolveKokoroReady;
+let kokoroWebGpuAvailable = null;
+let nextKokoroRequestId = 1;
+const pendingKokoroRequests = new Map();
 let controlWindow;
 let mascotWindow;
 let tray;
@@ -233,6 +266,46 @@ function effectiveCharacter(characterOrId) {
 
 function activeCharacter() {
   return effectiveCharacter(preferences.data.characterId);
+}
+
+const TTS_PROVIDERS = new Set(["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"]);
+
+function characterTtsSettings(characterId = preferences.data.characterId) {
+  const stored = preferences.data.characterTtsProfiles?.[characterId] || {};
+  return {
+    provider: TTS_PROVIDERS.has(stored.provider) ? stored.provider
+      : TTS_PROVIDERS.has(preferences.data.ttsProvider) ? preferences.data.ttsProvider : "system",
+    realtimeVoice: normalizeRealtimeVoice(stored.realtimeVoice, normalizeRealtimeVoice(preferences.data.realtimeVoice)),
+    irodoriVoiceId: String(stored.irodoriVoiceId || preferences.data.irodoriVoiceId || ""),
+    supertonicVoice: /^[FM][1-5]$/.test(String(stored.supertonicVoice || ""))
+      ? String(stored.supertonicVoice) : preferences.data.supertonicVoice || "F1",
+    kokoroVoice: normalizeKokoroVoice(stored.kokoroVoice || preferences.data.kokoroVoice),
+  };
+}
+
+function activeIrodoriVoice(characterId = preferences.data.characterId) {
+  const settings = characterTtsSettings(characterId);
+  return irodoriVoiceLibrary?.selectedVoice(preferences.data.irodoriVoices, settings.irodoriVoiceId) || null;
+}
+
+function activeIrodoriVoicePath(characterId = preferences.data.characterId) {
+  const voice = activeIrodoriVoice(characterId);
+  return voice ? irodoriVoiceLibrary.voicePath(voice) : "";
+}
+
+function decodeWaveDataUrl(value) {
+  const prefix = "data:audio/wav;base64,";
+  const source = String(value || "");
+  if (!source.startsWith(prefix)) throw new Error("参照音声をWAVへ変換できませんでした。");
+  const bytes = Buffer.from(source.slice(prefix.length), "base64");
+  if (!bytes.length || bytes.length > 16 * 1024 * 1024) throw new Error("変換した参照音声のサイズが正しくありません。");
+  return bytes;
+}
+
+function updatedCharacterTtsProfiles(characterId, patch) {
+  const profiles = { ...(preferences.data.characterTtsProfiles || {}) };
+  profiles[characterId] = { ...characterTtsSettings(characterId), ...patch };
+  return profiles;
 }
 
 function personaInstructions(character = activeCharacter()) {
@@ -489,8 +562,22 @@ function buildAvatarSnapshot(characterId, motionOverride = null) {
 
 function publicAppState() {
   const workDirectory = validWorkDirectory();
+  const characterTts = characterTtsSettings();
+  const irodoriVoice = activeIrodoriVoice();
+  const irodoriVoicePath = irodoriVoice ? irodoriVoiceLibrary.voicePath(irodoriVoice) : "";
   return {
     ...preferences.publicState(),
+    ttsProvider: characterTts.provider,
+    realtimeVoice: characterTts.realtimeVoice,
+    supertonicVoice: characterTts.supertonicVoice,
+    kokoroVoice: characterTts.kokoroVoice,
+    irodoriVoiceId: irodoriVoice?.id || "",
+    characterTts: {
+      characterId: preferences.data.characterId,
+      characterName: activeCharacter().name,
+      ...characterTts,
+      irodoriVoiceId: irodoriVoice?.id || "",
+    },
     interactionMode: preferences.data.interactionMode === "work" ? "work" : "chat",
     hasWorkDirectory: Boolean(workDirectory),
     workDirectoryName: workDirectory ? path.basename(workDirectory) : "",
@@ -507,6 +594,29 @@ function publicAppState() {
     }),
     canGenerateCharacters: preferences.data.backend === "codex",
     sherpaModel: embeddedSherpaOnnx?.status() || { installed: false, downloading: false, progress: null },
+    piperPlus: {
+      ...piperPlusStatus({
+        executablePath: preferences.data.piperPlusExecutablePath,
+        modelPath: preferences.data.piperPlusModelPath,
+      }),
+      sampleModel: embeddedTtsModels?.status("piper-plus") || null,
+    },
+    supertonic: {
+      ...supertonicStatus(preferences.data.supertonicModelDirectory),
+      sampleModel: embeddedTtsModels?.status("supertonic-3") || null,
+    },
+    irodori: {
+      ...irodoriModelStatus(preferences.data.irodoriModelDirectory, irodoriVoicePath, irodoriWebGpuAvailable),
+      voices: irodoriVoiceLibrary?.publicVoices(preferences.data.irodoriVoices, irodoriVoice?.id || "") || [],
+      voiceId: irodoriVoice?.id || "",
+      sampleModel: embeddedTtsModels?.status("irodori-webgpu") || null,
+    },
+    kokoro: {
+      ...kokoroModelStatus(preferences.data.kokoroModelDirectory, kokoroWebGpuAvailable),
+      voices: KOKORO_VOICES,
+      voice: characterTts.kokoroVoice,
+      sampleModel: embeddedTtsModels?.status("kokoro") || null,
+    },
     generationInProgress,
     codexAvailable: Boolean(codexCommand),
     platform: process.platform,
@@ -1224,6 +1334,15 @@ async function runSmokeTest() {
   const mascotCanvas = await mascotWindow.webContents.executeJavaScript("Boolean(document.querySelector('#stage') && document.querySelector('#desktopMascotChatButton') && document.querySelector('#desktopMascotStopButton'))");
   const controlInterruptReady = await controlWindow.webContents.executeJavaScript("Boolean(document.querySelector('#stopButton'))");
   if (!String(controlTitle).includes("PuruPet") || !mascotCanvas || !controlInterruptReady) throw new Error("renderer smoke check failed");
+  const ttsDownloadUiReady = await controlWindow.webContents.executeJavaScript(`[
+    'piperPlusModelDownloadButton', 'supertonicModelDownloadButton', 'kokoroModelDownloadButton', 'irodoriModelDownloadButton',
+    'piperPlusModelDownloadProgress', 'supertonicModelDownloadProgress', 'kokoroModelDownloadProgress', 'irodoriModelDownloadProgress'
+  ].every((id) => Boolean(document.getElementById(id)))`);
+  if (!ttsDownloadUiReady) throw new Error("TTS model download controls check failed");
+  for (const provider of ["piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"]) {
+    const model = embeddedTtsModels.status(provider);
+    if (!model.label || !model.downloadBytes || model.supported !== true) throw new Error(`TTS model manifest check failed: ${provider}`);
+  }
   if (mascotWindow.isResizable()) throw new Error("transparent mascot must not expose a Windows resize frame");
   const hoverOpened = await mascotWindow.webContents.executeJavaScript(`(async () => {
     const petZone = document.querySelector('#desktopMascotPetZone');
@@ -1591,15 +1710,34 @@ async function runSmokeTest() {
     return Boolean(document.querySelector('#ttsToggle') && provider && inputProvider &&
       [...provider.options].some((option) => option.value === 'system') &&
       [...provider.options].some((option) => option.value === 'style-bert-vits2') &&
+      [...provider.options].some((option) => option.value === 'piper-plus') &&
+      [...provider.options].some((option) => option.value === 'supertonic-3') &&
+      [...provider.options].some((option) => option.value === 'kokoro') &&
+      [...provider.options].some((option) => option.value === 'irodori-webgpu') &&
       [...inputProvider.options].some((option) => option.value === 'codex-audio') &&
       document.querySelector('#styleBertVits2UrlInput') &&
       document.querySelector('#styleBertVits2ModelIdInput') &&
       document.querySelector('#styleBertVits2SpeedInput') &&
+      document.querySelector('#piperPlusSettings') &&
+      document.querySelector('#piperPlusExecutableButton') &&
+      document.querySelector('#piperPlusModelButton') &&
+      document.querySelector('#piperPlusSpeedInput') &&
+      document.querySelector('#supertonicModelButton') &&
+      document.querySelector('#supertonicVoiceSelect') &&
+      document.querySelector('#kokoroVoiceSelect') &&
+      document.querySelector('#realtimeVoiceSelect') &&
+      document.querySelector('#kokoroDeviceSelect') &&
+      document.querySelector('#irodoriModelButton') &&
+      document.querySelector('#irodoriReferenceButton') &&
       document.querySelector('#englishPronunciationToggle') &&
       document.querySelector('#englishPronunciationDictionaryInput') &&
       document.querySelector('#ttsTestButton'));
   })()`);
   if (!audioSettingReady) throw new Error("audio output setting check failed");
+  await ensureIrodoriWindow();
+  if (irodoriWebGpuAvailable === null) throw new Error("Irodori WebGPU capability check failed");
+  await ensureKokoroWindow();
+  if (kokoroWebGpuAvailable === null) throw new Error("Kokoro WebGPU capability check failed");
   await new Promise((resolve) => setTimeout(resolve, 120));
   fs.writeFileSync(path.join(outputDir, "control-desktop.png"), (await controlWindow.capturePage()).toPNG());
   const sherpaSettingsReady = await controlWindow.webContents.executeJavaScript(`(() => {
@@ -1619,6 +1757,12 @@ async function runSmokeTest() {
   if (!sherpaSettingsReady) throw new Error("embedded sherpa-onnx setting check failed");
   await new Promise((resolve) => setTimeout(resolve, 120));
   fs.writeFileSync(path.join(outputDir, "control-desktop-sherpa-onnx.png"), (await controlWindow.capturePage()).toPNG());
+  const characterVoicePageOpened = await controlWindow.webContents.executeJavaScript(`(async () => {
+    document.querySelector('[data-page="character"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return document.querySelector('#characterVoiceCard')?.closest('[data-page-panel="character"]')?.classList.contains('is-active');
+  })()`);
+  if (!characterVoicePageOpened) throw new Error("character voice settings were not placed in the character panel");
   const styleBertSettingsFit = await controlWindow.webContents.executeJavaScript(`(() => {
     document.querySelector('#ttsProviderSelect').value = 'style-bert-vits2';
     const settings = document.querySelector('#styleBertVits2Settings');
@@ -1634,11 +1778,60 @@ async function runSmokeTest() {
     const rect = document.querySelector('.tts-settings').getBoundingClientRect();
     return rect.height < window.innerHeight - 40 && rect.bottom <= window.innerHeight + 2;
   })()`);
-  if (!styleBertSettingsFit || !styleBertSettingsVisible) throw new Error("Style-Bert-VITS2 settings did not fit in the desktop panel");
-  fs.writeFileSync(path.join(outputDir, "control-desktop-style-bert-vits2.png"), (await controlWindow.capturePage()).toPNG());
+  if (!styleBertSettingsFit || !styleBertSettingsVisible) throw new Error("Style-Bert-VITS2 settings did not fit in the character voice panel");
+  fs.writeFileSync(path.join(outputDir, "control-character-style-bert-vits2.png"), (await controlWindow.capturePage()).toPNG());
+  const piperPlusSettingsFit = await controlWindow.webContents.executeJavaScript(`(() => {
+    document.querySelector('#ttsProviderSelect').value = 'piper-plus';
+    document.querySelector('#styleBertVits2Settings').hidden = true;
+    const settings = document.querySelector('#piperPlusSettings');
+    settings.hidden = false;
+    settings.scrollIntoView({ block: 'center' });
+    return settings.getBoundingClientRect().width > 200;
+  })()`);
+  if (!piperPlusSettingsFit) throw new Error("piper-plus settings did not fit in the character voice panel");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  fs.writeFileSync(path.join(outputDir, "control-character-piper-plus.png"), (await controlWindow.capturePage()).toPNG());
+  const supertonicSettingsVisible = await controlWindow.webContents.executeJavaScript(`(() => {
+    document.querySelector('#ttsProviderSelect').value = 'supertonic-3';
+    document.querySelector('#piperPlusSettings').hidden = true;
+    const settings = document.querySelector('#supertonicSettings');
+    settings.hidden = false;
+    settings.scrollIntoView({ block: 'center' });
+    return settings.getBoundingClientRect().width > 200;
+  })()`);
+  if (!supertonicSettingsVisible) throw new Error("Supertonic 3 settings did not fit in the character voice panel");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  fs.writeFileSync(path.join(outputDir, "control-character-supertonic-3.png"), (await controlWindow.capturePage()).toPNG());
+  const kokoroSettingsVisible = await controlWindow.webContents.executeJavaScript(`(() => {
+    document.querySelector('#ttsProviderSelect').value = 'kokoro';
+    document.querySelector('#supertonicSettings').hidden = true;
+    const settings = document.querySelector('#kokoroSettings');
+    settings.hidden = false;
+    settings.scrollIntoView({ block: 'center' });
+    return settings.getBoundingClientRect().width > 200;
+  })()`);
+  if (!kokoroSettingsVisible) throw new Error("Kokoro settings did not fit in the character voice panel");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  fs.writeFileSync(path.join(outputDir, "control-character-kokoro.png"), (await controlWindow.capturePage()).toPNG());
+  const irodoriSettingsVisible = await controlWindow.webContents.executeJavaScript(`(() => {
+    document.querySelector('#ttsProviderSelect').value = 'irodori-webgpu';
+    document.querySelector('#supertonicSettings').hidden = true;
+    document.querySelector('#kokoroSettings').hidden = true;
+    const settings = document.querySelector('#irodoriSettings');
+    settings.hidden = false;
+    settings.scrollIntoView({ block: 'center' });
+    return settings.getBoundingClientRect().width > 200;
+  })()`);
+  if (!irodoriSettingsVisible) throw new Error("Irodori TTS settings did not fit in the character voice panel");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  fs.writeFileSync(path.join(outputDir, "control-character-irodori-webgpu.png"), (await controlWindow.capturePage()).toPNG());
   await controlWindow.webContents.executeJavaScript(`(() => {
-    document.querySelector('#ttsProviderSelect').value = ${JSON.stringify(preferences.data.ttsProvider || "system")};
+    document.querySelector('#ttsProviderSelect').value = ${JSON.stringify(characterTtsSettings().provider)};
     document.querySelector('#styleBertVits2Settings').hidden = document.querySelector('#ttsProviderSelect').value !== 'style-bert-vits2';
+    document.querySelector('#piperPlusSettings').hidden = document.querySelector('#ttsProviderSelect').value !== 'piper-plus';
+    document.querySelector('#supertonicSettings').hidden = document.querySelector('#ttsProviderSelect').value !== 'supertonic-3';
+    document.querySelector('#kokoroSettings').hidden = document.querySelector('#ttsProviderSelect').value !== 'kokoro';
+    document.querySelector('#irodoriSettings').hidden = document.querySelector('#ttsProviderSelect').value !== 'irodori-webgpu';
   })()`);
   const previousMouseFollow = Boolean(preferences.data.mouseFollow);
   let settingsReloaded = waitForNextPageLoad(controlWindow);
@@ -1765,7 +1958,7 @@ function showMascotSpeech(text, { durationMs = 9000, ttsEnabled = preferences.da
     text: String(text || ""),
     durationMs,
     ttsEnabled: readAloud,
-    ttsProvider: preferences.data.ttsProvider || "system",
+    ttsProvider: characterTtsSettings().provider,
     speechLanguage: preferences.data.speechLanguage || "ja-JP",
     persistent: Boolean(persistent),
     expression: speechExpression(text),
@@ -1774,10 +1967,201 @@ function showMascotSpeech(text, { durationMs = 9000, ttsEnabled = preferences.da
   if (!readAloud) localServer.pushInput({ ...currentCursorInput(), ...responseExpression(text) });
 }
 
+function destroyIrodoriWindow(error = new Error("Irodori TTS WebGPUを終了しました。")) {
+  const window = irodoriWindow;
+  irodoriWindow = null;
+  irodoriReadyPromise = null;
+  resolveIrodoriReady = null;
+  for (const pending of pendingIrodoriRequests.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(error);
+  }
+  pendingIrodoriRequests.clear();
+  for (const pending of pendingIrodoriConversions.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(error);
+  }
+  pendingIrodoriConversions.clear();
+  if (window && !window.isDestroyed()) window.destroy();
+}
+
+async function ensureIrodoriWindow() {
+  if (irodoriWindow && !irodoriWindow.isDestroyed() && irodoriReadyPromise) {
+    await irodoriReadyPromise;
+    return irodoriWindow;
+  }
+  irodoriReadyPromise = new Promise((resolve) => { resolveIrodoriReady = resolve; });
+  irodoriWindow = new BrowserWindow({
+    title: "PuruPet Irodori TTS WebGPU",
+    show: false,
+    width: 320,
+    height: 240,
+    webPreferences: {
+      preload: path.join(__dirname, "preload-irodori.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      backgroundThrottling: false,
+    },
+  });
+  irodoriWindow.setMenuBarVisibility(false);
+  irodoriWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  irodoriWindow.webContents.on("will-navigate", (event) => event.preventDefault());
+  irodoriWindow.webContents.on("render-process-gone", (_event, details) => {
+    destroyIrodoriWindow(new Error(`Irodori TTS WebGPUが停止しました（${details.reason}）。`));
+  });
+  await irodoriWindow.loadFile(path.join(__dirname, "irodori.html"));
+  await Promise.race([
+    irodoriReadyPromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Irodori TTS WebGPUの起動が時間切れになりました。")), 15_000)),
+  ]);
+  return irodoriWindow;
+}
+
+async function synthesizeIrodoriSegment(text) {
+  const window = await ensureIrodoriWindow();
+  if (!irodoriWebGpuAvailable) throw new Error("この環境ではWebGPUを利用できません。GPUドライバーを確認してください。");
+  const requestId = `irodori-${Date.now()}-${nextIrodoriRequestId++}`;
+  const result = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingIrodoriRequests.delete(requestId);
+      reject(new Error("Irodori TTSの生成が10分以内に完了しませんでした。"));
+    }, 600_000);
+    pendingIrodoriRequests.set(requestId, { resolve, reject, timer });
+  });
+  window.webContents.send("irodori:synthesize", {
+    requestId,
+    text,
+    modelDirectory: preferences.data.irodoriModelDirectory,
+    referenceAudioPath: activeIrodoriVoicePath(),
+    numSteps: preferences.data.irodoriSteps,
+    seed: preferences.data.irodoriSeed,
+  });
+  return result;
+}
+
+async function synthesizeIrodoriTts(text) {
+  const status = irodoriModelStatus(preferences.data.irodoriModelDirectory, activeIrodoriVoicePath(), irodoriWebGpuAvailable);
+  if (!status.modelReady) throw new Error("Irodori TTSのFP16モデルフォルダーを選択してください。");
+  if (!status.referenceReady) throw new Error("Irodori TTSの参照音声を追加してください。");
+  const audioDataUrls = [];
+  for (const sentence of splitIrodoriText(text)) audioDataUrls.push(await synthesizeIrodoriSegment(sentence));
+  return { audioDataUrls, playbackRate: preferences.data.irodoriSpeed };
+}
+
+async function convertIrodoriReference(sourcePath) {
+  const window = await ensureIrodoriWindow();
+  const requestId = `irodori-convert-${Date.now()}-${nextIrodoriRequestId++}`;
+  const result = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingIrodoriConversions.delete(requestId);
+      reject(new Error("参照音声の変換が時間切れになりました。"));
+    }, 120_000);
+    pendingIrodoriConversions.set(requestId, { resolve, reject, timer });
+  });
+  window.webContents.send("irodori:convertReference", { requestId, sourcePath });
+  return result;
+}
+
+function destroyKokoroWindow(error = new Error("Kokoro TTSを終了しました。")) {
+  const window = kokoroWindow;
+  kokoroWindow = null;
+  kokoroReadyPromise = null;
+  resolveKokoroReady = null;
+  for (const pending of pendingKokoroRequests.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(error);
+  }
+  pendingKokoroRequests.clear();
+  if (window && !window.isDestroyed()) window.destroy();
+}
+
+async function ensureKokoroWindow() {
+  if (kokoroWindow && !kokoroWindow.isDestroyed() && kokoroReadyPromise) {
+    await kokoroReadyPromise;
+    return kokoroWindow;
+  }
+  kokoroReadyPromise = new Promise((resolve) => { resolveKokoroReady = resolve; });
+  kokoroWindow = new BrowserWindow({
+    title: "PuruPet Kokoro TTS",
+    show: false,
+    width: 320,
+    height: 240,
+    webPreferences: {
+      preload: path.join(__dirname, "preload-kokoro.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      backgroundThrottling: false,
+    },
+  });
+  kokoroWindow.setMenuBarVisibility(false);
+  kokoroWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  kokoroWindow.webContents.on("will-navigate", (event) => event.preventDefault());
+  kokoroWindow.webContents.on("render-process-gone", (_event, details) => {
+    destroyKokoroWindow(new Error(`Kokoro TTSが停止しました（${details.reason}）。`));
+  });
+  await kokoroWindow.loadFile(path.join(__dirname, "kokoro.html"));
+  await Promise.race([
+    kokoroReadyPromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Kokoro TTSの起動が時間切れになりました。")), 15_000)),
+  ]);
+  return kokoroWindow;
+}
+
+async function synthesizeKokoroSegment(text) {
+  const status = kokoroModelStatus(preferences.data.kokoroModelDirectory, kokoroWebGpuAvailable);
+  if (!status.ready) throw new Error("Kokoroの日本語モデルをダウンロードしてください。");
+  const window = await ensureKokoroWindow();
+  const requestId = `kokoro-${Date.now()}-${nextKokoroRequestId++}`;
+  const result = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingKokoroRequests.delete(requestId);
+      reject(new Error("Kokoro TTSの生成が5分以内に完了しませんでした。"));
+    }, 300_000);
+    pendingKokoroRequests.set(requestId, { resolve, reject, timer });
+  });
+  window.webContents.send("kokoro:synthesize", {
+    requestId,
+    text,
+    modelDirectory: preferences.data.kokoroModelDirectory,
+    voice: characterTtsSettings().kokoroVoice,
+    speed: preferences.data.kokoroSpeed,
+    device: preferences.data.kokoroDevice,
+  });
+  return result;
+}
+
+async function synthesizeKokoroTts(text) {
+  const audioDataUrls = [];
+  for (const sentence of splitTtsText(String(text || ""))) audioDataUrls.push(await synthesizeKokoroSegment(sentence));
+  return { audioDataUrls };
+}
+
 function synthesizeConfiguredTts(text) {
-  if (!preferences.data.ttsEnabled || preferences.data.ttsProvider !== "style-bert-vits2") {
+  const characterTts = characterTtsSettings();
+  if (!preferences.data.ttsEnabled || !["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(characterTts.provider)) {
     return Promise.resolve({ audioDataUrls: [] });
   }
+  if (characterTts.provider === "piper-plus") {
+    return synthesizePiperPlus({
+      text: configuredSpeechText(text),
+      executablePath: preferences.data.piperPlusExecutablePath,
+      modelPath: preferences.data.piperPlusModelPath,
+      speed: preferences.data.piperPlusSpeed,
+    });
+  }
+  if (characterTts.provider === "supertonic-3") {
+    return synthesizeSupertonicInWorker({
+      text: configuredSpeechText(text),
+      modelDirectory: preferences.data.supertonicModelDirectory,
+      voice: characterTts.supertonicVoice,
+      speed: preferences.data.supertonicSpeed,
+      numSteps: preferences.data.supertonicSteps,
+    });
+  }
+  if (characterTts.provider === "irodori-webgpu") return synthesizeIrodoriTts(configuredSpeechText(text));
+  if (characterTts.provider === "kokoro") return synthesizeKokoroTts(configuredSpeechText(text));
   return synthesizeStyleBertVits2({
     text: configuredSpeechText(text),
     url: preferences.data.styleBertVits2Url,
@@ -1803,13 +2187,14 @@ function rememberConversationTurn(userText, assistantText) {
 }
 
 async function startCodexRealtimeVoice(payload, target = "control") {
-  if (preferences.data.backend !== "codex") throw new Error("Codex Realtime音声入力はCodex app-server接続時のみ利用できます。");
+  if (preferences.data.backend !== "codex") throw new Error("GPT-Live / Codex VoiceはCodex app-server接続時のみ利用できます。");
   const sdp = String(payload?.sdp || "");
   if (!sdp.startsWith("v=0") || sdp.length > 300_000) throw new Error("音声接続情報が正しくありません。");
-  const assistantTranscript = { text: "" };
+  const assistantTranscript = { text: "", active: false };
   try {
     return await codexClient.startRealtime({
       sdp,
+      voice: characterTtsSettings().realtimeVoice,
       prompt: `${personaInstructions()} 日本語の自然な短い音声会話として応答してください。`,
       onEvent: (message) => {
         let forwarded = message;
@@ -1830,19 +2215,35 @@ async function startCodexRealtimeVoice(payload, target = "control") {
       const method = String(message?.method || "");
       const params = message?.params || {};
       if (method === "thread/realtime/transcript/delta" && params.role === "assistant") {
+        if (!assistantTranscript.active) {
+          assistantTranscript.active = true;
+          assistantTranscript.text = "";
+          mascotWindow?.webContents.send("mascot:stream", {
+            phase: "start",
+            mode: "chat",
+            ttsEnabled: false,
+            ttsProvider: characterTtsSettings().provider,
+            speechLanguage: preferences.data.speechLanguage || "ja-JP",
+          });
+        }
         assistantTranscript.text += String(params.delta || "");
         mascotWindow?.webContents.send("mascot:stream", { phase: "delta", text: assistantTranscript.text });
       }
       if (method === "thread/realtime/transcript/done" && params.role === "assistant") {
         assistantTranscript.text = String(params.text || assistantTranscript.text).trim();
-        if (assistantTranscript.text) showMascotSpeech(assistantTranscript.text);
+        if (assistantTranscript.text) {
+          mascotWindow?.webContents.send("mascot:stream", { phase: "done", text: assistantTranscript.text });
+          localServer.pushInput({ ...currentCursorInput(), ...responseExpression(assistantTranscript.text) });
+        }
+        assistantTranscript.active = false;
       }
       if (method === "thread/realtime/transcript/done" && params.role === "user") {
         assistantTranscript.text = "";
         localServer.pushInput({ ...currentCursorInput(), ...messageExpression(params.text) });
       }
       if (["thread/realtime/error", "thread/realtime/closed"].includes(method)) {
-        mascotWindow?.webContents.send("mascot:stream", { phase: "done", text: assistantTranscript.text });
+        if (assistantTranscript.active) mascotWindow?.webContents.send("mascot:stream", { phase: "done", text: assistantTranscript.text });
+        assistantTranscript.active = false;
       }
       },
     });
@@ -1855,12 +2256,18 @@ async function startCodexRealtimeVoice(payload, target = "control") {
 
 async function setCharacter(characterId) {
   const character = characterById(characterId);
-  preferences.patch({ characterId: character.id });
+  const characterTtsProfiles = { ...(preferences.data.characterTtsProfiles || {}) };
+  if (!characterTtsProfiles[character.id]) characterTtsProfiles[character.id] = characterTtsSettings(character.id);
+  preferences.patch({ characterId: character.id, characterTtsProfiles });
   localServer.setSnapshot(buildAvatarSnapshot(character.id));
   const configured = effectiveCharacter(character);
   codexClient?.setPersona(personaInstructions(configured));
   openAIClient?.reset();
   mascotWindow?.webContents.send("mascot:character", configured);
+  mascotWindow?.webContents.send("mascot:tts", {
+    enabled: preferences.data.ttsEnabled,
+    provider: characterTtsSettings(character.id).provider,
+  });
   mascotWindow?.showInactive();
   return publicAppState();
 }
@@ -1871,6 +2278,58 @@ function applyLoginItemSetting(enabled) {
 }
 
 function registerIpc() {
+  ipcMain.on("kokoro:ready", (event, payload = {}) => {
+    if (event.sender !== kokoroWindow?.webContents) return;
+    kokoroWebGpuAvailable = Boolean(payload.webgpuAvailable);
+    resolveKokoroReady?.(true);
+    resolveKokoroReady = null;
+    controlWindow?.webContents.send("app:stateChanged", publicAppState());
+  });
+  ipcMain.on("kokoro:result", (event, payload = {}) => {
+    if (event.sender !== kokoroWindow?.webContents) return;
+    const requestId = String(payload.requestId || "");
+    const pending = pendingKokoroRequests.get(requestId);
+    if (!pending) return;
+    pendingKokoroRequests.delete(requestId);
+    clearTimeout(pending.timer);
+    if (payload.error) pending.reject(new Error(String(payload.error)));
+    else if (typeof payload.audioDataUrl === "string" && payload.audioDataUrl.startsWith("data:audio/wav;base64,")) {
+      if (payload.fallbackFrom === "webgpu" && preferences.data.kokoroDevice !== "wasm") {
+        preferences.patch({ kokoroDevice: "wasm" });
+        controlWindow?.webContents.send("app:stateChanged", publicAppState());
+      }
+      pending.resolve(payload.audioDataUrl);
+    }
+    else pending.reject(new Error("Kokoro TTSから正しいWAV音声を受け取れませんでした。"));
+  });
+  ipcMain.on("irodori:ready", (event, payload = {}) => {
+    if (event.sender !== irodoriWindow?.webContents) return;
+    irodoriWebGpuAvailable = Boolean(payload.webgpuAvailable);
+    resolveIrodoriReady?.(true);
+    resolveIrodoriReady = null;
+    controlWindow?.webContents.send("app:stateChanged", publicAppState());
+  });
+  ipcMain.on("irodori:result", (event, payload = {}) => {
+    if (event.sender !== irodoriWindow?.webContents) return;
+    const pending = pendingIrodoriRequests.get(String(payload.requestId || ""));
+    if (!pending) return;
+    pendingIrodoriRequests.delete(String(payload.requestId));
+    clearTimeout(pending.timer);
+    if (payload.error) pending.reject(new Error(String(payload.error)));
+    else if (typeof payload.audioDataUrl === "string" && payload.audioDataUrl.startsWith("data:audio/wav;base64,")) pending.resolve(payload.audioDataUrl);
+    else pending.reject(new Error("Irodori TTSから正しいWAV音声を受け取れませんでした。"));
+  });
+  ipcMain.on("irodori:referenceConverted", (event, payload = {}) => {
+    if (event.sender !== irodoriWindow?.webContents) return;
+    const requestId = String(payload.requestId || "");
+    const pending = pendingIrodoriConversions.get(requestId);
+    if (!pending) return;
+    pendingIrodoriConversions.delete(requestId);
+    clearTimeout(pending.timer);
+    if (payload.error) pending.reject(new Error(String(payload.error)));
+    else if (typeof payload.audioDataUrl === "string" && payload.audioDataUrl.startsWith("data:audio/wav;base64,")) pending.resolve(payload.audioDataUrl);
+    else pending.reject(new Error("参照音声をWAVへ変換できませんでした。"));
+  });
   ipcMain.handle("mascotInline:getState", (event) => {
     assertTrustedSender(event, "mascot");
     return publicAppState();
@@ -1989,7 +2448,7 @@ function registerIpc() {
       durationMs: 1500,
       persistent: true,
       ttsEnabled: Boolean(preferences.data.ttsEnabled),
-      ttsProvider: preferences.data.ttsProvider || "system",
+      ttsProvider: characterTtsSettings().provider,
       speechLanguage: preferences.data.speechLanguage || "ja-JP",
       spokenText: configuredSpeechText(text),
     };
@@ -2038,6 +2497,10 @@ function registerIpc() {
     assertTrustedSender(event);
     return codexClient.listModels();
   });
+  ipcMain.handle("codex:realtimeVoices", async (event) => {
+    assertTrustedSender(event);
+    return normalizeRealtimeVoiceList(await codexClient.listRealtimeVoices());
+  });
   ipcMain.handle("settings:save", (event, patch) => {
     assertTrustedSender(event);
     const previousBackend = preferences.data.backend;
@@ -2045,7 +2508,7 @@ function registerIpc() {
     const previousDisplayId = String(preferences.data.preferredDisplayId || "");
     const requestedDisplayId = String(patch?.preferredDisplayId || "");
     const displayId = screen.getAllDisplays().some((display) => String(display.id) === requestedDisplayId) ? requestedDisplayId : "";
-    const ttsProvider = ["system", "style-bert-vits2"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
+    const ttsProvider = ["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
     const styleBertVits2Url = String(patch?.styleBertVits2Url || preferences.data.styleBertVits2Url || "http://localhost:5000").trim().slice(0, 300);
     if (ttsProvider === "style-bert-vits2") styleBertVoiceEndpoint(styleBertVits2Url);
     const speechInputProvider = ["auto", "realtime", "codex-audio", "sherpa-onnx", "browser", "openai"].includes(patch?.speechInputProvider)
@@ -2059,6 +2522,20 @@ function registerIpc() {
       ? patch.vadSensitivity : preferences.data.vadSensitivity || "normal";
     const codexChatReasoningEffort = normalizedReasoningEffort(patch?.codexChatReasoningEffort ?? preferences.data.codexChatReasoningEffort);
     const codexWorkReasoningEffort = normalizedReasoningEffort(patch?.codexWorkReasoningEffort ?? preferences.data.codexWorkReasoningEffort);
+    const activeCharacterId = preferences.data.characterId;
+    const supertonicVoice = /^[FM][1-5]$/.test(String(patch?.supertonicVoice || "")) ? String(patch.supertonicVoice) : "F1";
+    const requestedIrodoriVoiceId = String(patch?.irodoriVoiceId || "");
+    const irodoriVoiceId = preferences.data.irodoriVoices.some((voice) => voice.id === requestedIrodoriVoiceId)
+      ? requestedIrodoriVoiceId : activeIrodoriVoice(activeCharacterId)?.id || "";
+    const kokoroVoice = normalizeKokoroVoice(patch?.kokoroVoice || characterTtsSettings(activeCharacterId).kokoroVoice);
+    const realtimeVoice = normalizeRealtimeVoice(patch?.realtimeVoice || characterTtsSettings(activeCharacterId).realtimeVoice);
+    const characterTtsProfiles = updatedCharacterTtsProfiles(activeCharacterId, {
+      provider: ttsProvider,
+      realtimeVoice,
+      supertonicVoice,
+      irodoriVoiceId,
+      kokoroVoice,
+    });
     const allowed = {
       backend: ["codex", "openai"].includes(patch?.backend) ? patch.backend : preferences.data.backend,
       openaiModel: String(patch?.openaiModel || preferences.data.openaiModel).slice(0, 120),
@@ -2074,9 +2551,22 @@ function registerIpc() {
       launchAtLogin: Boolean(patch?.launchAtLogin),
       ttsEnabled: Boolean(patch?.ttsEnabled),
       ttsProvider,
+      realtimeVoice,
+      characterTtsProfiles,
       styleBertVits2Url,
       styleBertVits2ModelId: Math.min(9999, Math.max(0, Math.round(Number(patch?.styleBertVits2ModelId) || 0))),
       styleBertVits2Speed: Math.min(2, Math.max(.5, Number(patch?.styleBertVits2Speed) || 1)),
+      piperPlusSpeed: Math.min(2, Math.max(.5, Number(patch?.piperPlusSpeed) || 1)),
+      supertonicVoice,
+      supertonicSpeed: Math.min(2, Math.max(.5, Number(patch?.supertonicSpeed) || 1)),
+      supertonicSteps: Math.min(20, Math.max(2, Math.round(Number(patch?.supertonicSteps) || 8))),
+      irodoriVoiceId,
+      irodoriSpeed: Math.min(2, Math.max(.5, Number(patch?.irodoriSpeed) || 1)),
+      irodoriSteps: Math.min(40, Math.max(4, Math.round(Number(patch?.irodoriSteps) || 16))),
+      irodoriSeed: Math.min(2147483647, Math.max(0, Math.round(Number(patch?.irodoriSeed) || 0))),
+      kokoroVoice,
+      kokoroSpeed: Math.min(2, Math.max(.5, Number(patch?.kokoroSpeed) || 1)),
+      kokoroDevice: ["auto", "webgpu", "wasm"].includes(patch?.kokoroDevice) ? patch.kokoroDevice : "auto",
       englishPronunciationEnabled: patch?.englishPronunciationEnabled !== false,
       englishPronunciationDictionary: String(patch?.englishPronunciationDictionary || "").slice(0, 12_000),
       speechInputProvider,
@@ -2097,7 +2587,7 @@ function registerIpc() {
     if (allowed.backend !== previousBackend) resetWorkClient();
     syncMascotAlwaysOnTop();
     syncMascotClickThrough(allowed.clickThrough);
-    mascotWindow?.webContents.send("mascot:tts", { enabled: allowed.ttsEnabled, provider: allowed.ttsProvider });
+    mascotWindow?.webContents.send("mascot:tts", { enabled: allowed.ttsEnabled, provider: characterTtsSettings().provider });
     mascotWindow?.webContents.send("mascot:voiceInputSettings", {
       speechInputProvider: allowed.speechInputProvider,
       voiceActivationMode: allowed.voiceActivationMode,
@@ -2135,6 +2625,166 @@ function registerIpc() {
   ipcMain.handle("tts:synthesize", (event, text) => {
     assertTrustedSender(event);
     return synthesizeConfiguredTts(String(text || "").slice(0, 1000));
+  });
+  ipcMain.handle("tts:modelDownload", async (event, provider) => {
+    assertTrustedSender(event);
+    const normalizedProvider = String(provider || "");
+    const status = await embeddedTtsModels.download(normalizedProvider, (progress) => {
+      controlWindow?.webContents.send("tts:modelProgress", progress);
+    });
+    if (normalizedProvider === "piper-plus") {
+      preferences.patch({
+        piperPlusExecutablePath: status.executablePath,
+        piperPlusModelPath: status.modelPath,
+        piperPlusSpeed: preferences.data.piperPlusSpeed === 1 ? .67 : preferences.data.piperPlusSpeed,
+      });
+    } else if (normalizedProvider === "supertonic-3") {
+      preferences.patch({ supertonicModelDirectory: status.modelDirectory });
+    } else if (normalizedProvider === "irodori-webgpu") {
+      preferences.patch({ irodoriModelDirectory: status.modelDirectory });
+      destroyIrodoriWindow();
+    } else if (normalizedProvider === "kokoro") {
+      preferences.patch({ kokoroModelDirectory: status.modelDirectory });
+      destroyKokoroWindow();
+    }
+    const result = publicAppState();
+    controlWindow?.webContents.send("tts:modelProgress", result[{
+      "piper-plus": "piperPlus",
+      "supertonic-3": "supertonic",
+      "irodori-webgpu": "irodori",
+      kokoro: "kokoro",
+    }[normalizedProvider]]?.sampleModel);
+    broadcastAppState();
+    return result;
+  });
+  ipcMain.handle("tts:modelRemove", (event, provider) => {
+    assertTrustedSender(event);
+    const normalizedProvider = String(provider || "");
+    const managedPaths = embeddedTtsModels.installedPaths(normalizedProvider);
+    embeddedTtsModels.remove(normalizedProvider);
+    if (normalizedProvider === "piper-plus") {
+      const patch = {};
+      if (preferences.data.piperPlusExecutablePath === managedPaths.executablePath) patch.piperPlusExecutablePath = "";
+      if (preferences.data.piperPlusModelPath === managedPaths.modelPath) patch.piperPlusModelPath = "";
+      if (Object.keys(patch).length) preferences.patch(patch);
+    } else if (normalizedProvider === "supertonic-3") {
+      if (preferences.data.supertonicModelDirectory === managedPaths.modelDirectory) preferences.patch({ supertonicModelDirectory: "" });
+    } else if (normalizedProvider === "irodori-webgpu") {
+      if (preferences.data.irodoriModelDirectory === managedPaths.modelDirectory) preferences.patch({ irodoriModelDirectory: "" });
+      destroyIrodoriWindow();
+    } else if (normalizedProvider === "kokoro") {
+      if (preferences.data.kokoroModelDirectory === managedPaths.modelDirectory) preferences.patch({ kokoroModelDirectory: "" });
+      destroyKokoroWindow();
+    }
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:piperChooseExecutable", async (event) => {
+    assertTrustedSender(event);
+    const options = {
+      title: "piper-plusの実行ファイルを選択",
+      properties: ["openFile"],
+    };
+    if (process.platform === "win32") options.filters = [{ name: "piper-plus", extensions: ["exe"] }];
+    const result = await dialog.showOpenDialog(controlWindow, options);
+    if (result.canceled || !result.filePaths[0]) return publicAppState();
+    const executablePath = validatePiperPlusExecutable(result.filePaths[0]);
+    preferences.patch({ piperPlusExecutablePath: executablePath });
+    return publicAppState();
+  });
+  ipcMain.handle("tts:piperChooseModel", async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog(controlWindow, {
+      title: "piper-plusの音声モデルを選択",
+      properties: ["openFile"],
+      filters: [{ name: "ONNX音声モデル", extensions: ["onnx"] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return publicAppState();
+    const modelPath = validatePiperPlusModel(result.filePaths[0]);
+    preferences.patch({ piperPlusModelPath: modelPath });
+    return publicAppState();
+  });
+  ipcMain.handle("tts:supertonicChooseModel", async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog(controlWindow, {
+      title: "Supertonic 3の展開済みモデルフォルダーを選択",
+      properties: ["openDirectory"],
+    });
+    if (result.canceled || !result.filePaths[0]) return publicAppState();
+    const modelDirectory = validateSupertonicDirectory(result.filePaths[0]);
+    preferences.patch({ supertonicModelDirectory: modelDirectory });
+    return publicAppState();
+  });
+  ipcMain.handle("tts:irodoriChooseModel", async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog(controlWindow, {
+      title: "Irodori TTSのモデルフォルダーを選択",
+      properties: ["openDirectory"],
+    });
+    if (result.canceled || !result.filePaths[0]) return publicAppState();
+    const modelDirectory = validateIrodoriModelDirectory(result.filePaths[0]);
+    preferences.patch({ irodoriModelDirectory: modelDirectory });
+    destroyIrodoriWindow();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:irodoriChooseReference", async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog(controlWindow, {
+      title: "Irodori TTSへ追加する参照音声を選択",
+      properties: ["openFile"],
+      filters: [{ name: "音声", extensions: ["wav", "mp3", "m4a", "aac", "ogg", "flac", "webm"] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return publicAppState();
+    const sourcePath = path.resolve(result.filePaths[0]);
+    const stat = fs.statSync(sourcePath);
+    if (!stat.isFile() || stat.size > 100 * 1024 * 1024) throw new Error("参照音声は100MB以内にしてください。");
+    const audioDataUrl = await convertIrodoriReference(sourcePath);
+    const imported = irodoriVoiceLibrary.importWave(
+      decodeWaveDataUrl(audioDataUrl),
+      path.basename(sourcePath, path.extname(sourcePath)),
+      preferences.data.irodoriVoices,
+    );
+    preferences.patch({
+      irodoriReferenceAudioPath: "",
+      irodoriVoices: imported.voices,
+      irodoriVoiceId: imported.record.id,
+      characterTtsProfiles: updatedCharacterTtsProfiles(preferences.data.characterId, { irodoriVoiceId: imported.record.id }),
+    });
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:irodoriSelectVoice", (event, voiceId) => {
+    assertTrustedSender(event);
+    const id = String(voiceId || "");
+    if (!preferences.data.irodoriVoices.some((voice) => voice.id === id && irodoriVoiceLibrary.isReady(voice))) {
+      throw new Error("選択したIrodori音声が見つかりません。");
+    }
+    preferences.patch({
+      irodoriVoiceId: id,
+      characterTtsProfiles: updatedCharacterTtsProfiles(preferences.data.characterId, { irodoriVoiceId: id }),
+    });
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:irodoriRenameVoice", (event, payload = {}) => {
+    assertTrustedSender(event);
+    const voices = irodoriVoiceLibrary.rename(preferences.data.irodoriVoices, String(payload.id || ""), payload.name);
+    preferences.patch({ irodoriVoices: voices });
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:irodoriRemoveVoice", (event, voiceId) => {
+    assertTrustedSender(event);
+    const id = String(voiceId || "");
+    const voices = irodoriVoiceLibrary.remove(preferences.data.irodoriVoices, id);
+    const fallback = irodoriVoiceLibrary.selectedVoice(voices, "")?.id || "";
+    const profiles = Object.fromEntries(Object.entries(preferences.data.characterTtsProfiles || {}).map(([characterId, profile]) => [
+      characterId,
+      profile.irodoriVoiceId === id ? { ...profile, irodoriVoiceId: fallback } : profile,
+    ]));
+    preferences.patch({ irodoriVoices: voices, irodoriVoiceId: fallback, characterTtsProfiles: profiles });
+    broadcastAppState();
+    return publicAppState();
   });
   ipcMain.handle("onboarding:complete", (event, complete) => {
     assertTrustedSender(event);
@@ -2518,6 +3168,8 @@ function ensureBrowserWindow(browserSession) {
   activeBrowserSession = browserSession;
   if (browserWindow && !browserWindow.isDestroyed() && browserWindowSessionId === browserSession.id) return browserWindow;
   if (browserWindow && !browserWindow.isDestroyed()) browserWindow.destroy();
+  destroyIrodoriWindow();
+  destroyKokoroWindow();
   browserWindowSessionId = browserSession.id;
   browserWindow = new BrowserWindow({
     width: 1080,
@@ -3099,14 +3751,17 @@ async function sendChatMessage(message, { localImagePath = "", localAudioPath = 
     controlWindow?.webContents.send("chat:stream", payload);
     mascotWindow?.webContents.send("mascot:stream", payload);
   };
-  const speechSegmenter = new StreamingTextSegmenter({ maxLength: 64 });
+  const activeTtsProvider = characterTtsSettings().provider;
+  const speechSegmenter = new StreamingTextSegmenter({
+    maxLength: activeTtsProvider === "irodori-webgpu" ? Math.max(24, IRODORI_CHUNK_LENGTH - 6) : 64,
+  });
   const streamTtsEnabled = Boolean(preferences.data.ttsEnabled);
   sendStream({
     phase: "start",
     character: activeCharacter().name,
     mode: workMode ? "work" : "chat",
     ttsEnabled: Boolean(preferences.data.ttsEnabled),
-    ttsProvider: preferences.data.ttsProvider || "system",
+    ttsProvider: activeTtsProvider,
     speechLanguage: preferences.data.speechLanguage || "ja-JP",
   });
   let thinkingFillerTimer = null;
@@ -3114,7 +3769,7 @@ async function sendChatMessage(message, { localImagePath = "", localAudioPath = 
     thinkingFillerTimer = setTimeout(() => {
       mascotWindow?.webContents.send("mascot:thinkingFiller", {
         text: thinkingFillerText(),
-        ttsProvider: preferences.data.ttsProvider || "system",
+        ttsProvider: characterTtsSettings().provider,
         speechLanguage: preferences.data.speechLanguage || "ja-JP",
       });
       thinkingFillerTimer = null;
@@ -3415,10 +4070,31 @@ async function boot() {
   const projectRootIsArchive = projectRoot.toLowerCase().includes(".asar");
   const codexWorkingDirectory = app.isPackaged || projectRootIsArchive ? app.getPath("documents") : projectRoot;
   preferences = new Preferences(path.join(app.getPath("userData"), "preferences.json"), safeStorage);
+  irodoriVoiceLibrary = new IrodoriVoiceLibrary(path.join(app.getPath("userData"), "irodori-voices"));
+  if (!preferences.data.irodoriVoices.length && preferences.data.irodoriReferenceAudioPath) {
+    const migrated = irodoriVoiceLibrary.migrateLegacyWave(preferences.data.irodoriReferenceAudioPath);
+    if (migrated) {
+      preferences.patch({
+        irodoriReferenceAudioPath: "",
+        irodoriVoices: migrated.voices,
+        irodoriVoiceId: migrated.record.id,
+        characterTtsProfiles: updatedCharacterTtsProfiles(preferences.data.characterId, { irodoriVoiceId: migrated.record.id }),
+      });
+    } else {
+      preferences.patch({ irodoriReferenceAudioPath: "" });
+    }
+  } else if (preferences.data.irodoriReferenceAudioPath) {
+    preferences.patch({ irodoriReferenceAudioPath: "" });
+  }
+  const availableIrodoriVoice = irodoriVoiceLibrary.selectedVoice(preferences.data.irodoriVoices, preferences.data.irodoriVoiceId);
+  if (availableIrodoriVoice && availableIrodoriVoice.id !== preferences.data.irodoriVoiceId) {
+    preferences.patch({ irodoriVoiceId: availableIrodoriVoice.id });
+  }
   embeddedSherpaOnnx = new EmbeddedSherpaOnnx(path.join(app.getPath("userData"), "sherpa-onnx-models"), {
     modelId: preferences.data.sherpaModelId,
   });
   embeddedSherpaVad = new EmbeddedSherpaVad(path.join(app.getPath("userData"), "sherpa-onnx-models"));
+  embeddedTtsModels = new EmbeddedTtsModels(path.join(app.getPath("userData"), "tts-models"));
   cleanupStaleTemporaryInputs();
   if (process.argv.includes("--smoke-test")) preferences.patch({ onboardingComplete: false });
   localServer = new MascotStaticServer(projectRoot);
@@ -3471,7 +4147,8 @@ else {
   app.on("second-instance", () => showControlWindow());
   app.whenReady().then(boot).catch((error) => {
     console.error("Desktop mascot startup failed:", error);
-    app.quit();
+    if (process.argv.includes("--smoke-test")) app.exit(1);
+    else app.quit();
   });
 }
 
@@ -3489,6 +4166,8 @@ app.on("before-quit", () => {
   browserCodexClient?.stop();
   computerCodexClient?.stop();
   if (browserWindow && !browserWindow.isDestroyed()) browserWindow.destroy();
+  destroyIrodoriWindow();
+  destroyKokoroWindow();
   localServer?.stop();
 });
 
