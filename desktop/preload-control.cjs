@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   removeIrodoriVoice: (id) => ipcRenderer.invoke("tts:irodoriRemoveVoice", id),
   normalizeTtsText: (text) => ipcRenderer.invoke("tts:normalizeText", text),
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
+  appendCodexRealtimeSpeech: (text) => ipcRenderer.invoke("audio:realtimeAppendSpeech", text),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
   onChatStream: (callback) => {
     const listener = (_event, payload) => callback(payload);

@@ -281,6 +281,22 @@ test("Codex client stops the active realtime session", async () => {
   assert.deepEqual(call, { method: "thread/realtime/stop", params: { threadId: "thread-voice" } });
 });
 
+test("Codex client appends click and preview speech to the active realtime session", async () => {
+  const client = new CodexAppServerClient();
+  assert.equal(client.hasActiveRealtime(), false);
+  assert.equal(await client.appendRealtimeSpeech("音声テスト"), false);
+  client.threadId = "thread-voice";
+  client.realtimeHandlers.set("thread-voice", () => {});
+  let call;
+  client.request = async (method, params) => { call = { method, params }; return {}; };
+  assert.equal(client.hasActiveRealtime(), true);
+  assert.equal(await client.appendRealtimeSpeech("  なあに？  "), true);
+  assert.deepEqual(call, {
+    method: "thread/realtime/appendSpeech",
+    params: { threadId: "thread-voice", text: "なあに？" },
+  });
+});
+
 test("Codex client interrupts the active work turn", async () => {
   const client = new CodexAppServerClient();
   client.threadId = "thread-work";

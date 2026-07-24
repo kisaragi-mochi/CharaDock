@@ -1726,6 +1726,7 @@ async function runSmokeTest() {
       document.querySelector('#supertonicVoiceSelect') &&
       document.querySelector('#kokoroVoiceSelect') &&
       document.querySelector('#realtimeVoiceSelect') &&
+      document.querySelector('#realtimeVoiceTestButton') &&
       document.querySelector('#kokoroDeviceSelect') &&
       document.querySelector('#irodoriModelButton') &&
       document.querySelector('#irodoriReferenceButton') &&
@@ -1898,7 +1899,12 @@ async function runSmokeTest() {
             }
             if (message?.method === 'thread/realtime/started') {
               clearTimeout(timer);
-              resolve('webrtc');
+              try {
+                const appended = await window.mascotDesktop.appendCodexRealtimeSpeech('Realtime音声テストです。');
+                resolve(appended ? 'webrtc' : 'device-fallback');
+              } catch {
+                resolve('device-fallback');
+              }
             }
           });
         });
@@ -2419,7 +2425,7 @@ function registerIpc() {
     assertTrustedSender(event, "mascot");
     return dragMascotWindow(phase);
   });
-  ipcMain.handle("mascotInline:pet", (event, payload = {}) => {
+  ipcMain.handle("mascotInline:pet", async (event, payload = {}) => {
     assertTrustedSender(event, "mascot");
     const character = activeCharacter();
     const phrases = character.petPhrases || ["なあに？"];
@@ -2441,16 +2447,30 @@ function registerIpc() {
         ];
     const reaction = reactions[Math.floor(Math.random() * reactions.length)];
     localServer.pushInput({ ...currentCursorInput(), ...reaction });
+    const spokenText = configuredSpeechText(text);
+    const realtimeSpeechExpected = preferences.data.backend === "codex" && codexClient.hasActiveRealtime();
+    let realtimeSpeech = false;
+    let realtimeSpeechError = "";
+    if (realtimeSpeechExpected) {
+      try {
+        realtimeSpeech = await codexClient.appendRealtimeSpeech(spokenText);
+      } catch (error) {
+        realtimeSpeechError = userFacingRealtimeError(error);
+        console.warn("Codex Realtime click speech:", error.message);
+      }
+    }
     return {
       text,
       zone: headTouch ? "head" : "body",
       emotion: reaction.emotion,
       durationMs: 1500,
       persistent: true,
-      ttsEnabled: Boolean(preferences.data.ttsEnabled),
+      ttsEnabled: !realtimeSpeechExpected && Boolean(preferences.data.ttsEnabled),
       ttsProvider: characterTtsSettings().provider,
       speechLanguage: preferences.data.speechLanguage || "ja-JP",
-      spokenText: configuredSpeechText(text),
+      spokenText,
+      realtimeSpeech,
+      realtimeSpeechError,
     };
   });
   ipcMain.handle("mascotInline:transcribe", async (event, payload) => {
@@ -2953,6 +2973,10 @@ function registerIpc() {
   ipcMain.handle("audio:realtimeStart", async (event, payload) => {
     assertTrustedSender(event);
     return startCodexRealtimeVoice(payload, "control");
+  });
+  ipcMain.handle("audio:realtimeAppendSpeech", async (event, text) => {
+    assertTrustedSender(event);
+    return codexClient.appendRealtimeSpeech(String(text || ""));
   });
   ipcMain.handle("audio:realtimeStop", async (event) => {
     assertTrustedSender(event);

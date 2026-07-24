@@ -23,6 +23,9 @@
   let realtimeUserTranscript = "";
   let realtimeAssistantMessage = null;
   let realtimeUnavailable = false;
+  let realtimePreviewMode = false;
+  let realtimePreviewText = "";
+  let realtimePreviewStopTimer = 0;
   let speechPulseTimer = null;
   let speechAudio = null;
   let speechPlaybackToken = 0;
@@ -164,8 +167,9 @@
 
   function syncRealtimeVoiceUi() {
     const select = $("#realtimeVoiceSelect");
+    const testButton = $("#realtimeVoiceTestButton");
     const status = $("#realtimeVoiceStatus");
-    if (!select || !status || !state) return;
+    if (!select || !testButton || !status || !state) return;
     const selected = state.realtimeVoice || state.characterTts?.realtimeVoice || realtimeVoices.defaultVoice || "cove";
     select.replaceChildren();
     const addGroup = (label, voices) => {
@@ -184,6 +188,7 @@
     }
     select.value = selected;
     select.disabled = state.backend !== "codex";
+    testButton.disabled = state.backend !== "codex" || realtimePreviewMode;
     if (state.backend !== "codex") setStatus(status, "Realtime音声はCodex app-server接続時に使用します。");
     else if (realtimeVoices.loaded) setStatus(status, `${realtimeVoices.voices.length}種類のRealtime音声を利用できます。`);
     else setStatus(status, "保存済みの声を表示しています。接続時に音声一覧を更新します。");
@@ -796,6 +801,7 @@
   }
 
   function closeRealtimeAudio() {
+    clearTimeout(realtimePreviewStopTimer);
     try { realtimeDataChannel?.close(); } catch {}
     try { realtimePeerConnection?.close(); } catch {}
     realtimeRemoteAudio?.pause();
@@ -805,7 +811,12 @@
     realtimeRemoteAudio = null;
     realtimeStarting = false;
     realtimeUserTranscript = "";
+    realtimePreviewMode = false;
+    realtimePreviewText = "";
+    realtimePreviewStopTimer = 0;
     $("#speechInputButton").setAttribute("aria-pressed", "false");
+    const previewButton = $("#realtimeVoiceTestButton");
+    if (previewButton) previewButton.disabled = false;
   }
 
   async function stopCodexRealtimeVoice({ quiet = false } = {}) {
@@ -821,15 +832,21 @@
     return true;
   }
 
-  async function startCodexRealtimeVoice() {
+  async function startCodexRealtimeVoice({ preview = false, previewText = "" } = {}) {
     stopSpeechPlayback();
-    const stream = await ensureAudioStream();
+    const stream = preview ? null : await ensureAudioStream();
     const peer = new RTCPeerConnection();
     realtimePeerConnection = peer;
     realtimeStarting = true;
+    realtimePreviewMode = preview;
+    realtimePreviewText = String(previewText || "").trim();
     realtimeUserTranscript = "";
     realtimeAssistantMessage = null;
-    for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
+    if (stream) {
+      for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
+    } else {
+      peer.addTransceiver("audio", { direction: "recvonly" });
+    }
     realtimeRemoteAudio = new Audio();
     realtimeRemoteAudio.autoplay = true;
     peer.addEventListener("track", (event) => {
@@ -839,7 +856,7 @@
     realtimeDataChannel = peer.createDataChannel("oai-events");
     peer.addEventListener("connectionstatechange", () => {
       if (["failed", "disconnected"].includes(peer.connectionState)) {
-        setStatus($("#chatStatus"), "Codex Realtime音声接続が切れました。", true);
+        setStatus(preview ? $("#realtimeVoiceStatus") : $("#chatStatus"), "Codex Realtime音声接続が切れました。", true);
         closeRealtimeAudio();
       }
     });
@@ -847,6 +864,16 @@
     await peer.setLocalDescription(offer);
     await api.startCodexRealtime({ sdp: peer.localDescription?.sdp || offer.sdp });
     realtimeStarting = false;
+    if (preview) {
+      if (!realtimePreviewStopTimer) {
+        realtimePreviewStopTimer = setTimeout(async () => {
+          await stopCodexRealtimeVoice({ quiet: true });
+          setStatus($("#realtimeVoiceStatus"), "音声テストを終了しました。もう一度試せます。", true);
+        }, 15_000);
+      }
+      if (realtimePreviewText) setStatus($("#realtimeVoiceStatus"), "選択したRealtime音声へ接続しています…");
+      return;
+    }
     $("#speechInputButton").setAttribute("aria-pressed", "true");
     $("#speechInputMode").textContent = "GPT-Live / Codex Voice";
     $("#speechInputMode").classList.remove("is-fallback");
@@ -863,10 +890,35 @@
       return;
     }
     if (method === "thread/realtime/started") {
+      if (realtimePreviewMode) {
+        const text = realtimePreviewText;
+        realtimePreviewText = "";
+        let appended = false;
+        try {
+          appended = await api.appendCodexRealtimeSpeech(text);
+        } catch (error) {
+          await stopCodexRealtimeVoice({ quiet: true });
+          setStatus($("#realtimeVoiceStatus"), error.message, true);
+          return;
+        }
+        if (!appended) {
+          await stopCodexRealtimeVoice({ quiet: true });
+          setStatus($("#realtimeVoiceStatus"), "Realtime音声テストを開始できませんでした。", true);
+          return;
+        }
+        clearTimeout(realtimePreviewStopTimer);
+        realtimePreviewStopTimer = setTimeout(async () => {
+          await stopCodexRealtimeVoice({ quiet: true });
+          setStatus($("#realtimeVoiceStatus"), "音声テストを再生しました。");
+        }, 10_000);
+        setStatus($("#realtimeVoiceStatus"), "選択したRealtime音声を再生しています…");
+        return;
+      }
       setStatus($("#chatStatus"), "Codex Realtime音声入力中。もう一度押すと終了します。");
       return;
     }
     if (method === "thread/realtime/transcript/delta") {
+      if (realtimePreviewMode) return;
       const delta = String(params.delta || "");
       if (params.role === "user") {
         realtimeUserTranscript += delta;
@@ -882,6 +934,16 @@
     }
     if (method === "thread/realtime/transcript/done") {
       const text = String(params.text || "").trim();
+      if (realtimePreviewMode) {
+        if (params.role === "assistant" && text) {
+          clearTimeout(realtimePreviewStopTimer);
+          realtimePreviewStopTimer = setTimeout(async () => {
+            await stopCodexRealtimeVoice({ quiet: true });
+            setStatus($("#realtimeVoiceStatus"), "音声テストを再生しました。");
+          }, 1200);
+        }
+        return;
+      }
       if (params.role === "user" && text) {
         appendMessage("user", text);
         realtimeUserTranscript = "";
@@ -897,8 +959,13 @@
       return;
     }
     if (method === "thread/realtime/error") {
+      const preview = realtimePreviewMode;
       realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtimeAudio();
+      if (preview) {
+        setStatus($("#realtimeVoiceStatus"), params.message || "Realtime音声テストを再生できませんでした。", true);
+        return;
+      }
       if ((state.speechInputProvider || "auto") === "realtime") {
         setStatus($("#chatStatus"), params.message || "Codex Realtime音声接続を開始できませんでした。", true);
       } else {
@@ -907,8 +974,10 @@
       return;
     }
     if (method === "thread/realtime/closed") {
+      const preview = realtimePreviewMode;
       closeRealtimeAudio();
-      setStatus($("#chatStatus"), "Codex Realtime音声入力を終了しました。");
+      if (preview) setStatus($("#realtimeVoiceStatus"), "音声テストを再生しました。");
+      else setStatus($("#chatStatus"), "Codex Realtime音声入力を終了しました。");
     }
   }
 
@@ -1319,6 +1388,26 @@
         setStatus($("#realtimeVoiceStatus"), "このキャラクターのRealtime音声を保存しました。次の接続から使用します。");
       } catch (error) {
         setStatus($("#realtimeVoiceStatus"), error.message, true);
+      }
+    });
+    $("#realtimeVoiceTestButton").addEventListener("click", async () => {
+      const button = $("#realtimeVoiceTestButton");
+      button.disabled = true;
+      try {
+        if (state.backend !== "codex") throw new Error("Realtime音声テストはCodex app-server接続時に利用できます。");
+        await saveSettings();
+        const sample = "音声テストです。これからよろしくね。";
+        if (await api.appendCodexRealtimeSpeech(sample)) {
+          setStatus($("#realtimeVoiceStatus"), "接続中のRealtime音声でテストを再生しています…");
+          setTimeout(() => { button.disabled = false; }, 1800);
+          return;
+        }
+        await startCodexRealtimeVoice({ preview: true, previewText: sample });
+      } catch (error) {
+        closeRealtimeAudio();
+        setStatus($("#realtimeVoiceStatus"), error.message, true);
+      } finally {
+        if (!realtimePreviewMode) button.disabled = false;
       }
     });
     $("#piperPlusExecutableButton").addEventListener("click", async () => {

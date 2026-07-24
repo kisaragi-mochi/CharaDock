@@ -402,6 +402,18 @@ class CodexAppServerClient {
     return true;
   }
 
+  hasActiveRealtime() {
+    return Boolean(this.threadId && this.realtimeHandlers.has(this.threadId));
+  }
+
+  async appendRealtimeSpeech(text) {
+    const threadId = this.threadId;
+    const normalized = String(text || "").trim().slice(0, 1000);
+    if (!normalized || !threadId || !this.realtimeHandlers.has(threadId)) return false;
+    await this.request("thread/realtime/appendSpeech", { threadId, text: normalized }, 30_000);
+    return true;
+  }
+
   sendMessage(message, { onDelta, onEvent, localImagePath = "", localAudioPath = "", outputSchema = null, timeoutMs = 180_000 } = {}) {
     const run = async () => {
       this.turnStarting = true;

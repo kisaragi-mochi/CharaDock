@@ -4,6 +4,7 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- Add per-voice Realtime previews through a temporary receive-only session, and speak character-click reactions through the active Realtime session instead of normal TTS.
 - List GPT-Live voices from Codex app-server, save a separate Realtime voice per character, pass it to Realtime V3, suppress normal TTS during Live sessions, and stream delayed assistant transcripts into the persistent speech bubble.
 - Improve long Irodori speech by always splitting at Japanese sentence endings, bounding unpunctuated inference chunks to 48 characters, and synthesizing one segment ahead while the current audio plays.
 - Follow the proven Kokoro Web/Kokoro-JS WebGPU path by using the recommended FP32 model and explicitly downloading output tensors; detect zero or non-finite GPU output, regenerate it on CPU, and retain the working CPU setting instead of playing silence.

@@ -900,6 +900,7 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       const result = await ipcRenderer.invoke("mascotInline:pet", { zone });
       showSpeech(result);
+      if (result?.realtimeSpeechError) setStatus(`Realtime音声: ${result.realtimeSpeechError}`, 5000);
     } catch (error) {
       setStatus(`クリック反応: ${error.message}`, 5000);
     }
