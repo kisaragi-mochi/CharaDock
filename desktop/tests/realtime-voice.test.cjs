@@ -22,15 +22,28 @@ test("realtime voice list exposes only the voice set accepted by Realtime V3", (
   });
 });
 
-test("Realtime voice preview and character click speech are wired through appendSpeech", () => {
+test("Realtime sessions start only from voice input and keep transcript deltas intact", () => {
   const root = path.join(__dirname, "..");
   const html = fs.readFileSync(path.join(root, "control.html"), "utf8");
   const control = fs.readFileSync(path.join(root, "control.js"), "utf8");
   const main = fs.readFileSync(path.join(root, "main.cjs"), "utf8");
   const preload = fs.readFileSync(path.join(root, "preload-control.cjs"), "utf8");
-  assert.match(html, /id="realtimeVoiceTestButton"/);
-  assert.match(control, /addTransceiver\("audio", \{ direction: "recvonly" \}\)/);
-  assert.match(control, /appendCodexRealtimeSpeech\(sample\)/);
-  assert.match(main, /codexClient\.appendRealtimeSpeech\(spokenText\)/);
-  assert.match(preload, /audio:realtimeAppendSpeech/);
+  const mascot = fs.readFileSync(path.join(root, "preload-mascot.cjs"), "utf8");
+  assert.doesNotMatch(html, /id="realtimeVoiceTestButton"/);
+  assert.match(html, /聞こえ方の目安/);
+  assert.match(control, /await startCodexRealtimeVoice\(\)/);
+  assert.doesNotMatch(control, /appendCodexRealtimeSpeech/);
+  assert.doesNotMatch(mascot, /playbackText|realtimePlaybackOnly|realtimeAppendSpeech/);
+  assert.match(control, /cove: \{ impression: "男性寄り", description: "落ち着いて率直" \}/);
+  assert.match(control, /maple: \{ impression: "女性寄り", description: "陽気で率直" \}/);
+  assert.match(control, /arbor: \{ impression: "中性的", description: "気さくで万能" \}/);
+  assert.match(main, /const realtimeClient = workMode \? ensureWorkClient\(\) : codexClient/);
+  assert.match(main, /sandbox: "workspace-write"/);
+  assert.match(main, /await stopActiveRealtime\(\)\.catch/);
+  assert.match(preload, /audio:realtimeStart/);
+  assert.match(main, /if \(!assistantTranscript\.active\) assistantTranscript\.text = ""/);
+  assert.match(control, /if \(!realtimeAssistantActive\)/);
+  assert.match(control, /realtimeAssistantMessage = null;\s+realtimeAssistantText = ""/);
+  assert.match(control, /realtimeAssistantText \+= delta/);
+  assert.match(control, /textContent = realtimeAssistantText/);
 });

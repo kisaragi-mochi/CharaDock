@@ -143,6 +143,7 @@ let mascotHovered = false;
 let generationInProgress = false;
 let nextWorkRunId = 1;
 let activeWorkRunId = null;
+let activeRealtimeClient = null;
 let pendingScreenShare = null;
 let pendingBrowserUse = null;
 let pendingComputerUse = null;
@@ -737,7 +738,9 @@ async function interruptActiveWork() {
   run.status = "stopping";
   updateWorkRun(run, { activity: "中断を要求しています…" });
   try {
-    const interrupted = await (computerCodexClient || browserCodexClient || workCodexClient)?.interruptActiveTurn();
+    const client = computerCodexClient || browserCodexClient || workCodexClient;
+    let interrupted = await client?.interruptActiveTurn();
+    if (!interrupted && client?.hasActiveRealtime?.()) interrupted = await client.stopRealtime();
     if (!interrupted) throw new Error("中断できる実行中の操作が見つかりませんでした。");
   } catch (error) {
     run.status = "running";
@@ -833,6 +836,7 @@ async function setInteractionMode(mode) {
     if (preferences.data.backend !== "codex") throw new Error("作業モードはCodex app-server接続時のみ利用できます。");
     if (!validWorkDirectory()) return chooseWorkDirectory();
   }
+  if (nextMode !== preferences.data.interactionMode) await stopActiveRealtime().catch(() => {});
   preferences.patch({ interactionMode: nextMode });
   return broadcastAppState();
 }
@@ -1726,7 +1730,6 @@ async function runSmokeTest() {
       document.querySelector('#supertonicVoiceSelect') &&
       document.querySelector('#kokoroVoiceSelect') &&
       document.querySelector('#realtimeVoiceSelect') &&
-      document.querySelector('#realtimeVoiceTestButton') &&
       document.querySelector('#kokoroDeviceSelect') &&
       document.querySelector('#irodoriModelButton') &&
       document.querySelector('#irodoriReferenceButton') &&
@@ -1878,33 +1881,94 @@ async function runSmokeTest() {
   }
   await setCharacter(previousCharacter);
   if (process.argv.includes("--verify-realtime")) {
-    const realtimeMode = await controlWindow.webContents.executeJavaScript(`(async () => {
+    const recordRealtimeSampleArgument = process.argv.find((argument) => argument.startsWith("--record-realtime-sample="));
+    const recordRealtimeSamplePath = recordRealtimeSampleArgument
+      ? path.resolve(recordRealtimeSampleArgument.slice("--record-realtime-sample=".length))
+      : "";
+    const verifyRealtimeWorkMode = process.argv.includes("--verify-realtime-work-mode");
+    const previousRealtimeWorkState = {
+      interactionMode: preferences.data.interactionMode,
+      workDirectory: preferences.data.workDirectory,
+    };
+    const realtimeWorkDirectory = verifyRealtimeWorkMode
+      ? fs.mkdtempSync(path.join(app.getPath("temp"), "purupet-realtime-work-"))
+      : "";
+    try {
+      if (verifyRealtimeWorkMode) {
+        preferences.patch({ interactionMode: "work", workDirectory: realtimeWorkDirectory });
+        resetWorkClient();
+        broadcastAppState();
+      }
+      const realtimeMode = await controlWindow.webContents.executeJavaScript(`(async () => {
+      const shouldRecord = ${JSON.stringify(Boolean(recordRealtimeSamplePath))};
       let peer;
       let stream;
+      let context;
+      let oscillator;
+      let remoteAudio;
+      let recorder;
+      const recordedChunks = [];
       let unsubscribe = () => {};
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        context = new AudioContext();
+        oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const destination = context.createMediaStreamDestination();
+        gain.gain.value = 0;
+        oscillator.connect(gain).connect(destination);
+        oscillator.start();
+        await context.resume();
+        stream = destination.stream;
         peer = new RTCPeerConnection();
+        remoteAudio = new Audio();
+        remoteAudio.autoplay = true;
         for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
+        peer.addEventListener('track', (event) => {
+          const remoteStream = event.streams[0] || new MediaStream([event.track]);
+          remoteAudio.srcObject = remoteStream;
+          remoteAudio.play().catch(() => {});
+          if (!shouldRecord || recorder) return;
+          recorder = new MediaRecorder(remoteStream, { mimeType: 'audio/webm;codecs=opus' });
+          recorder.addEventListener('dataavailable', (chunk) => {
+            if (chunk.data?.size) recordedChunks.push(chunk.data);
+          });
+          recorder.start(100);
+        });
         peer.createDataChannel('oai-events');
         const started = new Promise((resolve) => {
-          const timer = setTimeout(() => resolve('device-fallback'), 30_000);
+          let settled = false;
+          const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+          };
+          const timer = setTimeout(() => finish({ mode: 'device-fallback', bytes: [] }), 30_000);
           unsubscribe = window.mascotDesktop.onCodexRealtime(async (message) => {
             if (message?.method === 'thread/realtime/sdp') {
               await peer.setRemoteDescription({ type: 'answer', sdp: message.params.sdp });
             }
             if (message?.method === 'thread/realtime/error') {
-              clearTimeout(timer);
-              resolve('device-fallback');
+              finish({ mode: 'device-fallback', bytes: [] });
             }
             if (message?.method === 'thread/realtime/started') {
-              clearTimeout(timer);
               try {
-                const appended = await window.mascotDesktop.appendCodexRealtimeSpeech('Realtime音声テストです。');
-                resolve(appended ? 'webrtc' : 'device-fallback');
+                const appended = await window.mascotDesktop.appendCodexRealtimeSpeech('Realtime音声の再生テストです。こんにちは、今日もよろしくね。');
+                if (!appended) finish({ mode: 'device-fallback', bytes: [] });
+                else if (!shouldRecord) finish({ mode: 'webrtc', bytes: [] });
               } catch {
-                resolve('device-fallback');
+                finish({ mode: 'device-fallback', bytes: [] });
               }
+            }
+            if (shouldRecord && message?.method === 'thread/realtime/transcript/done' && message.params?.role === 'assistant') {
+              setTimeout(() => {
+                if (!recorder || recorder.state === 'inactive') return finish({ mode: 'device-fallback', bytes: [] });
+                recorder.addEventListener('stop', async () => {
+                  const blob = new Blob(recordedChunks, { type: 'audio/webm;codecs=opus' });
+                  finish({ mode: 'webrtc', bytes: [...new Uint8Array(await blob.arrayBuffer())] });
+                }, { once: true });
+                recorder.stop();
+              }, 800);
             }
           });
         });
@@ -1913,15 +1977,33 @@ async function runSmokeTest() {
         await window.mascotDesktop.startCodexRealtime({ sdp: peer.localDescription.sdp });
         return await started;
       } catch {
-        return 'device-fallback';
+        return { mode: 'device-fallback', bytes: [] };
       } finally {
         unsubscribe();
         await window.mascotDesktop.stopCodexRealtime().catch(() => {});
+        remoteAudio?.pause();
+        if (remoteAudio) remoteAudio.srcObject = null;
         peer?.close();
         for (const track of stream?.getTracks?.() || []) track.stop();
+        try { oscillator?.stop(); } catch {}
+        if (context) await context.close().catch(() => {});
       }
     })()`);
-    console.log(`codex-realtime: ${realtimeMode}`);
+      if (recordRealtimeSamplePath && realtimeMode.mode === "webrtc" && realtimeMode.bytes?.length) {
+        fs.mkdirSync(path.dirname(recordRealtimeSamplePath), { recursive: true });
+        fs.writeFileSync(recordRealtimeSamplePath, Buffer.from(realtimeMode.bytes));
+        console.log(`codex-realtime-sample: ${recordRealtimeSamplePath}`);
+      }
+      console.log(`${verifyRealtimeWorkMode ? "codex-realtime-work" : "codex-realtime"}: ${realtimeMode.mode}`);
+    } finally {
+      await stopActiveRealtime().catch(() => {});
+      if (verifyRealtimeWorkMode) {
+        preferences.patch(previousRealtimeWorkState);
+        resetWorkClient();
+        broadcastAppState();
+        fs.rmSync(realtimeWorkDirectory, { recursive: true, force: true });
+      }
+    }
   }
   if (process.argv.includes("--verify-codex")) {
     const account = await codexClient.getAccount();
@@ -2192,16 +2274,42 @@ function rememberConversationTurn(userText, assistantText) {
   conversationHistory = boundedConversationHistory(conversationHistory, userText, assistantText);
 }
 
+function currentRealtimeClient() {
+  const clients = [activeRealtimeClient, codexClient, workCodexClient].filter(Boolean);
+  return clients.find((client, index) => clients.indexOf(client) === index && client.hasActiveRealtime?.()) || null;
+}
+
+async function stopActiveRealtime() {
+  const client = currentRealtimeClient();
+  if (!client) return false;
+  return client.stopRealtime();
+}
+
+async function appendActiveRealtimeSpeech(text) {
+  const client = currentRealtimeClient();
+  if (!client) return false;
+  return client.appendRealtimeSpeech(text);
+}
+
 async function startCodexRealtimeVoice(payload, target = "control") {
   if (preferences.data.backend !== "codex") throw new Error("GPT-Live / Codex VoiceはCodex app-server接続時のみ利用できます。");
   const sdp = String(payload?.sdp || "");
   if (!sdp.startsWith("v=0") || sdp.length > 300_000) throw new Error("音声接続情報が正しくありません。");
+  const workMode = preferences.data.interactionMode === "work";
+  if (workMode && activeWorkRunId) throw new Error("実行中の作業があります。完了を待つか、中断してください。");
+  const realtimeClient = workMode ? ensureWorkClient() : codexClient;
+  const previousRealtimeClient = currentRealtimeClient();
+  if (previousRealtimeClient && previousRealtimeClient !== realtimeClient) await previousRealtimeClient.stopRealtime().catch(() => {});
+  activeRealtimeClient = realtimeClient;
   const assistantTranscript = { text: "", active: false };
+  let realtimeWorkRun = null;
   try {
-    return await codexClient.startRealtime({
+    return await realtimeClient.startRealtime({
       sdp,
       voice: characterTtsSettings().realtimeVoice,
-      prompt: `${personaInstructions()} 日本語の自然な短い音声会話として応答してください。`,
+      prompt: workMode
+        ? `${personaInstructions()} 作業モードです。ユーザーの音声指示をCodexへハンドオフし、選択済みの作業フォルダー内で実際に作業してください。進行と完了結果は日本語で簡潔に音声報告してください。`
+        : `${personaInstructions()} 日本語の自然な短い音声会話として応答してください。`,
       onEvent: (message) => {
         let forwarded = message;
         if (message?.method === "thread/realtime/error") {
@@ -2220,40 +2328,77 @@ async function startCodexRealtimeVoice(payload, target = "control") {
         if (target === "mascot" && !mascotWindow?.isDestroyed()) mascotWindow.webContents.send("mascot:realtimeEvent", forwarded);
       const method = String(message?.method || "");
       const params = message?.params || {};
+      const itemType = String(params.item?.type || "");
+      if (workMode && realtimeWorkRun) {
+        const activity = itemType === "commandExecution" ? "コマンドを実行中…"
+          : itemType === "fileChange" ? "ファイルを更新中…"
+            : itemType === "webSearch" ? "情報を確認中…" : "";
+        if (activity) updateWorkRun(realtimeWorkRun, { activity });
+      }
       if (method === "thread/realtime/transcript/delta" && params.role === "assistant") {
+        const delta = String(params.delta || "");
         if (!assistantTranscript.active) {
           assistantTranscript.active = true;
           assistantTranscript.text = "";
           mascotWindow?.webContents.send("mascot:stream", {
             phase: "start",
-            mode: "chat",
+            mode: workMode ? "work" : "chat",
             ttsEnabled: false,
             ttsProvider: characterTtsSettings().provider,
             speechLanguage: preferences.data.speechLanguage || "ja-JP",
           });
         }
-        assistantTranscript.text += String(params.delta || "");
-        mascotWindow?.webContents.send("mascot:stream", { phase: "delta", text: assistantTranscript.text });
+        assistantTranscript.text += delta;
+        mascotWindow?.webContents.send("mascot:stream", {
+          phase: "delta",
+          delta,
+          text: assistantTranscript.text,
+          displayText: workMode ? latestWorkDisplayText(assistantTranscript.text) : assistantTranscript.text,
+        });
       }
       if (method === "thread/realtime/transcript/done" && params.role === "assistant") {
         assistantTranscript.text = String(params.text || assistantTranscript.text).trim();
         if (assistantTranscript.text) {
-          mascotWindow?.webContents.send("mascot:stream", { phase: "done", text: assistantTranscript.text });
+          mascotWindow?.webContents.send("mascot:stream", {
+            phase: "done",
+            text: assistantTranscript.text,
+            displayText: workMode ? latestWorkDisplayText(assistantTranscript.text) : assistantTranscript.text,
+          });
           localServer.pushInput({ ...currentCursorInput(), ...responseExpression(assistantTranscript.text) });
+          if (workMode && realtimeWorkRun) {
+            updateWorkRun(realtimeWorkRun, { status: "completed", result: assistantTranscript.text, finished: true });
+            realtimeWorkRun = null;
+          }
         }
         assistantTranscript.active = false;
       }
       if (method === "thread/realtime/transcript/done" && params.role === "user") {
-        assistantTranscript.text = "";
+        if (!assistantTranscript.active) assistantTranscript.text = "";
         localServer.pushInput({ ...currentCursorInput(), ...messageExpression(params.text) });
+        const request = String(params.text || "").trim();
+        if (workMode && request) {
+          if (!realtimeWorkRun && !activeWorkRunId) realtimeWorkRun = beginWorkRun(request);
+          if (realtimeWorkRun) updateWorkRun(realtimeWorkRun, { activity: "Realtimeから作業を開始しました…" });
+        }
       }
       if (["thread/realtime/error", "thread/realtime/closed"].includes(method)) {
         if (assistantTranscript.active) mascotWindow?.webContents.send("mascot:stream", { phase: "done", text: assistantTranscript.text });
         assistantTranscript.active = false;
+        if (workMode && realtimeWorkRun) {
+          const failed = method === "thread/realtime/error";
+          updateWorkRun(realtimeWorkRun, {
+            status: failed ? "failed" : "interrupted",
+            result: failed ? `エラー: ${params.message || "Realtime作業を完了できませんでした。"}` : "Realtime作業を中断しました。",
+            finished: true,
+          });
+          realtimeWorkRun = null;
+        }
+        if (activeRealtimeClient === realtimeClient) activeRealtimeClient = null;
       }
       },
     });
   } catch (error) {
+    if (activeRealtimeClient === realtimeClient) activeRealtimeClient = null;
     const message = userFacingRealtimeError(error);
     if (message !== error.message) console.warn("Codex Realtime:", error.message);
     throw new Error(message);
@@ -2447,30 +2592,18 @@ function registerIpc() {
         ];
     const reaction = reactions[Math.floor(Math.random() * reactions.length)];
     localServer.pushInput({ ...currentCursorInput(), ...reaction });
+    const useRealtimeVoice = preferences.data.backend === "codex" && preferences.data.speechInputProvider === "realtime";
     const spokenText = configuredSpeechText(text);
-    const realtimeSpeechExpected = preferences.data.backend === "codex" && codexClient.hasActiveRealtime();
-    let realtimeSpeech = false;
-    let realtimeSpeechError = "";
-    if (realtimeSpeechExpected) {
-      try {
-        realtimeSpeech = await codexClient.appendRealtimeSpeech(spokenText);
-      } catch (error) {
-        realtimeSpeechError = userFacingRealtimeError(error);
-        console.warn("Codex Realtime click speech:", error.message);
-      }
-    }
     return {
       text,
       zone: headTouch ? "head" : "body",
       emotion: reaction.emotion,
       durationMs: 1500,
       persistent: true,
-      ttsEnabled: !realtimeSpeechExpected && Boolean(preferences.data.ttsEnabled),
+      ttsEnabled: !useRealtimeVoice && Boolean(preferences.data.ttsEnabled),
       ttsProvider: characterTtsSettings().provider,
       speechLanguage: preferences.data.speechLanguage || "ja-JP",
       spokenText,
-      realtimeSpeech,
-      realtimeSpeechError,
     };
   });
   ipcMain.handle("mascotInline:transcribe", async (event, payload) => {
@@ -2499,7 +2632,11 @@ function registerIpc() {
   });
   ipcMain.handle("mascotInline:realtimeStop", async (event) => {
     assertTrustedSender(event, "mascot");
-    return codexClient.stopRealtime();
+    return stopActiveRealtime();
+  });
+  ipcMain.handle("mascotInline:realtimeAppendSpeech", async (event, text) => {
+    assertTrustedSender(event, "mascot");
+    return appendActiveRealtimeSpeech(String(text || ""));
   });
   ipcMain.handle("mascotInline:synthesizeTts", (event, text) => {
     assertTrustedSender(event, "mascot");
@@ -2976,11 +3113,11 @@ function registerIpc() {
   });
   ipcMain.handle("audio:realtimeAppendSpeech", async (event, text) => {
     assertTrustedSender(event);
-    return codexClient.appendRealtimeSpeech(String(text || ""));
+    return appendActiveRealtimeSpeech(String(text || ""));
   });
   ipcMain.handle("audio:realtimeStop", async (event) => {
     assertTrustedSender(event);
-    return codexClient.stopRealtime();
+    return stopActiveRealtime();
   });
 }
 

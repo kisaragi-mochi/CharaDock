@@ -297,6 +297,28 @@ test("Codex client appends click and preview speech to the active realtime sessi
   });
 });
 
+test("Codex client forwards realtime handoff work events and tracks the active turn", () => {
+  const client = new CodexAppServerClient();
+  client.threadId = "thread-work-voice";
+  const events = [];
+  client.realtimeHandlers.set("thread-work-voice", (event) => events.push(event));
+  client.handleLine(JSON.stringify({
+    method: "turn/started",
+    params: { threadId: "thread-work-voice", turn: { id: "turn-work-voice" } },
+  }));
+  client.handleLine(JSON.stringify({
+    method: "item/started",
+    params: { threadId: "thread-work-voice", item: { type: "commandExecution" } },
+  }));
+  assert.equal(client.activeTurnId, "turn-work-voice");
+  assert.deepEqual(events.map((event) => event.method), ["turn/started", "item/started"]);
+  client.handleLine(JSON.stringify({
+    method: "turn/completed",
+    params: { threadId: "thread-work-voice", turn: { id: "turn-work-voice", status: "completed" } },
+  }));
+  assert.equal(client.activeTurnId, null);
+});
+
 test("Codex client interrupts the active work turn", async () => {
   const client = new CodexAppServerClient();
   client.threadId = "thread-work";

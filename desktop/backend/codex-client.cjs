@@ -204,6 +204,13 @@ class CodexAppServerClient {
       else pending.resolve(message.result);
       return;
     }
+    const realtimeThreadId = String(message.params?.threadId || "");
+    const realtimeHandler = this.realtimeHandlers.get(realtimeThreadId);
+    if (realtimeHandler && !String(message.method || "").startsWith("thread/realtime/")) {
+      if (message.method === "turn/started" && message.params?.turn?.id) this.activeTurnId = message.params.turn.id;
+      if (message.method === "turn/completed" && this.activeTurnId === message.params?.turn?.id) this.activeTurnId = null;
+      realtimeHandler(message);
+    }
     if (message.method === "item/agentMessage/delta") {
       const collector = this.turnCollectors.get(message.params?.turnId);
       if (collector) {

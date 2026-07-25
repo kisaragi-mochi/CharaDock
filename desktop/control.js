@@ -22,10 +22,9 @@
   let realtimeStarting = false;
   let realtimeUserTranscript = "";
   let realtimeAssistantMessage = null;
+  let realtimeAssistantText = "";
+  let realtimeAssistantActive = false;
   let realtimeUnavailable = false;
-  let realtimePreviewMode = false;
-  let realtimePreviewText = "";
-  let realtimePreviewStopTimer = 0;
   let speechPulseTimer = null;
   let speechAudio = null;
   let speechPlaybackToken = 0;
@@ -35,6 +34,17 @@
   let codexAccount = null;
   let codexModels = [];
   let realtimeVoices = { voices: [], defaultVoice: "cove", loaded: false };
+  const realtimeVoiceProfiles = Object.freeze({
+    arbor: { impression: "中性的", description: "気さくで万能" },
+    breeze: { impression: "女性寄り", description: "活発で誠実" },
+    cove: { impression: "男性寄り", description: "落ち着いて率直" },
+    ember: { impression: "男性寄り", description: "自信があり前向き" },
+    juniper: { impression: "女性寄り", description: "開放的で明るい" },
+    maple: { impression: "女性寄り", description: "陽気で率直" },
+    sol: { impression: "女性寄り", description: "聡明でリラックス" },
+    spruce: { impression: "男性寄り", description: "穏やかで肯定的" },
+    vale: { impression: "女性寄り", description: "明るく好奇心旺盛" },
+  });
   let onboardingStep = 0;
   let onboardingWasOpen = false;
   let onboardingFocusReturn = null;
@@ -167,28 +177,29 @@
 
   function syncRealtimeVoiceUi() {
     const select = $("#realtimeVoiceSelect");
-    const testButton = $("#realtimeVoiceTestButton");
     const status = $("#realtimeVoiceStatus");
-    if (!select || !testButton || !status || !state) return;
+    if (!select || !status || !state) return;
     const selected = state.realtimeVoice || state.characterTts?.realtimeVoice || realtimeVoices.defaultVoice || "cove";
     select.replaceChildren();
-    const addGroup = (label, voices) => {
+    const addGroup = (impression, voices) => {
       if (!voices.length) return;
       const group = document.createElement("optgroup");
-      group.label = label;
+      group.label = `${impression}（声の印象）`;
       for (const voice of voices) {
-        const display = `${voice.charAt(0).toUpperCase()}${voice.slice(1)}${voice === realtimeVoices.defaultVoice ? "（標準）" : ""}`;
+        const profile = realtimeVoiceProfiles[voice];
+        const display = `${voice.charAt(0).toUpperCase()}${voice.slice(1)} — ${profile?.description || "Realtime音声"}${voice === realtimeVoices.defaultVoice ? "（標準）" : ""}`;
         group.appendChild(new Option(display, voice));
       }
       select.appendChild(group);
     };
-    addGroup("Realtime V3音声", realtimeVoices.voices);
+    for (const impression of ["男性寄り", "女性寄り", "中性的"]) {
+      addGroup(impression, realtimeVoices.voices.filter((voice) => realtimeVoiceProfiles[voice]?.impression === impression));
+    }
     if (![...select.options].some((option) => option.value === selected)) {
       select.appendChild(new Option(`${selected.charAt(0).toUpperCase()}${selected.slice(1)}（保存済み）`, selected));
     }
     select.value = selected;
     select.disabled = state.backend !== "codex";
-    testButton.disabled = state.backend !== "codex" || realtimePreviewMode;
     if (state.backend !== "codex") setStatus(status, "Realtime音声はCodex app-server接続時に使用します。");
     else if (realtimeVoices.loaded) setStatus(status, `${realtimeVoices.voices.length}種類のRealtime音声を利用できます。`);
     else setStatus(status, "保存済みの声を表示しています。接続時に音声一覧を更新します。");
@@ -801,7 +812,6 @@
   }
 
   function closeRealtimeAudio() {
-    clearTimeout(realtimePreviewStopTimer);
     try { realtimeDataChannel?.close(); } catch {}
     try { realtimePeerConnection?.close(); } catch {}
     realtimeRemoteAudio?.pause();
@@ -811,12 +821,9 @@
     realtimeRemoteAudio = null;
     realtimeStarting = false;
     realtimeUserTranscript = "";
-    realtimePreviewMode = false;
-    realtimePreviewText = "";
-    realtimePreviewStopTimer = 0;
+    realtimeAssistantText = "";
+    realtimeAssistantActive = false;
     $("#speechInputButton").setAttribute("aria-pressed", "false");
-    const previewButton = $("#realtimeVoiceTestButton");
-    if (previewButton) previewButton.disabled = false;
   }
 
   async function stopCodexRealtimeVoice({ quiet = false } = {}) {
@@ -832,21 +839,17 @@
     return true;
   }
 
-  async function startCodexRealtimeVoice({ preview = false, previewText = "" } = {}) {
+  async function startCodexRealtimeVoice() {
     stopSpeechPlayback();
-    const stream = preview ? null : await ensureAudioStream();
+    const stream = await ensureAudioStream();
     const peer = new RTCPeerConnection();
     realtimePeerConnection = peer;
     realtimeStarting = true;
-    realtimePreviewMode = preview;
-    realtimePreviewText = String(previewText || "").trim();
     realtimeUserTranscript = "";
     realtimeAssistantMessage = null;
-    if (stream) {
-      for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
-    } else {
-      peer.addTransceiver("audio", { direction: "recvonly" });
-    }
+    realtimeAssistantText = "";
+    realtimeAssistantActive = false;
+    for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
     realtimeRemoteAudio = new Audio();
     realtimeRemoteAudio.autoplay = true;
     peer.addEventListener("track", (event) => {
@@ -856,7 +859,7 @@
     realtimeDataChannel = peer.createDataChannel("oai-events");
     peer.addEventListener("connectionstatechange", () => {
       if (["failed", "disconnected"].includes(peer.connectionState)) {
-        setStatus(preview ? $("#realtimeVoiceStatus") : $("#chatStatus"), "Codex Realtime音声接続が切れました。", true);
+        setStatus($("#chatStatus"), "Codex Realtime音声接続が切れました。", true);
         closeRealtimeAudio();
       }
     });
@@ -864,16 +867,6 @@
     await peer.setLocalDescription(offer);
     await api.startCodexRealtime({ sdp: peer.localDescription?.sdp || offer.sdp });
     realtimeStarting = false;
-    if (preview) {
-      if (!realtimePreviewStopTimer) {
-        realtimePreviewStopTimer = setTimeout(async () => {
-          await stopCodexRealtimeVoice({ quiet: true });
-          setStatus($("#realtimeVoiceStatus"), "音声テストを終了しました。もう一度試せます。", true);
-        }, 15_000);
-      }
-      if (realtimePreviewText) setStatus($("#realtimeVoiceStatus"), "選択したRealtime音声へ接続しています…");
-      return;
-    }
     $("#speechInputButton").setAttribute("aria-pressed", "true");
     $("#speechInputMode").textContent = "GPT-Live / Codex Voice";
     $("#speechInputMode").classList.remove("is-fallback");
@@ -890,35 +883,10 @@
       return;
     }
     if (method === "thread/realtime/started") {
-      if (realtimePreviewMode) {
-        const text = realtimePreviewText;
-        realtimePreviewText = "";
-        let appended = false;
-        try {
-          appended = await api.appendCodexRealtimeSpeech(text);
-        } catch (error) {
-          await stopCodexRealtimeVoice({ quiet: true });
-          setStatus($("#realtimeVoiceStatus"), error.message, true);
-          return;
-        }
-        if (!appended) {
-          await stopCodexRealtimeVoice({ quiet: true });
-          setStatus($("#realtimeVoiceStatus"), "Realtime音声テストを開始できませんでした。", true);
-          return;
-        }
-        clearTimeout(realtimePreviewStopTimer);
-        realtimePreviewStopTimer = setTimeout(async () => {
-          await stopCodexRealtimeVoice({ quiet: true });
-          setStatus($("#realtimeVoiceStatus"), "音声テストを再生しました。");
-        }, 10_000);
-        setStatus($("#realtimeVoiceStatus"), "選択したRealtime音声を再生しています…");
-        return;
-      }
       setStatus($("#chatStatus"), "Codex Realtime音声入力中。もう一度押すと終了します。");
       return;
     }
     if (method === "thread/realtime/transcript/delta") {
-      if (realtimePreviewMode) return;
       const delta = String(params.delta || "");
       if (params.role === "user") {
         realtimeUserTranscript += delta;
@@ -926,46 +894,44 @@
         setStatus($("#chatStatus"), "聞き取っています…");
       }
       if (params.role === "assistant") {
+        if (!realtimeAssistantActive) {
+          realtimeAssistantActive = true;
+          realtimeAssistantMessage = null;
+          realtimeAssistantText = "";
+        }
+        realtimeAssistantText += delta;
         if (!realtimeAssistantMessage) realtimeAssistantMessage = appendMessage("assistant", "");
-        realtimeAssistantMessage.querySelector("p").textContent += delta;
+        realtimeAssistantMessage.querySelector("p").textContent = realtimeAssistantText;
         $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
       }
       return;
     }
     if (method === "thread/realtime/transcript/done") {
       const text = String(params.text || "").trim();
-      if (realtimePreviewMode) {
-        if (params.role === "assistant" && text) {
-          clearTimeout(realtimePreviewStopTimer);
-          realtimePreviewStopTimer = setTimeout(async () => {
-            await stopCodexRealtimeVoice({ quiet: true });
-            setStatus($("#realtimeVoiceStatus"), "音声テストを再生しました。");
-          }, 1200);
-        }
-        return;
-      }
       if (params.role === "user" && text) {
         appendMessage("user", text);
         realtimeUserTranscript = "";
         $("#chatInput").value = "";
-        realtimeAssistantMessage = null;
+        if (!realtimeAssistantActive) {
+          realtimeAssistantMessage = null;
+          realtimeAssistantText = "";
+        }
         setStatus($("#chatStatus"), "Codexが考えています…");
       }
-      if (params.role === "assistant" && text) {
-        if (!realtimeAssistantMessage) realtimeAssistantMessage = appendMessage("assistant", text);
-        else realtimeAssistantMessage.querySelector("p").textContent = text;
-        setStatus($("#chatStatus"), "Codex Realtimeから応答しました。");
+      if (params.role === "assistant") {
+        if (text) {
+          if (!realtimeAssistantMessage) realtimeAssistantMessage = appendMessage("assistant", text);
+          else realtimeAssistantMessage.querySelector("p").textContent = text;
+          realtimeAssistantText = text;
+          setStatus($("#chatStatus"), "Codex Realtimeから応答しました。");
+        }
+        realtimeAssistantActive = false;
       }
       return;
     }
     if (method === "thread/realtime/error") {
-      const preview = realtimePreviewMode;
       realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtimeAudio();
-      if (preview) {
-        setStatus($("#realtimeVoiceStatus"), params.message || "Realtime音声テストを再生できませんでした。", true);
-        return;
-      }
       if ((state.speechInputProvider || "auto") === "realtime") {
         setStatus($("#chatStatus"), params.message || "Codex Realtime音声接続を開始できませんでした。", true);
       } else {
@@ -974,10 +940,8 @@
       return;
     }
     if (method === "thread/realtime/closed") {
-      const preview = realtimePreviewMode;
       closeRealtimeAudio();
-      if (preview) setStatus($("#realtimeVoiceStatus"), "音声テストを再生しました。");
-      else setStatus($("#chatStatus"), "Codex Realtime音声入力を終了しました。");
+      setStatus($("#chatStatus"), "Codex Realtime音声入力を終了しました。");
     }
   }
 
@@ -1383,31 +1347,15 @@
     });
     $("#realtimeVoiceSelect").addEventListener("change", async () => {
       try {
-        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        const stopped = realtimePeerConnection || realtimeStarting
+          ? await stopCodexRealtimeVoice({ quiet: true })
+          : await api.stopCodexRealtime().catch(() => false);
         await saveSettings();
-        setStatus($("#realtimeVoiceStatus"), "このキャラクターのRealtime音声を保存しました。次の接続から使用します。");
+        setStatus($("#realtimeVoiceStatus"), stopped
+          ? "接続中のRealtimeを終了し、この音声へ切り替えました。"
+          : "このキャラクターのRealtime音声を保存しました。");
       } catch (error) {
         setStatus($("#realtimeVoiceStatus"), error.message, true);
-      }
-    });
-    $("#realtimeVoiceTestButton").addEventListener("click", async () => {
-      const button = $("#realtimeVoiceTestButton");
-      button.disabled = true;
-      try {
-        if (state.backend !== "codex") throw new Error("Realtime音声テストはCodex app-server接続時に利用できます。");
-        await saveSettings();
-        const sample = "音声テストです。これからよろしくね。";
-        if (await api.appendCodexRealtimeSpeech(sample)) {
-          setStatus($("#realtimeVoiceStatus"), "接続中のRealtime音声でテストを再生しています…");
-          setTimeout(() => { button.disabled = false; }, 1800);
-          return;
-        }
-        await startCodexRealtimeVoice({ preview: true, previewText: sample });
-      } catch (error) {
-        closeRealtimeAudio();
-        setStatus($("#realtimeVoiceStatus"), error.message, true);
-      } finally {
-        if (!realtimePreviewMode) button.disabled = false;
       }
     });
     $("#piperPlusExecutableButton").addEventListener("click", async () => {
