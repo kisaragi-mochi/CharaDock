@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   downloadSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelDownload", modelId),
   removeSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelRemove", modelId),
   synthesizeTts: (text) => ipcRenderer.invoke("tts:synthesize", text),
+  nextTtsChunk: (streamId) => ipcRenderer.invoke("tts:nextChunk", streamId),
+  cancelTtsStream: (streamId) => ipcRenderer.invoke("tts:cancelStream", streamId),
   downloadTtsModel: (provider) => ipcRenderer.invoke("tts:modelDownload", provider),
   removeTtsModel: (provider) => ipcRenderer.invoke("tts:modelRemove", provider),
   choosePiperPlusExecutable: () => ipcRenderer.invoke("tts:piperChooseExecutable"),

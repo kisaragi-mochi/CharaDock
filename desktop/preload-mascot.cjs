@@ -139,6 +139,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let ttsAudioGraphConnected = false;
   let ttsEnvelope = 0;
   let ttsBusy = false;
+  const activeTtsStreamIds = new Set();
   let streamTtsQueue = [];
   let streamTtsQueueSignal = null;
   let streamTtsDraining = false;
@@ -405,6 +406,8 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const stopTtsPlayback = () => {
     ttsPlaybackToken += 1;
+    for (const streamId of activeTtsStreamIds) ipcRenderer.invoke("mascotInline:cancelTtsStream", streamId).catch(() => {});
+    activeTtsStreamIds.clear();
     thinkingFillerActive = false;
     streamTtsQueue = [];
     streamTtsQueueSignal?.();
@@ -548,13 +551,20 @@ window.addEventListener("DOMContentLoaded", () => {
     const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", spokenText);
     const sources = result?.audioDataUrls || [];
     if (!sources.length) throw new Error("音声合成から音声データが返されませんでした。");
-    return { segment, text, spokenText, sources, playbackRate: result?.playbackRate };
+    const streamId = String(result?.streamId || "");
+    if (token !== ttsPlaybackToken) {
+      if (streamId) ipcRenderer.invoke("mascotInline:cancelTtsStream", streamId).catch(() => {});
+      return null;
+    }
+    if (streamId) activeTtsStreamIds.add(streamId);
+    return { segment, text, spokenText, sources, playbackRate: result?.playbackRate, streamId };
   };
   const prepareQueuedSpeechSegment = (segment, provider, token) => prepareSpeechSegment(segment, provider, token)
     .then((prepared) => ({ prepared }), (error) => ({ error }));
   const playPreparedSpeechSegment = async (prepared, provider, language, token) => {
     if (!prepared || token !== ttsPlaybackToken) return;
     const { segment, text, spokenText, sources, playbackRate } = prepared;
+    let streamId = String(prepared.streamId || "");
     let activated = false;
     const activate = () => {
       if (activated) return;
@@ -565,9 +575,27 @@ window.addEventListener("DOMContentLoaded", () => {
       if (segment?.expression) ipcRenderer.invoke("mascotInline:expression", segment.expression).catch(() => {});
     };
     if (isGeneratedTtsProvider(provider)) {
-      for (const source of sources) {
-        if (token !== ttsPlaybackToken) return;
-        await playAudioSource(source, spokenText, token, activate, playbackRate);
+      let chunkSources = sources;
+      try {
+        while (chunkSources.length) {
+          const nextPromise = streamId ? ipcRenderer.invoke("mascotInline:nextTtsChunk", streamId) : null;
+          for (const source of chunkSources) {
+            if (token !== ttsPlaybackToken) return;
+            await playAudioSource(source, spokenText, token, activate, playbackRate);
+          }
+          if (!nextPromise || token !== ttsPlaybackToken) break;
+          const next = await nextPromise;
+          chunkSources = next?.audioDataUrl ? [next.audioDataUrl] : [];
+          if (next?.done) {
+            activeTtsStreamIds.delete(streamId);
+            streamId = "";
+          }
+        }
+      } finally {
+        if (streamId) {
+          activeTtsStreamIds.delete(streamId);
+          ipcRenderer.invoke("mascotInline:cancelTtsStream", streamId).catch(() => {});
+        }
       }
       return;
     }
@@ -615,7 +643,7 @@ window.addEventListener("DOMContentLoaded", () => {
         // Keep at most one synthesis ahead. This overlaps GPU inference with
         // playback without launching concurrent Irodori sessions or retaining
         // a long answer's worth of WAV data in memory.
-        while (token === ttsPlaybackToken && !playbackDone && !preparedPromise) {
+        while (token === ttsPlaybackToken && !playbackDone && !preparedPromise && !prepared.streamId) {
           if (streamTtsQueue.length) {
             preparedPromise = prepareQueuedSpeechSegment(streamTtsQueue.shift(), streamTtsConfig.provider, token);
             break;

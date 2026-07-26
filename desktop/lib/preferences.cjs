@@ -34,7 +34,8 @@ const DEFAULTS = Object.freeze({
   irodoriVoices: [],
   irodoriVoiceId: "",
   irodoriSpeed: 1,
-  irodoriSteps: 16,
+  irodoriSteps: 8,
+  irodoriSamplingMode: "sway",
   irodoriSeed: 0,
   kokoroModelDirectory: "",
   kokoroVoice: "jf_alpha",
@@ -117,7 +118,10 @@ class Preferences {
       });
       this.data.irodoriVoiceId = String(this.data.irodoriVoiceId || "").slice(0, 80);
       this.data.irodoriSpeed = Math.min(2, Math.max(.5, Number(this.data.irodoriSpeed) || 1));
-      this.data.irodoriSteps = Math.min(40, Math.max(4, Math.round(Number(this.data.irodoriSteps) || 16)));
+      const firstSwayMigration = !Object.prototype.hasOwnProperty.call(parsed, "irodoriSamplingMode");
+      if (!["linear", "sway"].includes(this.data.irodoriSamplingMode)) this.data.irodoriSamplingMode = "sway";
+      if (firstSwayMigration && Number(this.data.irodoriSteps) === 16) this.data.irodoriSteps = 8;
+      this.data.irodoriSteps = Math.min(40, Math.max(4, Math.round(Number(this.data.irodoriSteps) || 8)));
       this.data.irodoriSeed = Math.min(2147483647, Math.max(0, Math.round(Number(this.data.irodoriSeed) || 0)));
       if (typeof this.data.kokoroModelDirectory !== "string") this.data.kokoroModelDirectory = "";
       this.data.kokoroModelDirectory = this.data.kokoroModelDirectory.slice(0, 1000);

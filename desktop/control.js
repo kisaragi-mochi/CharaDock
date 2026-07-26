@@ -27,6 +27,7 @@
   let realtimeUnavailable = false;
   let speechPulseTimer = null;
   let speechAudio = null;
+  let speechTtsStreamId = "";
   let speechPlaybackToken = 0;
   let streamingMessage = null;
   let generatorFile = null;
@@ -535,7 +536,8 @@
     $("#kokoroSettings").hidden = $("#ttsProviderSelect").value !== "kokoro";
     syncKokoroUi();
     $("#irodoriSpeedInput").value = Number(state.irodoriSpeed) || 1;
-    $("#irodoriStepsInput").value = Number(state.irodoriSteps) || 16;
+    $("#irodoriSamplingModeSelect").value = state.irodoriSamplingMode || "sway";
+    $("#irodoriStepsInput").value = Number(state.irodoriSteps) || 8;
     $("#irodoriSeedInput").value = Number(state.irodoriSeed) || 0;
     $("#irodoriSettings").hidden = $("#ttsProviderSelect").value !== "irodori-webgpu";
     syncIrodoriUi();
@@ -673,6 +675,7 @@
       kokoroDevice: $("#kokoroDeviceSelect").value,
       irodoriVoiceId: $("#irodoriVoiceSelect").value,
       irodoriSpeed: Number($("#irodoriSpeedInput").value),
+      irodoriSamplingMode: $("#irodoriSamplingModeSelect").value,
       irodoriSteps: Number($("#irodoriStepsInput").value),
       irodoriSeed: Number($("#irodoriSeedInput").value),
       englishPronunciationEnabled: $("#englishPronunciationToggle").checked,
@@ -1059,6 +1062,8 @@
 
   function stopSpeechPlayback() {
     speechPlaybackToken += 1;
+    if (speechTtsStreamId) api.cancelTtsStream(speechTtsStreamId).catch(() => {});
+    speechTtsStreamId = "";
     window.speechSynthesis?.cancel();
     if (speechAudio) {
       speechAudio.pause();
@@ -1094,6 +1099,29 @@
     });
   }
 
+  async function playGeneratedResult(result, token) {
+    let sources = Array.isArray(result?.audioDataUrls) ? result.audioDataUrls : [];
+    let streamId = String(result?.streamId || "");
+    speechTtsStreamId = streamId;
+    try {
+      while (sources.length) {
+        const nextPromise = streamId ? api.nextTtsChunk(streamId) : null;
+        for (const source of sources) {
+          if (token !== speechPlaybackToken) return;
+          await playGeneratedAudio(source, token, result?.playbackRate);
+        }
+        if (!nextPromise || token !== speechPlaybackToken) break;
+        const next = await nextPromise;
+        sources = next?.audioDataUrl ? [next.audioDataUrl] : [];
+        if (next?.done) streamId = "";
+        speechTtsStreamId = streamId;
+      }
+    } finally {
+      if (streamId) api.cancelTtsStream(streamId).catch(() => {});
+      speechTtsStreamId = "";
+    }
+  }
+
   async function speakResponse(text) {
     if (!state.ttsEnabled) return;
     stopSpeechPlayback();
@@ -1105,7 +1133,7 @@
         const result = await api.synthesizeTts(text);
         const sources = result?.audioDataUrls || [];
         if (!sources.length) throw new Error(`${providerName}から音声データが返されませんでした。音声出力がONか確認してください。`);
-        for (const source of sources) await playGeneratedAudio(source, token, result?.playbackRate);
+        await playGeneratedResult(result, token);
         if (token === speechPlaybackToken) setStatus($("#ttsStatus"), "接続と再生を確認しました。");
       } catch (error) {
         if (token === speechPlaybackToken) setStatus($("#ttsStatus"), error.message, true);
@@ -1488,7 +1516,7 @@
       state.sherpaModel = await api.removeSherpaModel($("#sherpaModelSelect").value);
       syncSherpaModelUi(state.sherpaModel);
     });
-    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#piperPlusSpeedInput", "#supertonicVoiceSelect", "#supertonicSpeedInput", "#supertonicStepsInput", "#kokoroVoiceSelect", "#kokoroSpeedInput", "#kokoroDeviceSelect", "#irodoriSpeedInput", "#irodoriStepsInput", "#irodoriSeedInput", "#englishPronunciationDictionaryInput"]
+    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#piperPlusSpeedInput", "#supertonicVoiceSelect", "#supertonicSpeedInput", "#supertonicStepsInput", "#kokoroVoiceSelect", "#kokoroSpeedInput", "#kokoroDeviceSelect", "#irodoriSpeedInput", "#irodoriSamplingModeSelect", "#irodoriStepsInput", "#irodoriSeedInput", "#englishPronunciationDictionaryInput"]
       .forEach((selector) => $(selector).addEventListener("change", () => {
         saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
       }));

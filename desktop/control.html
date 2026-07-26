@@ -350,8 +350,10 @@
                 <p class="hint">WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。</p>
                 <div class="size-actions">
                   <label>再生速度（0.5–2.0×）<input id="irodoriSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                  <label>生成方式<select id="irodoriSamplingModeSelect"><option value="sway">高速（Sway）</option><option value="linear">互換（Linear）</option></select></label>
                   <label>生成ステップ（4–40）<input id="irodoriStepsInput" type="number" min="4" max="40" step="1" /></label>
                 </div>
+                <p class="hint">高速設定はSway 8ステップです。音質が合わない場合は10～12ステップ、またはLinearへ戻せます。</p>
                 <label>シード<input id="irodoriSeedInput" type="number" min="0" max="2147483647" step="1" /></label>
                 <p id="irodoriStatus" class="hint">Irodori TTSの準備状況を確認しています…</p>
                 <p class="hint">テキストと参照音声は端末内で処理されます。本人の許可がある声、または利用権を持つ音声だけを使用してください。</p>

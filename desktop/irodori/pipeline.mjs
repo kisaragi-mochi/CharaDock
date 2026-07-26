@@ -101,7 +101,12 @@ function normalizeReference(wav, rate, target = -16) {
 }
 
 export class IrodoriTTS {
-  constructor({ ort, sessions, tokenizer }) { this.ort = ort; this.s = sessions; this.tok = tokenizer; }
+  constructor({ ort, sessions, tokenizer }) {
+    this.ort = ort;
+    this.s = sessions;
+    this.tok = tokenizer;
+    this.speakerCache = new Map();
+  }
   tensor(data, shape, type = "float32") { return new this.ort.Tensor(type, data, shape); }
   tokenize(text) {
     const ids = this.tok.encode(normalizeText(text), { add_special_tokens: false });
@@ -115,8 +120,14 @@ export class IrodoriTTS {
     });
     return { state: output.text_state.data, length, dim: output.text_state.dims[2], mask: new Uint8Array(length).fill(1) };
   }
-  async referenceLatent(wav, sampleRate) {
+  async referenceLatent(wav, sampleRate, cacheKey = "") {
     if (sampleRate !== SR) throw new Error(`参照音声は${SR}Hzへ変換する必要があります。`);
+    if (cacheKey && this.speakerCache.has(cacheKey)) {
+      const cached = this.speakerCache.get(cacheKey);
+      this.speakerCache.delete(cacheKey);
+      this.speakerCache.set(cacheKey, cached);
+      return cached;
+    }
     const normalized = normalizeReference(wav, sampleRate);
     const paddedLength = Math.ceil(normalized.length / HOP) * HOP;
     const padded = new Float32Array(paddedLength); padded.set(normalized);
@@ -126,7 +137,12 @@ export class IrodoriTTS {
       ref_latent: this.tensor(latent, [1, length, LATENT_DIM]),
       ref_mask: this.tensor(mask, [1, length], "bool"),
     });
-    return { state: speaker.speaker_state.data, length: speaker.speaker_state.dims[1], dim: speaker.speaker_state.dims[2], mask: speaker.speaker_mask.data };
+    const result = { state: speaker.speaker_state.data, length: speaker.speaker_state.dims[1], dim: speaker.speaker_state.dims[2], mask: speaker.speaker_mask.data };
+    if (cacheKey) {
+      this.speakerCache.set(cacheKey, result);
+      while (this.speakerCache.size > 8) this.speakerCache.delete(this.speakerCache.keys().next().value);
+    }
+    return result;
   }
   async duration(text, speaker, { durationScale = 1, minSeconds = .5, maxSeconds = 30 } = {}) {
     const output = await this.s.duration.run({
@@ -140,7 +156,7 @@ export class IrodoriTTS {
     const predicted = Math.expm1(output.log_frames.data[0]) * durationScale;
     return Math.max(Math.ceil(minSeconds * SR / HOP), Math.min(Math.floor(maxSeconds * SR / HOP), Math.round(predicted)));
   }
-  async flow(text, speaker, length, { numSteps = 16, cfgText = 3, cfgSpk = 5, cfgMinT = .5, cfgMaxT = 1, initScale = .999, seed = 0 } = {}) {
+  async flow(text, speaker, length, { numSteps = 8, tScheduleMode = "sway", swayCoeff = -1, cfgText = 3, cfgSpk = 5, cfgMinT = .5, cfgMaxT = 1, initScale = .999, seed = 0 } = {}) {
     const size = length * LATENT_DIM;
     let current = gaussianNoise(size, seed);
     const zerosText = new Float32Array(text.length * text.dim), zerosTextMask = new Uint8Array(text.length);
@@ -152,14 +168,23 @@ export class IrodoriTTS {
     const speakerMask3 = this.tensor(cat3(speaker.mask, speaker.mask, zerosSpeakerMask, speaker.length, Uint8Array), [3, speaker.length], "bool");
     const text1 = this.tensor(text.state, [1, text.length, text.dim]), textMask1 = this.tensor(text.mask, [1, text.length], "bool");
     const speaker1 = this.tensor(speaker.state, [1, speaker.length, speaker.dim]), speakerMask1 = this.tensor(speaker.mask, [1, speaker.length], "bool");
+    const schedule = new Float32Array(numSteps + 1);
+    for (let step = 0; step <= numSteps; step++) {
+      let u = step / numSteps;
+      if (tScheduleMode === "sway") u += swayCoeff * (Math.cos(.5 * Math.PI * u) + u - 1);
+      schedule[step] = (1 - Math.max(0, Math.min(1, u))) * initScale;
+    }
+    const x3 = new Float32Array(3 * size);
+    const t3 = new Float32Array(3);
     for (let step = 0; step < numSteps; step++) {
-      const time = (1 - step / numSteps) * initScale;
-      const delta = (1 - (step + 1) / numSteps) * initScale - time;
+      const time = schedule[step];
+      const delta = schedule[step + 1] - time;
       let velocity;
       if (time >= cfgMinT && time <= cfgMaxT) {
-        const x = new Float32Array(3 * size); x.set(current); x.set(current, size); x.set(current, 2 * size);
+        x3.set(current); x3.set(current, size); x3.set(current, 2 * size);
+        t3.fill(time);
         const output = await this.s.dit.run({
-          x_t: this.tensor(x, [3, length, LATENT_DIM]), t: this.tensor(new Float32Array([time, time, time]), [3]),
+          x_t: this.tensor(x3, [3, length, LATENT_DIM]), t: this.tensor(t3, [3]),
           text_state: text3, text_mask: textMask3, speaker_state: speaker3, speaker_mask: speakerMask3,
         });
         velocity = new Float32Array(size);
@@ -174,9 +199,7 @@ export class IrodoriTTS {
         });
         velocity = output.v.data;
       }
-      const next = new Float32Array(size);
-      for (let i = 0; i < size; i++) next[i] = current[i] + velocity[i] * delta;
-      current = next;
+      for (let i = 0; i < size; i++) current[i] += velocity[i] * delta;
     }
     return current;
   }
@@ -186,10 +209,31 @@ export class IrodoriTTS {
     return (await this.s.dac.run({ z: this.tensor(transposed, [1, LATENT_DIM, length]) })).audio.data;
   }
   async synthesize(textValue, referenceWav, sampleRate, options = {}) {
+    const startedAt = performance.now();
     const text = await this.encodeText(textValue);
-    const speaker = await this.referenceLatent(referenceWav, sampleRate);
+    const textEncodedAt = performance.now();
+    const speakerCacheHit = Boolean(options.speakerCacheKey && this.speakerCache.has(options.speakerCacheKey));
+    const speaker = await this.referenceLatent(referenceWav, sampleRate, options.speakerCacheKey);
+    const speakerEncodedAt = performance.now();
     const length = await this.duration(text, speaker, options);
+    const durationPredictedAt = performance.now();
     const latent = await this.flow(text, speaker, length, options);
-    return { audio: await this.decode(latent, length), sampleRate: SR, seqLen: length };
+    const flowedAt = performance.now();
+    const audio = await this.decode(latent, length);
+    const finishedAt = performance.now();
+    return {
+      audio,
+      sampleRate: SR,
+      seqLen: length,
+      speakerCacheHit,
+      timings: {
+        textMs: textEncodedAt - startedAt,
+        speakerMs: speakerEncodedAt - textEncodedAt,
+        durationMs: durationPredictedAt - speakerEncodedAt,
+        flowMs: flowedAt - durationPredictedAt,
+        decodeMs: finishedAt - flowedAt,
+        totalMs: finishedAt - startedAt,
+      },
+    };
   }
 }

@@ -119,6 +119,9 @@ let irodoriWebGpuAvailable = null;
 let nextIrodoriRequestId = 1;
 const pendingIrodoriRequests = new Map();
 const pendingIrodoriConversions = new Map();
+let nextIrodoriStreamId = 1;
+const irodoriTtsStreams = new Map();
+let irodoriPrewarmTimer;
 let kokoroWindow;
 let kokoroReadyPromise;
 let resolveKokoroReady;
@@ -2070,6 +2073,8 @@ function destroyIrodoriWindow(error = new Error("Irodori TTS WebGPUを終了し�
     pending.reject(error);
   }
   pendingIrodoriConversions.clear();
+  for (const stream of irodoriTtsStreams.values()) clearTimeout(stream.timer);
+  irodoriTtsStreams.clear();
   if (window && !window.isDestroyed()) window.destroy();
 }
 
@@ -2123,18 +2128,91 @@ async function synthesizeIrodoriSegment(text) {
     modelDirectory: preferences.data.irodoriModelDirectory,
     referenceAudioPath: activeIrodoriVoicePath(),
     numSteps: preferences.data.irodoriSteps,
+    tScheduleMode: preferences.data.irodoriSamplingMode,
     seed: preferences.data.irodoriSeed,
   });
   return result;
 }
 
-async function synthesizeIrodoriTts(text) {
+function scheduleIrodoriStreamExpiry(streamId, stream) {
+  clearTimeout(stream.timer);
+  stream.timer = setTimeout(() => irodoriTtsStreams.delete(streamId), 10 * 60_000);
+}
+
+function beginIrodoriStreamChunk(streamId, stream) {
+  if (stream.nextIndex >= stream.chunks.length) return false;
+  const chunk = stream.chunks[stream.nextIndex++];
+  stream.pending = synthesizeIrodoriSegment(chunk).then(
+    (audioDataUrl) => ({ audioDataUrl }),
+    (error) => ({ error }),
+  );
+  scheduleIrodoriStreamExpiry(streamId, stream);
+  return true;
+}
+
+async function nextIrodoriTtsChunk(streamId, ownerId) {
+  const id = String(streamId || "");
+  const stream = irodoriTtsStreams.get(id);
+  if (!stream || stream.ownerId !== ownerId) return { done: true };
+  const result = await stream.pending;
+  if (!irodoriTtsStreams.has(id)) return { done: true };
+  stream.pending = null;
+  if (result.error) {
+    clearTimeout(stream.timer);
+    irodoriTtsStreams.delete(id);
+    throw result.error;
+  }
+  const hasMore = beginIrodoriStreamChunk(id, stream);
+  if (!hasMore) {
+    clearTimeout(stream.timer);
+    irodoriTtsStreams.delete(id);
+  }
+  return { audioDataUrl: result.audioDataUrl, done: !hasMore, playbackRate: preferences.data.irodoriSpeed };
+}
+
+function cancelIrodoriTtsStream(streamId, ownerId) {
+  const id = String(streamId || "");
+  const stream = irodoriTtsStreams.get(id);
+  if (!stream || stream.ownerId !== ownerId) return false;
+  clearTimeout(stream.timer);
+  irodoriTtsStreams.delete(id);
+  return true;
+}
+
+async function synthesizeIrodoriTts(text, ownerId = 0) {
   const status = irodoriModelStatus(preferences.data.irodoriModelDirectory, activeIrodoriVoicePath(), irodoriWebGpuAvailable);
   if (!status.modelReady) throw new Error("Irodori TTSのFP16モデルフォルダーを選択してください。");
   if (!status.referenceReady) throw new Error("Irodori TTSの参照音声を追加してください。");
-  const audioDataUrls = [];
-  for (const sentence of splitIrodoriText(text)) audioDataUrls.push(await synthesizeIrodoriSegment(sentence));
-  return { audioDataUrls, playbackRate: preferences.data.irodoriSpeed };
+  const chunks = splitIrodoriText(text);
+  if (!chunks.length) return { audioDataUrls: [], playbackRate: preferences.data.irodoriSpeed };
+  const firstAudio = await synthesizeIrodoriSegment(chunks[0]);
+  if (chunks.length === 1) return { audioDataUrls: [firstAudio], playbackRate: preferences.data.irodoriSpeed };
+  const streamId = `irodori-stream-${Date.now()}-${nextIrodoriStreamId++}`;
+  const stream = { ownerId, chunks, nextIndex: 1, pending: null, timer: null };
+  irodoriTtsStreams.set(streamId, stream);
+  beginIrodoriStreamChunk(streamId, stream);
+  return { audioDataUrls: [firstAudio], playbackRate: preferences.data.irodoriSpeed, streamId };
+}
+
+function scheduleIrodoriPrewarm(delayMs = 3000) {
+  clearTimeout(irodoriPrewarmTimer);
+  if (!preferences?.data.ttsEnabled || characterTtsSettings().provider !== "irodori-webgpu") return;
+  const referenceAudioPath = activeIrodoriVoicePath();
+  if (!irodoriModelStatus(preferences.data.irodoriModelDirectory, referenceAudioPath).ready) return;
+  irodoriPrewarmTimer = setTimeout(async () => {
+    try {
+      const window = await ensureIrodoriWindow();
+      window.webContents.send("irodori:prewarm", {
+        modelDirectory: preferences.data.irodoriModelDirectory,
+        referenceAudioPath,
+        numSteps: preferences.data.irodoriSteps,
+        tScheduleMode: preferences.data.irodoriSamplingMode,
+        seed: preferences.data.irodoriSeed,
+      });
+    } catch (error) {
+      console.warn("Irodori WebGPU prewarm failed:", error.message);
+    }
+  }, delayMs);
 }
 
 async function convertIrodoriReference(sourcePath) {
@@ -2226,7 +2304,7 @@ async function synthesizeKokoroTts(text) {
   return { audioDataUrls };
 }
 
-function synthesizeConfiguredTts(text) {
+function synthesizeConfiguredTts(text, ownerId = 0) {
   const characterTts = characterTtsSettings();
   if (!preferences.data.ttsEnabled || !["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(characterTts.provider)) {
     return Promise.resolve({ audioDataUrls: [] });
@@ -2248,7 +2326,7 @@ function synthesizeConfiguredTts(text) {
       numSteps: preferences.data.supertonicSteps,
     });
   }
-  if (characterTts.provider === "irodori-webgpu") return synthesizeIrodoriTts(configuredSpeechText(text));
+  if (characterTts.provider === "irodori-webgpu") return synthesizeIrodoriTts(configuredSpeechText(text), ownerId);
   if (characterTts.provider === "kokoro") return synthesizeKokoroTts(configuredSpeechText(text));
   return synthesizeStyleBertVits2({
     text: configuredSpeechText(text),
@@ -2420,6 +2498,7 @@ async function setCharacter(characterId) {
     provider: characterTtsSettings(character.id).provider,
   });
   mascotWindow?.showInactive();
+  scheduleIrodoriPrewarm();
   return publicAppState();
 }
 
@@ -2467,8 +2546,24 @@ function registerIpc() {
     pendingIrodoriRequests.delete(String(payload.requestId));
     clearTimeout(pending.timer);
     if (payload.error) pending.reject(new Error(String(payload.error)));
-    else if (typeof payload.audioDataUrl === "string" && payload.audioDataUrl.startsWith("data:audio/wav;base64,")) pending.resolve(payload.audioDataUrl);
+    else if (typeof payload.audioDataUrl === "string" && payload.audioDataUrl.startsWith("data:audio/wav;base64,")) {
+      const metrics = payload.metrics || {};
+      console.info("Irodori WebGPU:", {
+        elapsedMs: Math.round(Number(metrics.elapsedMs) || 0),
+        audioSeconds: Number(Number(metrics.audioSeconds || 0).toFixed(2)),
+        flowMs: Math.round(Number(metrics.flowMs) || 0),
+        decodeMs: Math.round(Number(metrics.decodeMs) || 0),
+        referenceCacheHit: Boolean(metrics.referenceCacheHit),
+        speakerCacheHit: Boolean(metrics.speakerCacheHit),
+      });
+      pending.resolve(payload.audioDataUrl);
+    }
     else pending.reject(new Error("Irodori TTSから正しいWAV音声を受け取れませんでした。"));
+  });
+  ipcMain.on("irodori:prewarmed", (event, payload = {}) => {
+    if (event.sender !== irodoriWindow?.webContents) return;
+    if (payload.error) console.warn("Irodori WebGPU prewarm failed:", payload.error);
+    else console.info("Irodori WebGPU prewarmed:", `${Math.round(Number(payload.metrics?.elapsedMs) || 0)}ms`);
   });
   ipcMain.on("irodori:referenceConverted", (event, payload = {}) => {
     if (event.sender !== irodoriWindow?.webContents) return;
@@ -2640,7 +2735,15 @@ function registerIpc() {
   });
   ipcMain.handle("mascotInline:synthesizeTts", (event, text) => {
     assertTrustedSender(event, "mascot");
-    return synthesizeConfiguredTts(String(text || "").slice(0, 1000));
+    return synthesizeConfiguredTts(String(text || "").slice(0, 1000), event.sender.id);
+  });
+  ipcMain.handle("mascotInline:nextTtsChunk", (event, streamId) => {
+    assertTrustedSender(event, "mascot");
+    return nextIrodoriTtsChunk(streamId, event.sender.id);
+  });
+  ipcMain.handle("mascotInline:cancelTtsStream", (event, streamId) => {
+    assertTrustedSender(event, "mascot");
+    return cancelIrodoriTtsStream(streamId, event.sender.id);
   });
   ipcMain.handle("tts:normalizeText", (event, text) => {
     assertTrustedSender(event);
@@ -2719,7 +2822,8 @@ function registerIpc() {
       supertonicSteps: Math.min(20, Math.max(2, Math.round(Number(patch?.supertonicSteps) || 8))),
       irodoriVoiceId,
       irodoriSpeed: Math.min(2, Math.max(.5, Number(patch?.irodoriSpeed) || 1)),
-      irodoriSteps: Math.min(40, Math.max(4, Math.round(Number(patch?.irodoriSteps) || 16))),
+      irodoriSteps: Math.min(40, Math.max(4, Math.round(Number(patch?.irodoriSteps) || 8))),
+      irodoriSamplingMode: ["linear", "sway"].includes(patch?.irodoriSamplingMode) ? patch.irodoriSamplingMode : "sway",
       irodoriSeed: Math.min(2147483647, Math.max(0, Math.round(Number(patch?.irodoriSeed) || 0))),
       kokoroVoice,
       kokoroSpeed: Math.min(2, Math.max(.5, Number(patch?.kokoroSpeed) || 1)),
@@ -2737,6 +2841,7 @@ function registerIpc() {
       preferredDisplayId: displayId,
     };
     preferences.patch(allowed);
+    scheduleIrodoriPrewarm();
     embeddedSherpaOnnx.selectModel(allowed.sherpaModelId);
     if (allowed.backend !== "codex" && preferences.data.interactionMode === "work") {
       preferences.patch({ interactionMode: "chat" });
@@ -2781,7 +2886,15 @@ function registerIpc() {
   });
   ipcMain.handle("tts:synthesize", (event, text) => {
     assertTrustedSender(event);
-    return synthesizeConfiguredTts(String(text || "").slice(0, 1000));
+    return synthesizeConfiguredTts(String(text || "").slice(0, 1000), event.sender.id);
+  });
+  ipcMain.handle("tts:nextChunk", (event, streamId) => {
+    assertTrustedSender(event);
+    return nextIrodoriTtsChunk(streamId, event.sender.id);
+  });
+  ipcMain.handle("tts:cancelStream", (event, streamId) => {
+    assertTrustedSender(event);
+    return cancelIrodoriTtsStream(streamId, event.sender.id);
   });
   ipcMain.handle("tts:modelDownload", async (event, provider) => {
     assertTrustedSender(event);
@@ -2800,6 +2913,7 @@ function registerIpc() {
     } else if (normalizedProvider === "irodori-webgpu") {
       preferences.patch({ irodoriModelDirectory: status.modelDirectory });
       destroyIrodoriWindow();
+      scheduleIrodoriPrewarm();
     } else if (normalizedProvider === "kokoro") {
       preferences.patch({ kokoroModelDirectory: status.modelDirectory });
       destroyKokoroWindow();
@@ -2882,6 +2996,7 @@ function registerIpc() {
     const modelDirectory = validateIrodoriModelDirectory(result.filePaths[0]);
     preferences.patch({ irodoriModelDirectory: modelDirectory });
     destroyIrodoriWindow();
+    scheduleIrodoriPrewarm();
     return publicAppState();
   });
   ipcMain.handle("tts:irodoriChooseReference", async (event) => {
@@ -2908,6 +3023,7 @@ function registerIpc() {
       characterTtsProfiles: updatedCharacterTtsProfiles(preferences.data.characterId, { irodoriVoiceId: imported.record.id }),
     });
     broadcastAppState();
+    scheduleIrodoriPrewarm();
     return publicAppState();
   });
   ipcMain.handle("tts:irodoriSelectVoice", (event, voiceId) => {
@@ -2921,6 +3037,7 @@ function registerIpc() {
       characterTtsProfiles: updatedCharacterTtsProfiles(preferences.data.characterId, { irodoriVoiceId: id }),
     });
     broadcastAppState();
+    scheduleIrodoriPrewarm();
     return publicAppState();
   });
   ipcMain.handle("tts:irodoriRenameVoice", (event, payload = {}) => {
@@ -4289,6 +4406,7 @@ async function boot() {
   createTray();
   registerShortcuts();
   startCursorLoop();
+  scheduleIrodoriPrewarm();
   const syncDisplays = () => {
     if (!controlWindow || controlWindow.isDestroyed()) return;
     controlWindow.webContents.send("app:stateChanged", publicAppState());

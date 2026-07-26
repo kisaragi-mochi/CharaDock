@@ -4,6 +4,7 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
+- Accelerate Irodori WebGPU with selectable Sway sampling, an 8-step default, cached reference/speaker encodings, idle prewarming, a short first chunk, and chunk-by-chunk playback/prefetch with per-stage timing logs.
 - Route Realtime through the workspace-write Codex worker while Work mode is selected, retain work history/progress/interruption, isolate Chat mode as read-only, and buffer assistant transcript deltas so the first displayed character is not lost.
 - Start Realtime sessions only from the record button, group voices by approximate masculine/feminine/neutral impression with descriptive labels, and keep character clicks visual-only during Realtime, preventing preview or click speech from overlapping a live conversation.
 - List GPT-Live voices from Codex app-server, save a separate Realtime voice per character, pass it to Realtime V3, suppress normal TTS during Live sessions, and stream delayed assistant transcripts into the persistent speech bubble.

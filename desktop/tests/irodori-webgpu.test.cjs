@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { IRODORI_CHUNK_LENGTH, MODEL_NAMES, irodoriModelStatus, resolveIrodoriModelDirectory, splitIrodoriText, validateIrodoriModelDirectory } = require("../lib/irodori-webgpu.cjs");
+const { IRODORI_CHUNK_LENGTH, IRODORI_FIRST_CHUNK_LENGTH, MODEL_NAMES, irodoriModelStatus, resolveIrodoriModelDirectory, splitIrodoriText, validateIrodoriModelDirectory } = require("../lib/irodori-webgpu.cjs");
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-irodori-"));
@@ -55,4 +55,11 @@ test("Irodori keeps short sentences in separate inference chunks", () => {
     "明日は雨です！",
     "でも出かけます？",
   ]);
+});
+
+test("Irodori emits a short first chunk for low time-to-first-audio", () => {
+  const chunks = splitIrodoriText("これは最初の音声を早く再生するために、意図的に少し長くしている文章です。続きもあります。");
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks[0].length <= IRODORI_FIRST_CHUNK_LENGTH);
+  assert.equal(chunks.join(""), "これは最初の音声を早く再生するために、意図的に少し長くしている文章です。続きもあります。");
 });

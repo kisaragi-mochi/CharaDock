@@ -16,6 +16,15 @@ const MODEL_NAMES = Object.freeze({
   enc: "dacvae_encoder",
 });
 let cached = null;
+const referenceCache = new Map();
+let synthesisQueue = Promise.resolve();
+let prewarmKey = "";
+
+function enqueueSynthesis(task) {
+  const run = synthesisQueue.then(task, task);
+  synthesisQueue = run.catch(() => {});
+  return run;
+}
 
 function decodeWav(bytes) {
   const buffer = Buffer.from(bytes);
@@ -112,22 +121,71 @@ async function loadEngine(modelDirectory) {
   return engine;
 }
 
+async function loadReference(referenceAudioPath) {
+  const resolvedPath = path.resolve(String(referenceAudioPath || ""));
+  const stat = await fs.stat(resolvedPath);
+  const key = `${resolvedPath}:${stat.size}:${Math.round(stat.mtimeMs)}`;
+  if (referenceCache.has(key)) {
+    const cachedReference = referenceCache.get(key);
+    referenceCache.delete(key);
+    referenceCache.set(key, cachedReference);
+    return { ...cachedReference, cacheHit: true };
+  }
+  const decoded = decodeWav(await fs.readFile(resolvedPath));
+  const value = { key, samples: resample48k(decoded.samples, decoded.sampleRate) };
+  referenceCache.set(key, value);
+  while (referenceCache.size > 8) referenceCache.delete(referenceCache.keys().next().value);
+  return { ...value, cacheHit: false };
+}
+
+async function synthesizeRequest(request) {
+  const startedAt = performance.now();
+  const [engine, reference] = await Promise.all([
+    loadEngine(request.modelDirectory),
+    loadReference(request.referenceAudioPath),
+  ]);
+  const preparedAt = performance.now();
+  const result = await engine.synthesize(String(request.text || ""), reference.samples, 48000, {
+    numSteps: Math.min(40, Math.max(4, Math.round(Number(request.numSteps) || 8))),
+    tScheduleMode: request.tScheduleMode === "linear" ? "linear" : "sway",
+    swayCoeff: -1,
+    seed: Math.max(0, Math.round(Number(request.seed) || 0)),
+    speakerCacheKey: reference.key,
+  });
+  return {
+    result,
+    metrics: {
+      ...result.timings,
+      prepareMs: preparedAt - startedAt,
+      elapsedMs: performance.now() - startedAt,
+      audioSeconds: result.audio.length / result.sampleRate,
+      referenceCacheHit: reference.cacheHit,
+      speakerCacheHit: result.speakerCacheHit,
+    },
+  };
+}
+
 ipcRenderer.on("irodori:synthesize", async (_event, request = {}) => {
   const requestId = String(request.requestId || "");
   try {
-    const [engine, referenceBytes] = await Promise.all([
-      loadEngine(request.modelDirectory),
-      fs.readFile(request.referenceAudioPath),
-    ]);
-    const decoded = decodeWav(referenceBytes);
-    const reference = resample48k(decoded.samples, decoded.sampleRate);
-    const result = await engine.synthesize(String(request.text || ""), reference, 48000, {
-      numSteps: Math.min(40, Math.max(4, Math.round(Number(request.numSteps) || 16))),
-      seed: Math.max(0, Math.round(Number(request.seed) || 0)),
-    });
-    ipcRenderer.send("irodori:result", { requestId, audioDataUrl: wavDataUrl(result.audio, result.sampleRate) });
+    const { result, metrics } = await enqueueSynthesis(() => synthesizeRequest(request));
+    ipcRenderer.send("irodori:result", { requestId, audioDataUrl: wavDataUrl(result.audio, result.sampleRate), metrics });
   } catch (error) {
     ipcRenderer.send("irodori:result", { requestId, error: String(error?.message || error) });
+  }
+});
+
+ipcRenderer.on("irodori:prewarm", async (_event, request = {}) => {
+  try {
+    const resolved = resolveIrodoriModelDirectory(request.modelDirectory);
+    const reference = await loadReference(request.referenceAudioPath);
+    const key = `${resolved.root}:${reference.key}:${request.tScheduleMode}:${request.numSteps}`;
+    if (prewarmKey === key) return;
+    const { metrics } = await enqueueSynthesis(() => synthesizeRequest({ ...request, text: "準備中です。" }));
+    prewarmKey = key;
+    ipcRenderer.send("irodori:prewarmed", { metrics });
+  } catch (error) {
+    ipcRenderer.send("irodori:prewarmed", { error: String(error?.message || error) });
   }
 });
 

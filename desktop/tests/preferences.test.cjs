@@ -61,7 +61,8 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.supertonicSpeed, 1);
   assert.equal(state.supertonicSteps, 8);
   assert.equal(state.supertonicModelDirectory, undefined);
-  assert.equal(state.irodoriSteps, 16);
+  assert.equal(state.irodoriSteps, 8);
+  assert.equal(state.irodoriSamplingMode, "sway");
   assert.equal(state.irodoriSpeed, 1);
   assert.equal(state.irodoriVoiceId, "");
   assert.equal(state.irodoriSeed, 0);
@@ -129,6 +130,17 @@ test("preferences migrate removed wake-word activation to VAD", () => {
   assert.equal(state.voiceActivationMode, "vad");
   assert.equal(state.vadSensitivity, "normal");
   assert.equal(Object.prototype.hasOwnProperty.call(state, "voiceWakeWord"), false);
+});
+
+test("preferences migrate the former Irodori default to Sway 8", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-preferences-"));
+  const file = path.join(root, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({ irodoriSteps: 16 }));
+  const preferences = new Preferences(file);
+  const state = preferences.publicState();
+  assert.equal(state.irodoriSamplingMode, "sway");
+  assert.equal(state.irodoriSteps, 8);
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test("preferences expose only the work folder name to renderer windows", () => {

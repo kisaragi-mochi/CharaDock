@@ -4,6 +4,7 @@ const path = require("node:path");
 const { splitTtsText } = require("./style-bert-vits2.cjs");
 
 const IRODORI_CHUNK_LENGTH = 48;
+const IRODORI_FIRST_CHUNK_LENGTH = 24;
 const IRODORI_MAX_CHUNKS = 24;
 
 const MODEL_NAMES = Object.freeze([
@@ -93,13 +94,21 @@ function splitIrodoriText(value) {
   const chunks = [];
   for (const sentence of sentences) {
     if (chunks.length >= IRODORI_MAX_CHUNKS) break;
-    chunks.push(...splitTtsText(sentence, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length));
+    if (!chunks.length && sentence.length > IRODORI_FIRST_CHUNK_LENGTH) {
+      const first = splitTtsText(sentence, IRODORI_FIRST_CHUNK_LENGTH, IRODORI_MAX_CHUNKS)[0];
+      if (first) chunks.push(first);
+      const remainder = sentence.slice(first?.length || 0).trim();
+      if (remainder) chunks.push(...splitTtsText(remainder, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length));
+    } else {
+      chunks.push(...splitTtsText(sentence, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length));
+    }
   }
   return chunks.slice(0, IRODORI_MAX_CHUNKS);
 }
 
 module.exports = {
   IRODORI_CHUNK_LENGTH,
+  IRODORI_FIRST_CHUNK_LENGTH,
   MODEL_NAMES,
   irodoriModelStatus,
   resolveIrodoriModelDirectory,
