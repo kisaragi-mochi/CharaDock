@@ -3,6 +3,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { DEFAULT_REALTIME_VOICE, normalizeRealtimeVoice } = require("./realtime-voice.cjs");
 const { normalizeCharacterMemories } = require("./character-memory.cjs");
+const { BUNDLED_IRODORI_VOICES } = require("./irodori-voices.cjs");
+
+const DEFAULT_IRODORI_VOICES = Object.freeze(BUNDLED_IRODORI_VOICES.map(({ sourceFileName: _sourceFileName, ...voice }) => Object.freeze({ ...voice })));
+const DEFAULT_CHARACTER_TTS_PROFILES = Object.freeze({
+  "amber-avatar": Object.freeze({ provider: "irodori-webgpu", realtimeVoice: "maple", irodoriVoiceId: "builtin-kohaku", supertonicVoice: "F5", kokoroVoice: "jf_alpha" }),
+  "bronze-avatar": Object.freeze({ provider: "supertonic-3", realtimeVoice: "juniper", irodoriVoiceId: "builtin-kohaku", supertonicVoice: "F2", kokoroVoice: "jf_alpha" }),
+  "towa-avatar": Object.freeze({ provider: "irodori-webgpu", realtimeVoice: "spruce", irodoriVoiceId: "builtin-hiro", supertonicVoice: "M4", kokoroVoice: "jf_alpha" }),
+  "sage-avatar": Object.freeze({ provider: "supertonic-3", realtimeVoice: "ember", irodoriVoiceId: "builtin-hiro", supertonicVoice: "M2", kokoroVoice: "jf_gongitsune" }),
+});
 
 const DEFAULTS = Object.freeze({
   language: "ja",
@@ -26,24 +35,24 @@ const DEFAULTS = Object.freeze({
   styleBertVits2Speed: 1,
   piperPlusExecutablePath: "",
   piperPlusModelPath: "",
-  piperPlusSpeed: 1,
+  piperPlusSpeed: .8,
   supertonicModelDirectory: "",
   supertonicVoice: "F1",
   supertonicSpeed: 1,
   supertonicSteps: 8,
   irodoriModelDirectory: "",
   irodoriReferenceAudioPath: "",
-  irodoriVoices: [],
-  irodoriVoiceId: "",
-  irodoriSpeed: 1,
-  irodoriSteps: 8,
+  irodoriVoices: DEFAULT_IRODORI_VOICES,
+  irodoriVoiceId: "builtin-kohaku",
+  irodoriSpeed: 1.1,
+  irodoriSteps: 12,
   irodoriSamplingMode: "sway",
   irodoriSeed: 0,
   kokoroModelDirectory: "",
   kokoroVoice: "jf_alpha",
   kokoroSpeed: 1,
   kokoroDevice: "auto",
-  characterTtsProfiles: {},
+  characterTtsProfiles: DEFAULT_CHARACTER_TTS_PROFILES,
   realtimeVoice: DEFAULT_REALTIME_VOICE,
   englishPronunciationEnabled: true,
   englishPronunciationDictionary: "",
@@ -213,6 +222,8 @@ class Preferences {
           fileName,
           name: String(voice?.name || "Voice").trim().slice(0, 80) || "Voice",
           createdAt: String(voice?.createdAt || "").slice(0, 40),
+          builtIn: Boolean(voice?.builtIn),
+          attributionUrl: String(voice?.attributionUrl || "").slice(0, 500),
         }];
       });
       this.data.irodoriVoiceId = String(this.data.irodoriVoiceId || "").slice(0, 80);

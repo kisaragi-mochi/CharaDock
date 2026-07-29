@@ -37,6 +37,7 @@
       "assets/bronze-avatar/**/*",
       "assets/towa-avatar/**/*",
       "assets/sage-avatar/**/*",
+      "assets/reference-voices/**/*",
       "vendor/**/*",
       "desktop/**/*",
       ".agents/skills/**/*",

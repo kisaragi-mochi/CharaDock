@@ -139,15 +139,33 @@ Inc.).
 
 CharaDock includes a modified, environment-specific copy of the inference core.
 The MIT copyright and permission notice are retained in the vendored source.
-Irodori model files and reference audio are not bundled. The user may download
-only the required FP16 ONNX artifacts and tokenizer from the original model
-repository; every file is pinned to one repository commit and verified against
-its SHA-256 digest. The user selects a consented reference WAV from local
-storage and inference stays on the device. The upstream model/runtime notice
+Irodori model files are not bundled. The user may download only the required
+FP16 ONNX artifacts and tokenizer from the original model repository; every
+file is pinned to one repository commit and verified against its SHA-256
+digest. Two reference WAV files are bundled as described below, and users may
+also select a consented reference WAV from local storage. Inference stays on
+the device. The upstream model/runtime notice
 identifies Irodori-TTS and Semantic-DACVAE weights as MIT and the llm-jp
 tokenizer as Apache-2.0. Voice cloning or impersonation without explicit
 consent, deepfakes, and misleading speech are prohibited by the ethical-use
 notice carried from the model card.
+
+### Bundled Irodori reference voices
+
+`assets/reference-voices/hiro.wav` is a recording of ochisamu and is bundled
+with the speaker and rights holder's permission.
+
+`assets/reference-voices/kohaku.wav` is derived from `rusuden_02`, a voice
+material from あみたろの声素材工房.
+
+- Credit: あみたろの声素材工房（https://amitaro.net/）
+- Terms: https://amitaro.net/voice/voice_rule/
+
+These files are included only as application reference voices and are not a
+standalone voice-material pack. `kohaku.wav` remains subject to the current
+upstream terms, including the restrictions on standalone redistribution,
+prohibited content, impersonation, fraud, and misleading use. If this summary
+and the upstream terms differ, the current upstream terms control.
 
 ### ONNX Runtime Web
 

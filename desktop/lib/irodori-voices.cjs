@@ -4,6 +4,26 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const VOICE_ID_PATTERN = /^[a-z0-9-]{8,80}$/;
+const BUNDLED_IRODORI_VOICES = Object.freeze([
+  Object.freeze({
+    id: "builtin-hiro",
+    fileName: "builtin-hiro.wav",
+    sourceFileName: "hiro.wav",
+    name: "Hiro（同梱）",
+    createdAt: "bundled",
+    builtIn: true,
+    attributionUrl: "",
+  }),
+  Object.freeze({
+    id: "builtin-kohaku",
+    fileName: "builtin-kohaku.wav",
+    sourceFileName: "kohaku.wav",
+    name: "Kohaku（あみたろの声素材工房）",
+    createdAt: "bundled",
+    builtIn: true,
+    attributionUrl: "https://amitaro.net/voice/voice_rule/",
+  }),
+]);
 
 function safeVoiceName(value, fallback = "Irodori Voice") {
   return String(value || "").trim().replace(/[\u0000-\u001f<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").slice(0, 80) || fallback;
@@ -40,9 +60,52 @@ class IrodoriVoiceLibrary {
       id: String(voice.id || ""),
       name: safeVoiceName(voice.name),
       createdAt: String(voice.createdAt || ""),
+      builtIn: Boolean(voice.builtIn),
+      attributionUrl: String(voice.attributionUrl || ""),
       ready: this.isReady(voice),
       selected: voice.id === selectedId,
     }));
+  }
+
+  installBundledVoices(voices, sourceDirectory) {
+    const sourceRoot = path.resolve(String(sourceDirectory || ""));
+    fs.mkdirSync(this.baseDirectory, { recursive: true });
+    const records = [];
+    const bundledBytes = new Map();
+    for (const definition of BUNDLED_IRODORI_VOICES) {
+      const source = path.join(sourceRoot, definition.sourceFileName);
+      const bytes = fs.readFileSync(source);
+      if (!isPcmWave(bytes)) throw new Error(`同梱Irodori参照音声がWAV形式ではありません: ${definition.sourceFileName}`);
+      const record = {
+        id: definition.id,
+        fileName: definition.fileName,
+        name: definition.name,
+        createdAt: definition.createdAt,
+        builtIn: true,
+        attributionUrl: definition.attributionUrl,
+      };
+      const destination = this.voicePath(record);
+      const current = (() => { try { return fs.readFileSync(destination); } catch { return null; } })();
+      if (!current || !current.equals(bytes)) {
+        const temporary = `${destination}.tmp`;
+        fs.writeFileSync(temporary, bytes, { mode: 0o600 });
+        fs.renameSync(temporary, destination);
+      }
+      records.push(record);
+      bundledBytes.set(record.id, bytes);
+    }
+    const bundledIds = new Set(records.map((record) => record.id));
+    const replacements = {};
+    const customVoices = (Array.isArray(voices) ? voices : []).filter((voice) => {
+      if (bundledIds.has(voice?.id)) return false;
+      let bytes;
+      try { bytes = fs.readFileSync(this.voicePath(voice)); } catch { return true; }
+      const replacement = records.find((record) => bundledBytes.get(record.id).equals(bytes));
+      if (!replacement) return true;
+      replacements[voice.id] = replacement.id;
+      return false;
+    });
+    return { voices: [...records, ...customVoices], replacements };
   }
 
   selectedVoice(voices, selectedId = "") {
@@ -83,6 +146,7 @@ class IrodoriVoiceLibrary {
     let found = false;
     const updated = (Array.isArray(voices) ? voices : []).map((voice) => {
       if (voice.id !== voiceId) return voice;
+      if (voice.builtIn) throw new Error("同梱参照音声の名前は変更できません。");
       found = true;
       return { ...voice, name: safeVoiceName(name, voice.name) };
     });
@@ -94,12 +158,14 @@ class IrodoriVoiceLibrary {
     const list = Array.isArray(voices) ? voices : [];
     const voice = list.find((item) => item.id === voiceId);
     if (!voice) throw new Error("削除するIrodori音声が見つかりません。");
+    if (voice.builtIn) throw new Error("同梱参照音声は削除できません。");
     fs.rmSync(this.voicePath(voice), { force: true });
     return list.filter((item) => item.id !== voiceId);
   }
 }
 
 module.exports = {
+  BUNDLED_IRODORI_VOICES,
   IrodoriVoiceLibrary,
   VOICE_ID_PATTERN,
   isPcmWave,

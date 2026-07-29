@@ -212,6 +212,7 @@ npm run site:build
 - ソフトウェアコードとドキュメント: [Apache License 2.0](./LICENSE)
 - 元プロジェクトと変更点: [NOTICE](./NOTICE)、[MODIFICATIONS.md](./MODIFICATIONS.md)
 - 第三者依存関係: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
+- 同梱Irodori参照音声: `hiro.wav`はochisamu本人の録音・許諾音声、`kohaku.wav`は[あみたろの声素材工房](https://amitaro.net/)の音声素材を[現行の利用規約](https://amitaro.net/voice/voice_rule/)に基づいて使用
 - デスクトップ版の新規4キャラクターとCharaDockアイコン: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
 - 元ブラウザー版に残る上流サンプル素材: [ASSET_LICENSE.md](./ASSET_LICENSE.md)
 

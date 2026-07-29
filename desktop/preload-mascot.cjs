@@ -729,7 +729,7 @@ window.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       if (token === ttsPlaybackToken) {
         streamTtsQueue = [];
-        setStatus(error.message, 5000);
+        setStatus(error.message, /ダウンロード|download|音声方式|voice method/i.test(error.message) ? 9000 : 5000);
       }
     } finally {
       if (token === ttsPlaybackToken) {
@@ -767,7 +767,7 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       await playSpeechSegment({ text, spokenText, expression }, provider, language, token);
     } catch (error) {
-      if (token === ttsPlaybackToken) setStatus(error.message, 5000);
+      if (token === ttsPlaybackToken) setStatus(error.message, /ダウンロード|download|音声方式|voice method/i.test(error.message) ? 9000 : 5000);
     } finally {
       if (token === ttsPlaybackToken) finishTtsPlayback();
     }

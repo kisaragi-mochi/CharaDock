@@ -574,8 +574,9 @@
     for (const voice of voices) select.append(new Option(`${voice.name}${voice.ready ? "" : "（ファイルなし）"}`, voice.id));
     select.value = info.voiceId || "";
     select.disabled = !voices.length;
-    $("#irodoriVoiceRenameButton").disabled = !info.voiceId;
-    $("#irodoriVoiceRemoveButton").disabled = !info.voiceId;
+    const selectedVoice = voices.find((voice) => voice.id === info.voiceId);
+    $("#irodoriVoiceRenameButton").disabled = !selectedVoice || selectedVoice.builtIn;
+    $("#irodoriVoiceRemoveButton").disabled = !selectedVoice || selectedVoice.builtIn;
     const status = $("#irodoriStatus");
     if (info.webgpuAvailable === false) setStatus(status, "WebGPUを利用できません。GPUドライバーを確認してください。", true);
     else if (!info.modelReady) setStatus(status, "FP16モデルは未導入です。後からフォルダーを選択できます。");

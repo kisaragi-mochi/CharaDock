@@ -212,6 +212,7 @@ Only the MediaPipe runtime and models that cannot be restored by `npm install` a
 - Software code and documentation: [Apache License 2.0](./LICENSE)
 - Upstream project and changes: [NOTICE](./NOTICE), [MODIFICATIONS.md](./MODIFICATIONS.md)
 - Third-party dependencies: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
+- Bundled Irodori reference voices: `hiro.wav` is recorded and authorized by ochisamu; `kohaku.wav` uses voice material from [あみたろの声素材工房 (Amitaro's Voice Material Workshop)](https://amitaro.net/) under its [current voice terms](https://amitaro.net/voice/voice_rule/)
 - Four new desktop characters and the CharaDock icon: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
 - Upstream sample assets retained by the browser editor: [ASSET_LICENSE.md](./ASSET_LICENSE.md)
 

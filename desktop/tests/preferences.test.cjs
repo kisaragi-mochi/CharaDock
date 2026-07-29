@@ -51,7 +51,7 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.styleBertVits2Url, "http://localhost:5000");
   assert.equal(state.styleBertVits2ModelId, 0);
   assert.equal(state.styleBertVits2Speed, 1);
-  assert.equal(state.piperPlusSpeed, 1);
+  assert.equal(state.piperPlusSpeed, .8);
   assert.equal(state.piperPlusExecutablePath, undefined);
   assert.equal(state.piperPlusModelPath, undefined);
   assert.equal(state.englishPronunciationEnabled, true);
@@ -62,10 +62,10 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.supertonicSpeed, 1);
   assert.equal(state.supertonicSteps, 8);
   assert.equal(state.supertonicModelDirectory, undefined);
-  assert.equal(state.irodoriSteps, 8);
+  assert.equal(state.irodoriSteps, 12);
   assert.equal(state.irodoriSamplingMode, "sway");
-  assert.equal(state.irodoriSpeed, 1);
-  assert.equal(state.irodoriVoiceId, "");
+  assert.equal(state.irodoriSpeed, 1.1);
+  assert.equal(state.irodoriVoiceId, "builtin-kohaku");
   assert.equal(state.irodoriSeed, 0);
   assert.equal(state.irodoriModelDirectory, undefined);
   assert.equal(state.irodoriReferenceAudioPath, undefined);
@@ -82,6 +82,18 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.codexWorkReasoningEffort, "");
   assert.equal(state.hasWorkDirectory, false);
   assert.equal(state.workDirectoryName, "");
+  assert.deepEqual(preferences.data.irodoriVoices.map((voice) => voice.id), ["builtin-hiro", "builtin-kohaku"]);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(preferences.data.characterTtsProfiles).map(([id, profile]) => [id, profile.provider])),
+    {
+      "amber-avatar": "irodori-webgpu",
+      "bronze-avatar": "supertonic-3",
+      "towa-avatar": "irodori-webgpu",
+      "sage-avatar": "supertonic-3",
+    },
+  );
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].irodoriVoiceId, "builtin-kohaku");
+  assert.equal(preferences.data.characterTtsProfiles["towa-avatar"].irodoriVoiceId, "builtin-hiro");
 });
 
 test("preferences persist only supported interface languages", () => {

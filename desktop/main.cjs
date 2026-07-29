@@ -71,6 +71,7 @@ const { IRODORI_CHUNK_LENGTH, IRODORI_CHUNK_OVERFLOW, irodoriModelStatus, splitI
 const { IrodoriVoiceLibrary } = require("./lib/irodori-voices.cjs");
 const { KOKORO_VOICES, kokoroModelStatus, normalizeKokoroVoice } = require("./lib/kokoro-webgpu.cjs");
 const { EmbeddedTtsModels } = require("./lib/tts-model-download.cjs");
+const { ttsSetupGuidance } = require("./lib/tts-readiness.cjs");
 const { validateAvatarOutput } = require("../.agents/skills/build-purupuru-avatar/scripts/validate-output.cjs");
 
 // Local TTS often completes several seconds after the click that requested it,
@@ -2586,6 +2587,17 @@ function synthesizeConfiguredTts(text, ownerId = 0) {
   }
   const spokenText = configuredSpeechText(text);
   if (!spokenText) return Promise.resolve({ audioDataUrls: [] });
+  const setupStatus = characterTts.provider === "piper-plus"
+    ? piperPlusStatus({ executablePath: preferences.data.piperPlusExecutablePath, modelPath: preferences.data.piperPlusModelPath })
+    : characterTts.provider === "supertonic-3"
+      ? supertonicStatus(preferences.data.supertonicModelDirectory)
+      : characterTts.provider === "irodori-webgpu"
+        ? irodoriModelStatus(preferences.data.irodoriModelDirectory, activeIrodoriVoicePath(), irodoriWebGpuAvailable)
+        : characterTts.provider === "kokoro"
+          ? kokoroModelStatus(preferences.data.kokoroModelDirectory, kokoroWebGpuAvailable)
+          : null;
+  const setupGuidance = setupStatus ? ttsSetupGuidance(characterTts.provider, setupStatus, interfaceLanguage()) : "";
+  if (setupGuidance) return Promise.reject(new Error(setupGuidance));
   if (characterTts.provider === "piper-plus") {
     return synthesizePiperPlus({
       text: spokenText,
@@ -4840,6 +4852,26 @@ async function boot() {
     }
   } else if (preferences.data.irodoriReferenceAudioPath) {
     preferences.patch({ irodoriReferenceAudioPath: "" });
+  }
+  const bundledIrodoriInstall = irodoriVoiceLibrary.installBundledVoices(
+    preferences.data.irodoriVoices,
+    path.join(projectRoot, "assets", "reference-voices"),
+  );
+  const voiceReplacements = bundledIrodoriInstall.replacements;
+  const remappedCharacterTtsProfiles = Object.fromEntries(Object.entries(preferences.data.characterTtsProfiles || {}).map(([characterId, profile]) => [
+    characterId,
+    voiceReplacements[profile?.irodoriVoiceId]
+      ? { ...profile, irodoriVoiceId: voiceReplacements[profile.irodoriVoiceId] }
+      : profile,
+  ]));
+  const remappedIrodoriVoiceId = voiceReplacements[preferences.data.irodoriVoiceId] || preferences.data.irodoriVoiceId;
+  if (JSON.stringify(bundledIrodoriInstall.voices) !== JSON.stringify(preferences.data.irodoriVoices)
+    || remappedIrodoriVoiceId !== preferences.data.irodoriVoiceId) {
+    preferences.patch({
+      irodoriVoices: bundledIrodoriInstall.voices,
+      irodoriVoiceId: remappedIrodoriVoiceId,
+      characterTtsProfiles: remappedCharacterTtsProfiles,
+    });
   }
   const availableIrodoriVoice = irodoriVoiceLibrary.selectedVoice(preferences.data.irodoriVoices, preferences.data.irodoriVoiceId);
   if (availableIrodoriVoice && availableIrodoriVoice.id !== preferences.data.irodoriVoiceId) {

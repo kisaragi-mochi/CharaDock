@@ -45,3 +45,17 @@ use every image they add to the application.
 
 The original PuruPuru PNGTuber demo avatars and favicon are not included in the
 distribution and are not covered by these terms.
+
+## Bundled reference voices
+
+The application also bundles two Irodori TTS reference WAV files under
+`assets/reference-voices`. `hiro.wav` is a recording of ochisamu and is
+included with the speaker and rights holder's permission. `kohaku.wav` uses
+voice material from あみたろの声素材工房 and remains subject to its current
+terms: https://amitaro.net/voice/voice_rule/
+
+Required credit: あみたろの声素材工房（https://amitaro.net/）
+
+The reference WAV files may be used as part of CharaDock, but this document
+does not grant permission to extract or redistribute them as a standalone
+voice-material pack.
