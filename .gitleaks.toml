@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "PuruPuru UI localStorage identifier; not an API credential"
+regexTarget = "secret"
+regexes = ['''^purupuru-section-v1$''']

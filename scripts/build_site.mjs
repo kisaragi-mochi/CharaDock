@@ -18,6 +18,7 @@ await mkdir(path.join(output, "assets", "characters"), { recursive: true });
 
 const assets = [
   ["app-icon.ico", "assets/favicon.ico"],
+  ["docs/images/purupet-hero.webp", "assets/purupet-hero.webp"],
   ["docs/images/purupet-work-mode.png", "assets/purupet-work-mode.png"],
   ["docs/images/characters/amber-complete-v2.png", "assets/characters/amber.png"],
   ["docs/images/characters/bronze-complete-v2.png", "assets/characters/bronze.png"],
@@ -29,12 +30,14 @@ for (const [from, to] of assets) {
   await cp(path.join(root, from), path.join(output, to));
 }
 
-const indexPath = path.join(output, "index.html");
-const html = (await readFile(indexPath, "utf8"))
-  .replaceAll("__REPOSITORY_URL__", repositoryUrl)
-  .replaceAll("__RELEASE_URL__", releaseUrl)
-  .replaceAll("__VERSION__", String(pkg.version));
-await writeFile(indexPath, html, "utf8");
+for (const page of ["index.html", "ja.html"]) {
+  const pagePath = path.join(output, page);
+  const html = (await readFile(pagePath, "utf8"))
+    .replaceAll("__REPOSITORY_URL__", repositoryUrl)
+    .replaceAll("__RELEASE_URL__", releaseUrl)
+    .replaceAll("__VERSION__", String(pkg.version));
+  await writeFile(pagePath, html, "utf8");
+}
 await writeFile(path.join(output, ".nojekyll"), "", "utf8");
 
 console.log(`site: built ${path.relative(root, output)} for ${repository || "local preview"}`);

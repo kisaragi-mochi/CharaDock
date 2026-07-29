@@ -1,65 +1,70 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="会話、音声、Codex作業を透過アバターから。Windowsデスクトップコンパニオン PuruPet Desktop。">
+  <meta name="description" content="Talk, remember, and work together. PuruPet Desktop connects transparent characters with Codex in a Windows desktop companion.">
   <meta name="theme-color" content="#f4f2ed" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)">
-  <meta property="og:title" content="PuruPet Desktop — デスクトップに、会話できる相棒を。">
-  <meta property="og:description" content="透過PNGTuber、ChatGPTログイン、音声、Codex作業をひとつのデスクトップコンパニオンに。">
+  <meta property="og:title" content="PuruPet Desktop — A companion you can talk to.">
+  <meta property="og:description" content="Talk, remember, and work together with a transparent character powered by Codex.">
   <meta property="og:type" content="website">
+  <link rel="alternate" hreflang="ja" href="./ja.html">
+  <link rel="alternate" hreflang="en" href="./">
+  <link rel="alternate" hreflang="x-default" href="./">
   <title>PuruPet Desktop</title>
   <link rel="icon" href="./assets/favicon.ico" sizes="any">
   <link rel="stylesheet" href="./styles.css">
   <script src="./site.js" defer></script>
 </head>
 <body data-character="amber">
-  <a class="skip-link" href="#main">本文へ移動</a>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
-    <a class="wordmark" href="#top" aria-label="PuruPet Desktop ホーム">
+    <a class="wordmark" href="#top" aria-label="PuruPet Desktop home">
       <span class="wordmark-mark" aria-hidden="true">P</span>
       <span><strong>PuruPet</strong><small>DESKTOP COMPANION</small></span>
     </a>
-    <nav aria-label="メインナビゲーション">
-      <a href="#features">できること</a>
-      <a href="#characters">キャラクター</a>
-      <a href="#safety">安心設計</a>
+    <nav aria-label="Main navigation">
+      <a href="#features">Features</a>
+      <a href="#characters">Characters</a>
+      <a href="#safety">Safety</a>
     </nav>
-    <a class="header-cta" href="__REPOSITORY_URL__">GitHub <span aria-hidden="true">↗</span></a>
+    <div class="header-actions">
+      <div class="language-switch" aria-label="Language">
+        <a class="is-active" href="./" lang="en" aria-current="page">EN</a>
+        <a href="./ja.html" lang="ja">日本語</a>
+      </div>
+      <a class="header-cta" href="__REPOSITORY_URL__">GitHub <span aria-hidden="true">↗</span></a>
+    </div>
   </header>
 
   <main id="main">
     <section class="hero" id="top">
       <div class="hero-copy">
         <p class="eyebrow"><span></span> Windows desktop companion</p>
-        <h1>デスクトップに、<br><em>会話できる</em><br>相棒を。</h1>
-        <p class="hero-lead">一枚絵が、ぷるぷる動き、話し、あなたの作業を手伝う。PuruPuru PNGTuberとCodexを、常駐できる小さな体験へ。</p>
+        <h1>A companion you can<br><em>talk to</em>, right on<br>your desktop.</h1>
+        <p class="hero-lead">It listens, remembers what matters to you, and works with Codex inside a folder you choose. A PuruPuru character becomes an always-nearby companion on your Windows desktop.</p>
         <div class="hero-actions" id="download">
-          <a class="button button-primary" href="__RELEASE_URL__">Windows版を入手 <span aria-hidden="true">↓</span></a>
-          <a class="button button-secondary" href="#experience">体験を見る</a>
+          <a class="button button-primary" href="__RELEASE_URL__">Get for Windows <span aria-hidden="true">↓</span></a>
+          <a class="button button-secondary" href="#experience">See the experience</a>
         </div>
-        <p class="release-note">v__VERSION__ · Windows 10/11 x64 · プレリリース</p>
+        <p class="release-note">v__VERSION__ · Windows 10/11 x64 · Pre-release</p>
       </div>
 
-      <div class="hero-visual" aria-label="PuruPet Desktopの使用イメージ">
-        <div class="ambient ambient-one"></div>
-        <div class="ambient ambient-two"></div>
-        <div class="hero-bubble">今日も、ここから始めよう。</div>
-        <img src="./assets/purupet-work-mode.png" alt="透過キャラクターとコンパクトな作業入力欄" width="560" height="680">
-        <div class="status-chip"><span></span> Codex · ChatGPT</div>
-      </div>
+      <figure class="hero-visual">
+        <img src="./assets/purupet-hero.webp" alt="Kohaku, Sepia, Towa, and Sage, the four characters included with PuruPet Desktop" width="1600" height="900">
+      </figure>
     </section>
 
-    <section class="signal-row" aria-label="主な特徴">
+    <section class="signal-row" aria-label="Highlights">
       <p>TRANSPARENT AVATAR</p><i></i><p>VOICE & REALTIME</p><i></i><p>CODEX WORK MODE</p><i></i><p>YOUR CHARACTER</p>
     </section>
 
     <section class="section" id="features">
       <div class="section-heading">
         <p class="eyebrow">One companion, many roles</p>
-        <h2>話す。動く。<br>そして、仕事も進める。</h2>
-        <p>必要なときだけ現れ、終われば静かに戻る。デスクトップを占領しないことも、機能のひとつです。</p>
+        <h2>Talk. Move.<br>Get work done.</h2>
+        <p>It appears when needed and returns to quiet when the moment passes. Staying out of your way is part of the design.</p>
       </div>
 
       <div class="bento-grid">
@@ -67,32 +72,32 @@
           <span class="feature-number">01</span>
           <div>
             <p class="feature-kicker">Conversation</p>
-            <h3>キャラクターのすぐそばで、自然に会話。</h3>
-            <p>返答はストリーミングで届き、吹き出しは顔の近くに。入力欄はマウスを重ねたときだけ、ふわりと現れます。</p>
+            <h3>A natural conversation, right beside the character.</h3>
+            <p>Responses stream near the character's face. Alongside history, useful names and preferences can be reviewed and deleted as character-specific long-term memory.</p>
           </div>
           <div class="mini-conversation" aria-hidden="true">
-            <p>この資料、要点をまとめて</p>
-            <p><span></span> まず3つに整理するね。</p>
+            <p>Summarize the key points in this document.</p>
+            <p><span></span> I'll organize them into three parts.</p>
           </div>
         </article>
 
         <article class="feature-card card-motion">
           <span class="feature-number">02</span>
           <p class="feature-kicker">Alive, not distracting</p>
-          <h3>呼吸、視線、髪揺れ。</h3>
-          <p>待機中もほんの少しだけ生きている。触れるとキャラごとの表情と言葉で応えます。</p>
+          <h3>Breathing, gaze, and hair motion.</h3>
+          <p>Just enough life while idle. Interact with the character and it responds with its own expression and words.</p>
           <div class="motion-orbit" aria-hidden="true"><span></span><i></i></div>
         </article>
 
         <article class="feature-card card-work">
           <span class="feature-number">03</span>
           <p class="feature-kicker">Codex work mode</p>
-          <h3>会話から、そのまま作業へ。</h3>
-          <p>選んだフォルダーだけでCodexが作業。進行、操作、結果は履歴に残り、いつでも中断できます。</p>
+          <h3>Move from conversation into real work.</h3>
+          <p>Codex works only inside the folder you select. Progress, operations, and results stay in history, and a turn can be interrupted at any time.</p>
           <ul class="task-list" aria-hidden="true">
-            <li class="done"><span>✓</span> READMEを確認</li>
-            <li class="active"><span></span> 構成を更新中</li>
-            <li><span></span> テストと報告</li>
+            <li class="done"><span>✓</span> Review README</li>
+            <li class="active"><span></span> Update structure</li>
+            <li><span></span> Test and report</li>
           </ul>
         </article>
 
@@ -100,28 +105,28 @@
           <span class="feature-number">04</span>
           <div>
             <p class="feature-kicker">Codex Avatar Studio</p>
-            <h3>一枚絵から、あなたの相棒を。</h3>
-            <p>標準の目・口・表情差分、髪レイヤー、動きの初期値、性格と話し方までまとめて生成。追加後すぐPuruPuru対応キャラとして使えます。</p>
+            <h3>Turn one illustration into your companion.</h3>
+            <p>Generate eye, mouth, expression, and hair layers together with initial motion settings, personality, and speaking style. The result is ready to use as a PuruPuru character.</p>
           </div>
-          <div class="studio-flow" aria-label="一枚絵からキャラクターができる流れ">
-            <span>1 image</span><i>→</i><span>27 expressions</span><i>→</i><span>1 personality</span>
+          <div class="studio-flow" aria-label="The flow from one image to a character">
+            <span>1 image</span><i>→</i><span>expression layers</span><i>→</i><span>1 companion</span>
           </div>
         </article>
 
         <article class="feature-card card-voice">
           <span class="feature-number">05</span>
           <p class="feature-kicker">Voice</p>
-          <h3>声で呼びかけ、声で返す。</h3>
-          <p>Codex Realtimeを優先し、使えない環境では端末音声認識へ自動で切り替えます。読み上げはいつでもOFFに。</p>
+          <h3>Speak to it. Hear it answer.</h3>
+          <p>Explicitly choose Codex Realtime, local sherpa-onnx, system recognition, or OpenAI transcription. Speech providers and voices are stored per character.</p>
           <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </article>
 
         <article class="feature-card card-context">
           <span class="feature-number">06</span>
           <p class="feature-kicker">Permission in context</p>
-          <h3>「見ていい？」を、会話の中で。</h3>
-          <p>画面共有やブラウザー閲覧は、その都度キャラクターが確認。許可は今回の回答だけに限定されます。</p>
-          <div class="permission-pill" aria-hidden="true"><span>今回だけ見る</span><span>やめる</span></div>
+          <h3>Permission requests stay in the conversation.</h3>
+          <p>Screen sharing and browser control ask first. Only a clear continuation of the same operation can reuse permission for up to five minutes.</p>
+          <div class="permission-pill" aria-hidden="true"><span>Allow this action</span><span>Stop</span></div>
         </article>
       </div>
     </section>
@@ -129,42 +134,42 @@
     <section class="experience" id="experience">
       <div class="experience-copy">
         <p class="eyebrow">Designed for the desktop</p>
-        <h2>主役はあなたの作業。<br>相棒は、そのすぐ隣。</h2>
-        <p>モニター端への吸着、位置ロック、マルチモニター、表示サイズと動き幅の調整。ライト／ダーク表示にもキャラクターの色にも自然に馴染みます。</p>
+        <h2>Your work stays central.<br>Your companion stays close.</h2>
+        <p>Edge snapping, position locking, multiple monitors, and per-character size and motion controls. The interface adapts to light and dark appearance and to each character's palette.</p>
         <dl>
-          <div><dt>0</dt><dd>会話モードでの<br>書き込み権限</dd></div>
-          <div><dt>1</dt><dd>選択フォルダーだけ<br>作業可能</dd></div>
-          <div><dt>12</dt><dd>保持される<br>直近の作業履歴</dd></div>
+          <div><dt>0</dt><dd>write permissions<br>in Conversation</dd></div>
+          <div><dt>1</dt><dd>selected folder<br>available to Work</dd></div>
+          <div><dt>12</dt><dd>recent work entries<br>kept in history</dd></div>
         </dl>
       </div>
       <figure class="product-shot">
-        <img src="./assets/purupet-work-mode.png" alt="画面を邪魔しない透過コンパニオンUI" loading="lazy">
-        <figcaption>必要なときだけ、コンパクトに。</figcaption>
+        <img src="./assets/purupet-work-mode.png" alt="A transparent companion UI that stays out of the way" loading="lazy">
+        <figcaption>Compact controls, only when needed.</figcaption>
       </figure>
     </section>
 
     <section class="section characters" id="characters">
       <div class="section-heading compact">
         <p class="eyebrow">Four personalities included</p>
-        <h2>色も、距離感も、四人四様。</h2>
-        <p>キャラクターを選ぶと、アプリ全体のアクセントと会話の雰囲気が変わります。</p>
+        <h2>Four colors.<br>Four ways to connect.</h2>
+        <p>Selecting a character changes both the interface accent and the tone of the conversation.</p>
       </div>
       <div class="character-grid" role="list">
         <button class="character-card is-active" type="button" data-character-choice="amber" role="listitem" aria-pressed="true">
-          <span class="character-image"><img src="./assets/characters/amber.png" alt="琥珀" loading="lazy"></span>
-          <span class="character-meta"><strong>琥珀</strong><small>快活 · 素直 · 背中を押す</small></span>
+          <span class="character-image"><img src="./assets/characters/amber.png" alt="Kohaku" loading="lazy"></span>
+          <span class="character-meta"><strong>Kohaku</strong><small>Bright · Candid · Encouraging</small></span>
         </button>
         <button class="character-card" type="button" data-character-choice="bronze" role="listitem" aria-pressed="false">
-          <span class="character-image"><img src="./assets/characters/bronze.png" alt="セピア" loading="lazy"></span>
-          <span class="character-meta"><strong>セピア</strong><small>余裕 · 洞察 · 頼れる</small></span>
+          <span class="character-image"><img src="./assets/characters/bronze.png" alt="Sepia" loading="lazy"></span>
+          <span class="character-meta"><strong>Sepia</strong><small>Composed · Perceptive · Dependable</small></span>
         </button>
         <button class="character-card" type="button" data-character-choice="towa" role="listitem" aria-pressed="false">
-          <span class="character-image"><img src="./assets/characters/towa.png" alt="トワ" loading="lazy"></span>
-          <span class="character-meta"><strong>トワ</strong><small>機転 · 発見 · 一緒に試す</small></span>
+          <span class="character-image"><img src="./assets/characters/towa.png" alt="Towa" loading="lazy"></span>
+          <span class="character-meta"><strong>Towa</strong><small>Quick-witted · Curious · Hands-on</small></span>
         </button>
         <button class="character-card" type="button" data-character-choice="sage" role="listitem" aria-pressed="false">
-          <span class="character-image"><img src="./assets/characters/sage.png" alt="セージ" loading="lazy"></span>
-          <span class="character-meta"><strong>セージ</strong><small>知性 · 整理 · 静かなユーモア</small></span>
+          <span class="character-image"><img src="./assets/characters/sage.png" alt="Sage" loading="lazy"></span>
+          <span class="character-meta"><strong>Sage</strong><small>Thoughtful · Organized · Quietly witty</small></span>
         </button>
       </div>
     </section>
@@ -173,12 +178,12 @@
       <div class="safety-panel">
         <div>
           <p class="eyebrow">Permission, privacy, control</p>
-          <h2>かわいいだけじゃない。<br>境界は、きちんと見える。</h2>
+          <h2>More than charm.<br>Clear boundaries.</h2>
         </div>
         <ul>
-          <li><span>01</span><div><strong>ChatGPT認証はCodexが管理</strong><p>PuruPetは認証トークンを受け取りません。</p></div></li>
-          <li><span>02</span><div><strong>画面とブラウザーは都度許可</strong><p>一度の許可を次の会話へ持ち越しません。</p></div></li>
-          <li><span>03</span><div><strong>作業範囲をフォルダーで限定</strong><p>会話モードは読み取り専用、作業は明示した場所だけ。</p></div></li>
+          <li><span>01</span><div><strong>Codex manages ChatGPT authentication</strong><p>PuruPet never receives the authentication token.</p></div></li>
+          <li><span>02</span><div><strong>Screen and browser access is purpose-specific</strong><p>A clear continuation lasts up to five minutes. Another site or purpose asks again.</p></div></li>
+          <li><span>03</span><div><strong>Work is scoped to a selected folder</strong><p>Conversation is read-only; Work can modify only the location you choose.</p></div></li>
         </ul>
       </div>
     </section>
@@ -186,23 +191,23 @@
     <section class="get-started section">
       <div>
         <p class="eyebrow">For builders</p>
-        <h2>ローカルではじめる。</h2>
-        <p>Node.js 22以降と、Codex機能を使う場合はCodex CLIを用意してください。</p>
+        <h2>Start locally.</h2>
+        <p>Use Node.js 22 or later. Codex features also require the Codex CLI.</p>
       </div>
       <div class="command-card">
         <code>npm ci<br>npm run desktop</code>
-        <button id="copyCommand" type="button" aria-label="起動コマンドをコピー">コピー</button>
+        <button id="copyCommand" type="button" aria-label="Copy startup commands" data-label-copy="Copy" data-label-copied="Copied" data-label-select="Select and copy">Copy</button>
       </div>
     </section>
 
     <section class="final-cta">
       <p class="eyebrow">A small companion for big work</p>
-      <h2>いつものデスクトップに、<br>ちょっといい相棒を。</h2>
+      <h2>Bring a better companion<br>to your everyday desktop.</h2>
       <div class="hero-actions">
-        <a class="button button-primary" href="__RELEASE_URL__">Windows版を入手</a>
-        <a class="button button-secondary" id="source" href="__REPOSITORY_URL__">ソースを見る</a>
+        <a class="button button-primary" href="__RELEASE_URL__">Get for Windows</a>
+        <a class="button button-secondary" id="source" href="__REPOSITORY_URL__">View source</a>
       </div>
-      <p class="legal-note">非公式のPuruPuru PNGTuber派生プロジェクトです。配布前に同梱素材の利用条件をご確認ください。</p>
+      <p class="legal-note">An unofficial derivative of PuruPuru PNGTuber. Review the terms for included visual assets before distribution.</p>
     </section>
   </main>
 

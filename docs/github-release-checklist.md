@@ -17,6 +17,7 @@ npm ci
 npm test
 npm run site:build
 npm audit
+gitleaks git . --redact=100 --config .gitleaks.toml
 uv lock --check
 uv run python scripts/verify_vendor_checksums.py
 git status --short --ignored
@@ -25,6 +26,7 @@ git status --short --ignored
 確認項目:
 
 - [ ] `.env`、`.npmrc`、APIキー、秘密鍵、Codex認証情報がない。
+- [ ] コミットのauthor / committerメールがGitHubのnoreplyアドレスになっている。
 - [ ] `source/`、`work/`、`dist/`、`node_modules/`、`.venv/`が追跡対象外である。
 - [ ] 100MB以上のGit対象ファイルがない。
 - [ ] README内の相対リンクと画像が表示できる。

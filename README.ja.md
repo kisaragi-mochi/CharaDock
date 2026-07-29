@@ -1,0 +1,230 @@
+<p align="center">
+  <img src="./app-icon.ico" width="88" height="88" alt="PuruPet Desktop">
+</p>
+
+<h1 align="center">PuruPet Desktop</h1>
+
+<p align="center"><strong>デスクトップに、会話できる相棒を。</strong></p>
+<p align="center">話して、覚えて、一緒に作業する。透過キャラクターとCodexをつないだWindowsデスクトップコンパニオン。</p>
+
+<p align="center">
+  <a href="./README.md">English</a>
+</p>
+
+<p align="center">
+  <img alt="Code: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-20201f?style=flat-square">
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-20201f?style=flat-square">
+  <img alt="Electron 43" src="https://img.shields.io/badge/Electron-43-20201f?style=flat-square">
+  <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-df9848?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="#クイックスタート">クイックスタート</a> ·
+  <a href="#できること">できること</a> ·
+  <a href="#一枚絵からキャラクターを追加">Avatar Studio</a> ·
+  <a href="./DESKTOP_APP.md">デスクトップ版ガイド</a> ·
+  <a href="./docs/usage.md">ブラウザー版ガイド</a>
+</p>
+
+<p align="center">
+  <img src="./docs/images/purupet-hero.webp" alt="PuruPet Desktopに収録された琥珀、セピア、トワ、セージ" width="960">
+</p>
+
+PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNGTuber)を基にした非公式派生アプリです。キャラクターが呼吸し、視線を動かし、声で会話し、必要なら選択したフォルダーの中でCodexと作業します。入力欄や履歴は必要なときだけ現れ、普段はデスクトップの片隅で静かに過ごします。
+
+> [!IMPORTANT]
+> 現在はプレリリースです。コードはApache-2.0ですが、画像には別の利用条件があります。公開・フォーク・配布前に[ライセンスと素材](#ライセンスと素材)を確認してください。
+
+## できること
+
+| 話す | 作業する | 自分のキャラを作る |
+| --- | --- | --- |
+| 顔の近くへ返答をストリーミング。音声入力、読み上げ、表情、リップシンクをキャラごとに設定できます。 | 小さなUIから`会話 / 作業`を切替。選択した1フォルダーだけでCodexが作業し、進行と結果を履歴へ残します。 | `Codex Avatar Studio`が一枚絵から目・口・表情差分、髪レイヤー、初期リグ、性格を生成・検証します。 |
+
+### デスクトップに馴染む動き
+
+- 透明・最前面のフレームレス表示
+- 呼吸、まばたき、髪揺れ、静かな待機視線、実音声波形による3段階リップシンク
+- キャラクター上にカーソルがある間だけ有効なマウス追従
+- モニター端への吸着、位置ロック、マルチモニター対応
+- サイズ、可動範囲、追従速度、揺れ、性格、話し方、吹き出し位置をキャラごとに保存
+- OSのライト／ダーク、高コントラスト、視差・透明効果の設定へ追従
+
+### 会話を続けられる
+
+- Codex app-serverのChatGPTログイン、またはOpenAI Responses API
+- 現在読み上げている文を吹き出しへ表示し、完了後は全文へ戻る長文表示
+- 会話履歴と作業履歴をアプリ終了後も復元
+- キャラクターごとに最大20往復の会話履歴を保持
+- 呼び名、好み、関係性、継続目標を自動抽出するキャラクター別の長期メモリ
+- 長期メモリは端末内に最大24件。内容の確認、個別削除、一括削除が可能
+
+一時的な依頼、推測、外部サイトの内容、秘密情報、住所・連絡先・センシティブな属性は長期メモリへ保存しません。メモリはキャラクター間で共有されません。
+
+### 声を選べる
+
+音声入力方式は設定で明示的に選びます。Codex Realtimeを自動起動したり、失敗時に別方式へ勝手に切り替えたりしません。
+
+- **入力:** Codex Realtime、ローカルsherpa-onnx、端末音声認識、OpenAI文字起こし
+- **ローカル認識:** 日本語Parakeet CTC、ReazonSpeech Zipformer、SenseVoice、Whisper base / tiny
+- **VAD:** Silero VADによる無音区切り、自動送信、3段階の感度
+- **出力:** Windows標準音声、Style-Bert-VITS2、piper-plus、Supertonic 3、Kokoro、Irodori TTS
+- **Realtime:** キャラクターごとにLive音声を選択。録音ボタンを押した間だけ接続し、文字入力にも同じLive音声で応答
+- **読み上げ整形:** URL、メール、パス、コード、長いハッシュ、Markdown記号を除外。ユーザー辞書と英字語の日本語読みへ対応
+
+<details>
+<summary><strong>ローカル音声モデルについて</strong></summary>
+
+モデルは必要なものだけ設定画面からダウンロードし、SHA-256検証後に選択します。音声方式と声はキャラクターごとに保存されます。
+
+- **piper-plus:** 公式C++ランタイムと「つくよみちゃん」FP16モデル、または手動指定の専用ONNX
+- **Supertonic 3:** 同梱sherpa-onnxによるCPU推論。F1–F5 / M1–M5、速度、生成ステップを選択
+- **Kokoro:** 日本語5音声。WebGPUを優先し、無音・非有限値を検出した場合はCPUで再生成
+- **Irodori TTS:** Electron内の専用WebGPUレンダラーでローカル推論。WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換してアプリ管理領域へ保存し、複数の参照音声を管理
+
+長文は句点や自然な区切りで分割し、現在の区間を再生しながら次の区間を合成します。Style-Bert-VITS2はローカルAPIのURL、モデルID、速度を指定できます。
+</details>
+
+## 収録キャラクター
+
+デスクトップ配布物には新規4キャラクターだけを収録します。
+
+| 琥珀 | セピア | トワ | セージ |
+|:---:|:---:|:---:|:---:|
+| <img src="./docs/images/characters/amber-complete-v2.png" alt="琥珀" width="190"> | <img src="./docs/images/characters/bronze-complete-v2.png" alt="セピア" width="190"> | <img src="./docs/images/characters/towa-complete-v1.png" alt="トワ" width="190"> | <img src="./docs/images/characters/sage-complete-v1.png" alt="セージ" width="190"> |
+| 快活で素直。前向きに背中を押す。 | 余裕と洞察があり、頼れる。 | 機転が利き、発見を一緒に試す。 | 穏やかな知性派。複雑なことを整理する。 |
+
+各キャラクターは通常の目・口差分に加え、嬉しい・驚き・やさしい表情差分を持ちます。選択キャラに合わせて設定画面とコンパニオンUIのアクセントも変化します。
+
+## クイックスタート
+
+### 必要環境
+
+- Windows 10 / 11 x64
+- Node.js 22以降
+- Codex機能を使う場合は、ログイン可能な[Codex CLI](https://github.com/openai/codex)
+- Python検査を行う場合のみPython 3.11と[uv](https://docs.astral.sh/uv/)
+
+### 開発版を起動
+
+```bash
+npm ci
+npm run desktop
+```
+
+初回ウィザードでAI接続、キャラクター、音声出力を設定します。Windows Store版Codexも自動検出します。`codex`が`PATH`にない場合は`CODEX_CLI_PATH`で実行ファイルを指定できます。
+
+1. キャラクター右下の`✦`へマウスを重ね、入力欄を開きます。
+2. そのまま会話するか、左端の`会話`を押して`作業`へ切り替えます。
+3. 作業モードの初回だけ、作業を許可するフォルダーを選びます。
+4. `履歴`から過去の会話、指示、操作、結果を確認できます。
+
+| 操作 | キー |
+| --- | --- |
+| 現在のモードの入力欄を開く | `Ctrl + Shift + Enter` |
+| 設定を開く | `Ctrl + Shift + M` |
+| クリック透過 | `Ctrl + Shift + L` |
+| キャラクター表示 | `Ctrl + Shift + H` |
+
+## 安全な作業と画面操作
+
+- 会話モードはread-only
+- 作業モードは利用者が選択した1フォルダーだけをworkspace-write
+- 会話と作業は別スレッド・別権限。モデルとreasoning effortもそれぞれ設定可能
+- 実行中ターンは履歴パネルから中断可能
+- 画面撮影、専用ブラウザー、Windows操作は会話の中で許可を確認
+- 許可後5分以内の「続けて」「そのまま」など、同じ操作の明確な続きだけ再確認なしで利用
+- 別サイト、別目的、終了表現、5分経過、専用ブラウザーを閉じた場合は許可を失効
+- 削除、送信、購入、インストール、認証・支払い設定、秘密情報の入力は自動操作しない
+- 一時スクリーンショットは回答後に削除
+
+ブラウザー操作は可視の専用ウィンドウで行い、ページ閲覧、リンク移動、クリック、検索文字入力、選択、キー、スクロール、戻るに対応します。許可中は通常のWeb検索を無効化し、専用ブラウザーを使わなかった回答を停止します。コンピューター操作は画面を毎回確認しながら、1ターン最大30操作まで実行します。
+
+## AI接続とプライバシー
+
+### Codex app-server
+
+アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、PuruPetは受け取りません。app-serverから取得したモデル一覧をプルダウン表示し、会話と作業で別々にモデルとreasoning effortを設定できます。
+
+GPT-Live / Codex Voiceは実験機能です。利用可否はアカウントや上流実装に依存します。Realtimeセッションは新しい空のタスクとして、録音ボタンを押したときだけ開始します。作業モードでは選択フォルダー限定のworkspace-writeスレッドへ接続し、音声で依頼した作業も履歴へ残します。
+
+### OpenAI APIとローカル処理
+
+Responses APIによる会話とTranscriptions APIによる文字起こしを利用できます。APIキーはレンダラーへ渡さず、利用可能な場合はOSの暗号化ストレージへ保存します。sherpa-onnx、端末音声認識、通常の口パク、対応TTSは端末内で処理します。Codex RealtimeまたはOpenAI文字起こしを選んだ場合のみ、音声が該当サービスへ送られます。
+
+## 一枚絵からキャラクターを追加
+
+Codex app-server接続時は、設定の`Codex Avatar Studio`からPNG・JPEG・WebPを選べます。同梱の[`.agents/skills/build-purupuru-avatar/`](./.agents/skills/build-purupuru-avatar/)を隔離されたworkspace-writeジョブで実行し、次を独立に品質検証してから追加します。
+
+- 目2段階 × 口3段階の標準PNG差分
+- 嬉しい・驚き・やさしい表情差分
+- 可動する前髪と後ろ髪レイヤー
+- 初期リグ、表示サイズ、可動範囲
+- 任意指定または自動提案の性格、話し方、触れ合い文
+
+利用者は、アップロード・加工・利用に必要な権利を持つ画像だけを使用してください。
+
+既存の`.purupuru`もキャラクター設定から追加・削除できます。調整したキャラクターは、画像込みのポータブルな `.purupuru` アバターパッケージとして保存できます。元のPNG素材フォルダに依存しないため、バックアップや別PCへの移行に利用できます。
+
+## WindowsバイナリとGitHub Pages
+
+ローカルでNSISインストーラーとportable版を生成します。
+
+```bash
+npm run dist:win:installer
+```
+
+[`Windows package`](./.github/workflows/release.yml)はWindowsランナーで同じビルドを行います。手動実行では14日間保持する成果物を生成し、`v0.1.0`のようなタグでは`.exe` 2種と`SHA256SUMS.txt`をDraft Releaseへ添付します。現在の開発ビルドはコード署名されていません。
+
+ランディングページは[`site/`](./site/)にあります。`npm run site:build`で`site-dist/`へ生成し、[`GitHub Pages`](./.github/workflows/pages.yml)が`main`更新時に公開用成果物を組み立てます。
+
+## ブラウザー版PuruPuruエディター
+
+元のPuruPuru編集画面とOBS向け透過表示も残しています。
+
+```bash
+uv run python scripts/run_local_server.py
+```
+
+表示された`http://127.0.0.1:8223/`をChromeまたはChromiumで開きます。素材形式、OBS、調整方法は[docs/usage.md](./docs/usage.md)を参照してください。
+
+## 開発とテスト
+
+```bash
+npm test
+npm run site:build
+```
+
+| パス | 内容 |
+| --- | --- |
+| `desktop/` | Electronメインプロセス、preload、設定・会話UI |
+| `assets/` | キャラクター画像とPuruPuru設定 |
+| `.agents/skills/` | 一枚絵からキャラクターを追加するCodex Skill |
+| `site/` | GitHub Pages用ランディングページ |
+| `vendor/mediapipe/` | オフライン顔追従に必要なMediaPipe、WASM、モデル |
+| `scripts/` | ローカルサーバー、サイト生成、検証補助 |
+| `tests/` | Node / JavaScript / Pythonテスト |
+
+`vendor/`に残すのは、`npm install`では復元できないMediaPipeランタイムとモデルだけです。更新方法は[docs/vendor-update.md](./docs/vendor-update.md)を参照してください。
+
+## ライセンスと素材
+
+- ソフトウェアコードとドキュメント: [Apache License 2.0](./LICENSE)
+- 元プロジェクトと変更点: [NOTICE](./NOTICE)、[MODIFICATIONS.md](./MODIFICATIONS.md)
+- 第三者依存関係: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
+- デスクトップ版の新規4キャラクター: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
+- 元ブラウザー版に残る上流サンプル素材: [ASSET_LICENSE.md](./ASSET_LICENSE.md)
+
+デスクトップ配布物には上流の旧デモキャラクターと旧faviconを含めません。ソースツリーに残る上流サンプルは、ブラウザー編集画面の互換性・検証用であり、Apache-2.0の対象ではありません。
+
+> [!WARNING]
+> 新規4キャラクターの元絵と生成差分を複製・加工・公開配布できることを、公開前に権利者が確認してください。ライセンス文書を置くだけでは元画像の権利は発生しません。
+
+## コントリビューション
+
+- [Contributing](./.github/CONTRIBUTING.md)
+- [Security policy](./.github/SECURITY.md)
+- [Support](./.github/SUPPORT.md)
+- [GitHub公開チェックリスト](./docs/github-release-checklist.md)
+
+PuruPet Desktop is not endorsed by or affiliated with the original PuruPuru PNGTuber developer.

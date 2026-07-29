@@ -394,14 +394,15 @@ class ProjectStaticTests(unittest.TestCase):
     def test_avatar_paths_are_current(self) -> None:
         app = self.read_text("app.js")
         readme = self.read_text("README.md")
+        readme_ja = self.read_text("README.ja.md")
         usage = self.read_text("docs/usage.md")
         self.assertIn("assets/amber-avatar/back-hair.png", app)
         self.assertIn("assets/demo-avatar02/back-hair.png", app)
         self.assertIn("assets/demo-avatar03/back-hair.png", app)
         self.assertIn('const DEFAULT_SETTINGS_URL = "assets/amber-avatar/default-settings.json"', app)
         self.assertIn('const DEMO_AVATAR02_SETTINGS_URL = "assets/demo-avatar02/default-settings.json"', app)
-        self.assertIn("元ブラウザー版に残る上流サンプル素材", readme)
-        self.assertIn("デスクトップ配布物には上流の旧デモキャラクター", readme)
+        self.assertIn("元ブラウザー版に残る上流サンプル素材", readme_ja)
+        self.assertIn("デスクトップ配布物には上流の旧デモキャラクター", readme_ja)
         self.assertIn("使い方 / Usage", usage)
         self.assertIn("Codex / Claude Code", usage)
         self.assertIn("同じキャンバスサイズ・同じ位置合わせ", usage)
@@ -426,11 +427,16 @@ class ProjectStaticTests(unittest.TestCase):
 
     def test_public_readme_explains_ai_assisted_pngtuber_workflow(self) -> None:
         readme = self.read_text("README.md")
+        readme_ja = self.read_text("README.ja.md")
         self.assertIn("PuruPet Desktop", readme)
         self.assertIn("Codex Avatar Studio", readme)
-        self.assertIn("会話 / 作業", readme)
+        self.assertIn("Conversation / Work", readme)
         self.assertIn(".agents/skills/build-purupuru-avatar/", readme)
-        self.assertIn("アップロード・加工・利用に必要な権利", readme)
+        self.assertIn("all rights required to upload, modify, and use", readme)
+        self.assertIn("会話 / 作業", readme_ja)
+        self.assertIn("アップロード・加工・利用に必要な権利", readme_ja)
+        self.assertIn('<a href="./README.ja.md">日本語</a>', readme)
+        self.assertIn('<a href="./README.md">English</a>', readme_ja)
 
     def test_public_character_previews_include_hair_layers(self) -> None:
         readme = self.read_text("README.md")
@@ -445,15 +451,31 @@ class ProjectStaticTests(unittest.TestCase):
     def test_public_copy_calls_human_characters_companions(self) -> None:
         public_copy = "\n".join([
             self.read_text("README.md"),
+            self.read_text("README.ja.md"),
             self.read_text("site/index.html"),
+            self.read_text("site/ja.html"),
             self.read_text("pyproject.toml"),
         ]).lower()
         self.assertNotIn("デスクトップペット", public_copy)
         self.assertNotIn("desktop pet", public_copy)
         self.assertIn("デスクトップコンパニオン", public_copy)
+        self.assertIn("desktop companion", public_copy)
+
+    def test_public_landing_has_explicit_english_and_japanese_pages(self) -> None:
+        english = self.read_text("site/index.html")
+        japanese = self.read_text("site/ja.html")
+        builder = self.read_text("scripts/build_site.mjs")
+        script = self.read_text("site/site.js")
+        self.assertIn('<html lang="en">', english)
+        self.assertIn('<html lang="ja">', japanese)
+        self.assertIn('href="./ja.html" lang="ja"', english)
+        self.assertIn('href="./" lang="en"', japanese)
+        self.assertIn('["index.html", "ja.html"]', builder)
+        self.assertIn('"purupet-site-language"', script)
 
     def test_purupuru_package_is_documented_as_self_contained(self) -> None:
         readme = self.read_text("README.md")
+        readme_ja = self.read_text("README.ja.md")
         usage = self.read_text("docs/usage.md")
         html = self.read_text("index.html")
         app = self.read_text("app.js")
@@ -462,7 +484,9 @@ class ProjectStaticTests(unittest.TestCase):
             "画像込みのポータブルな `.purupuru` アバターパッケージ",
             "元のPNG素材フォルダに依存しない",
         ]:
-            self.assertIn(text, readme)
+            self.assertIn(text, readme_ja)
+        self.assertIn("portable, self-contained `.purupuru` avatar package", readme)
+        self.assertIn("does not depend on the original PNG asset folder", readme)
 
         for text in [
             "画像込みのポータブルなアバターパッケージ",
@@ -478,13 +502,15 @@ class ProjectStaticTests(unittest.TestCase):
     def test_license_is_apache_2_and_assets_are_separate(self) -> None:
         license_text = self.read_text("LICENSE")
         readme = self.read_text("README.md")
+        readme_ja = self.read_text("README.ja.md")
         asset_license = self.read_text("ASSET_LICENSE.md")
         self.assertIn("Apache License", license_text)
         self.assertIn("Version 2.0", license_text)
         self.assertIn("Copyright 2026 masa", license_text)
         self.assertNotIn("PuruPuru PNGTuber " + "Custom " + "Lic" + "ense", license_text)
         self.assertNotIn("not an " + "OSI-approved open source license", license_text)
-        self.assertIn("ソフトウェアコードとドキュメント: [Apache License 2.0](./LICENSE)", readme)
+        self.assertIn("Software code and documentation: [Apache License 2.0](./LICENSE)", readme)
+        self.assertIn("ソフトウェアコードとドキュメント: [Apache License 2.0](./LICENSE)", readme_ja)
         self.assertIn("The software code and documentation text are licensed under [Apache License 2.0](./LICENSE)", asset_license)
         self.assertIn("The Apache-2.0 license does not grant rights to the upstream bundled demo avatars", asset_license)
 
