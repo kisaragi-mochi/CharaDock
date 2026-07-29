@@ -24,11 +24,11 @@ body[data-character="bronze"] {
   --on-accent: #220e07;
 }
 
-body[data-character="silver"] {
-  --accent: #91a5cf;
-  --accent-deep: #667dac;
-  --accent-soft: rgba(145, 165, 207, 0.17);
-  --on-accent: #0b1428;
+body[data-character="towa"] {
+  --accent: #33b5b3;
+  --accent-deep: #168d91;
+  --accent-soft: rgba(51, 181, 179, 0.16);
+  --on-accent: #071b1c;
 }
 
 body[data-character="sage"] {

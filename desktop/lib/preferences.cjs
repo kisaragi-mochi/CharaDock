@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { DEFAULT_REALTIME_VOICE, normalizeRealtimeVoice } = require("./realtime-voice.cjs");
+const { normalizeCharacterMemories } = require("./character-memory.cjs");
 
 const DEFAULTS = Object.freeze({
   backend: "codex",
@@ -45,7 +46,7 @@ const DEFAULTS = Object.freeze({
   realtimeVoice: DEFAULT_REALTIME_VOICE,
   englishPronunciationEnabled: true,
   englishPronunciationDictionary: "",
-  speechInputProvider: "auto",
+  speechInputProvider: "browser",
   sherpaModelId: "reazonspeech-ja-int8",
   speechLanguage: "ja-JP",
   voiceActivationMode: "vad",
@@ -59,11 +60,86 @@ const DEFAULTS = Object.freeze({
   workDirectory: "",
   characterProfiles: {},
   customCharacters: [],
+  conversationHistories: {},
+  characterMemories: {},
+  workHistory: [],
   mascotBounds: null,
   controlBounds: null,
 });
 
 const PUBLIC_KEYS = new Set(Object.keys(DEFAULTS));
+const LEGACY_TOWA_CHARACTER_ID = "user-avatar-ms5afs58";
+const BUILT_IN_TOWA_CHARACTER_ID = "towa-avatar";
+
+function normalizeConversationHistories(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).slice(0, 40).flatMap(([characterId, entries]) => {
+    const id = String(characterId || "").slice(0, 120);
+    if (!id || !Array.isArray(entries)) return [];
+    const history = entries.slice(-40).flatMap((entry) => {
+      const role = entry?.role === "assistant" ? "assistant" : entry?.role === "user" ? "user" : "";
+      const text = String(entry?.text || "").trim().slice(0, 12_000);
+      const createdAt = String(entry?.createdAt || "").slice(0, 40);
+      return role && text ? [{ role, text, createdAt }] : [];
+    });
+    return history.length ? [[id, history]] : [];
+  }));
+}
+
+function normalizeWorkHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 24).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const id = String(entry.id || "").slice(0, 120);
+    const request = String(entry.request || "").trim().slice(0, 12_000);
+    if (!id || !request) return [];
+    const wasActive = ["running", "stopping"].includes(entry.status);
+    const status = wasActive ? "interrupted" : ["completed", "interrupted", "failed"].includes(entry.status) ? entry.status : "failed";
+    return [{
+      id,
+      startedAt: String(entry.startedAt || "").slice(0, 40),
+      finishedAt: String(entry.finishedAt || (wasActive ? new Date().toISOString() : "")).slice(0, 40),
+      status,
+      request,
+      activities: (Array.isArray(entry.activities) ? entry.activities : []).slice(-12).map((item) => String(item || "").slice(0, 160)).filter(Boolean),
+      result: String(entry.result || (wasActive ? "アプリの終了により作業を中断しました。" : "")).slice(0, 24_000),
+      characterId: String(entry.characterId || "").slice(0, 120),
+      characterName: String(entry.characterName || "").slice(0, 80),
+      workDirectoryName: String(entry.workDirectoryName || "").slice(0, 260),
+    }];
+  });
+}
+
+function migrateBundledTowaPreferenceData(data) {
+  let changed = false;
+  if (data.characterId === LEGACY_TOWA_CHARACTER_ID) {
+    data.characterId = BUILT_IN_TOWA_CHARACTER_ID;
+    changed = true;
+  }
+  if (Array.isArray(data.customCharacters)) {
+    const remaining = data.customCharacters.filter((character) => character?.id !== LEGACY_TOWA_CHARACTER_ID);
+    if (remaining.length !== data.customCharacters.length) {
+      data.customCharacters = remaining;
+      changed = true;
+    }
+  }
+  for (const profileKey of ["characterProfiles", "characterTtsProfiles", "conversationHistories", "characterMemories"]) {
+    const profiles = data[profileKey];
+    if (!profiles || typeof profiles !== "object" || Array.isArray(profiles) || !profiles[LEGACY_TOWA_CHARACTER_ID]) continue;
+    if (!profiles[BUILT_IN_TOWA_CHARACTER_ID]) profiles[BUILT_IN_TOWA_CHARACTER_ID] = profiles[LEGACY_TOWA_CHARACTER_ID];
+    delete profiles[LEGACY_TOWA_CHARACTER_ID];
+    changed = true;
+  }
+  if (Array.isArray(data.workHistory)) {
+    for (const run of data.workHistory) {
+      if (run?.characterId === LEGACY_TOWA_CHARACTER_ID) {
+        run.characterId = BUILT_IN_TOWA_CHARACTER_ID;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
 
 class Preferences {
   constructor(filePath, safeStorage = null) {
@@ -146,7 +222,14 @@ class Preferences {
         }]];
       }));
       this.data.realtimeVoice = normalizeRealtimeVoice(this.data.realtimeVoice);
+      if (!["realtime", "sherpa-onnx", "browser", "openai"].includes(this.data.speechInputProvider)) {
+        this.data.speechInputProvider = "browser";
+      }
+      this.data.conversationHistories = normalizeConversationHistories(this.data.conversationHistories);
+      this.data.characterMemories = normalizeCharacterMemories(this.data.characterMemories);
+      this.data.workHistory = normalizeWorkHistory(this.data.workHistory);
       if (typeof parsed.encryptedApiKey === "string") this.data.encryptedApiKey = parsed.encryptedApiKey;
+      if (migrateBundledTowaPreferenceData(this.data)) this.save();
     } catch (error) {
       if (error?.code !== "ENOENT") console.warn("Preferences load failed:", error);
     }
@@ -162,7 +245,7 @@ class Preferences {
   publicState() {
     const state = {};
     for (const key of PUBLIC_KEYS) {
-      if (!["customCharacters", "workDirectory", "piperPlusExecutablePath", "piperPlusModelPath", "supertonicModelDirectory", "irodoriModelDirectory", "irodoriReferenceAudioPath", "irodoriVoices", "kokoroModelDirectory", "characterTtsProfiles"].includes(key)) state[key] = this.data[key];
+      if (!["customCharacters", "workDirectory", "piperPlusExecutablePath", "piperPlusModelPath", "supertonicModelDirectory", "irodoriModelDirectory", "irodoriReferenceAudioPath", "irodoriVoices", "kokoroModelDirectory", "characterTtsProfiles", "conversationHistories", "characterMemories", "workHistory"].includes(key)) state[key] = this.data[key];
     }
     state.hasWorkDirectory = Boolean(this.data.workDirectory);
     state.workDirectoryName = this.data.workDirectory ? path.basename(this.data.workDirectory) : "";
@@ -211,4 +294,4 @@ class Preferences {
   }
 }
 
-module.exports = { DEFAULTS, Preferences };
+module.exports = { DEFAULTS, Preferences, migrateBundledTowaPreferenceData, normalizeConversationHistories, normalizeWorkHistory };

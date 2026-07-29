@@ -21,7 +21,7 @@ const assets = [
   ["docs/images/purupet-work-mode.png", "assets/purupet-work-mode.png"],
   ["docs/images/characters/amber-complete-v2.png", "assets/characters/amber.png"],
   ["docs/images/characters/bronze-complete-v2.png", "assets/characters/bronze.png"],
-  ["docs/images/characters/silver-complete-v2.png", "assets/characters/silver.png"],
+  ["docs/images/characters/towa-complete-v1.png", "assets/characters/towa.png"],
   ["docs/images/characters/sage-complete-v1.png", "assets/characters/sage.png"],
 ];
 

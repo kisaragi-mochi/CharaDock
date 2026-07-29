@@ -1,4 +1,4 @@
 interface:
   display_name: "PuruPuruキャラクター作成"
-  short_description: "一枚絵からPuruPuru用差分と性格を作成します"
-  default_prompt: "Use $build-purupuru-avatar to turn this character image into a validated PuruPuru avatar package."
+  short_description: "一枚絵から品質検証済みの高精度アバターを作成します"
+  default_prompt: "Use $build-purupuru-avatar to turn this character image into a pixel-registered, quality-validated PuruPuru avatar package."

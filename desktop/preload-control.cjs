@@ -6,15 +6,18 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   setApiKey: (key) => ipcRenderer.invoke("settings:setApiKey", key),
   setCharacter: (id) => ipcRenderer.invoke("character:set", id),
+  removeCharacter: (id) => ipcRenderer.invoke("character:remove", id),
+  removeMemory: (id) => ipcRenderer.invoke("memory:remove", id),
+  clearMemories: () => ipcRenderer.invoke("memory:clear"),
   configureCharacter: (profile) => ipcRenderer.invoke("character:configure", profile),
   previewCharacterMotion: (payload) => ipcRenderer.invoke("character:previewMotion", payload),
   generateCharacter: (payload) => ipcRenderer.invoke("character:generate", payload),
+  importPuruPuruCharacter: (payload) => ipcRenderer.invoke("character:importPuruPuru", payload),
   sendVoiceLevel: (level) => ipcRenderer.invoke("mascot:voice", level),
   setExpression: (expression) => ipcRenderer.invoke("mascot:expression", expression),
   controlMascotWindow: (action, value) => ipcRenderer.invoke("mascot:window", action, value),
   sendChat: (message) => ipcRenderer.invoke("chat:send", message),
   interruptChat: () => ipcRenderer.invoke("chat:interrupt"),
-  sendCodexAudio: (payload) => ipcRenderer.invoke("audio:sendCodex", payload),
   resetChat: () => ipcRenderer.invoke("chat:reset"),
   testBackend: (backend) => ipcRenderer.invoke("backend:test", backend),
   getCodexAccount: () => ipcRenderer.invoke("codex:account"),
@@ -48,6 +51,11 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("chat:stream", listener);
     return () => ipcRenderer.removeListener("chat:stream", listener);
+  },
+  onChatHistory: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("chat:history", listener);
+    return () => ipcRenderer.removeListener("chat:history", listener);
   },
   onCharacterGeneration: (callback) => {
     const listener = (_event, payload) => callback(payload);

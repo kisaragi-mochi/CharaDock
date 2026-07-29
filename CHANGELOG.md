@@ -4,7 +4,22 @@ All notable changes to PuruPet Desktop will be documented here.
 
 ## Unreleased
 
-- Accelerate Irodori WebGPU with selectable Sway sampling, an 8-step default, cached reference/speaker encodings, idle prewarming, a short first chunk, and chunk-by-chunk playback/prefetch with per-stage timing logs.
+- Route typed messages through the active GPT-Live session so its selected Live voice produces the reply, while keeping Realtime sessions record-button-only.
+- Preserve every GPT-Live conversation turn when transcript events arrive consecutively or out of order, and let idle Live sessions speak character-click reactions without adding those reactions to conversation history.
+- Move character voice controls into the Character page, clearly show whether Live or standard TTS is active, and disable the unused voice path.
+- Keep the Settings conversation composer text-only, remove its nonfunctional microphone controls, and fix user-bubble contrast in light appearance.
+- Make character memory proactive on every conversational turn and add in-place updates for corrected or changed preferences while retaining per-character isolation and sensitive-data rejection.
+
+- Persist up to 20 conversation turns separately for each character and restore the latest 12 work records after restart; expose the same compact history panel in Chat and Work modes while limiting AI context to recent relevant entries.
+- Add character-scoped long-term user memory with app-server save/list/forget tools, a bounded always-visible profile block, secret/sensitive-data rejection, and inspect/delete controls in Character settings.
+- Sanitize only the TTS copy of an answer, skipping URLs, emails, file paths, code, hashes, citations, emoji, and dense markup while keeping readable Markdown link labels and the original displayed response intact.
+- Add an optional personality/speaking-style field to single-image character creation, infer it only when omitted, remove automatic/Codex local-audio input choices in favor of explicit providers, and publish Windows packages as ochisamu.
+- Remove the OmniVoice/VocoLoco provider from the app while leaving previously downloaded model files untouched for user-controlled cleanup.
+- Add safe `.purupuru` import in the Character tab, copying all avatar states, hair layers, package settings, thumbnail, and embedded item PNGs into app-owned storage; imported characters can be switched, edited, and deleted like generated characters.
+- Drive generated-audio lip sync from an adaptive real-waveform envelope with faster attack, natural release, dynamic loudness normalization, and 32ms updates instead of synthetic mouth pulses.
+- Allow generated characters to be deleted from the Character tab, including their app-owned image files and per-character profile/TTS settings, while protecting bundled characters and the generated-character storage root.
+- Rebuild single-image avatar generation around canonical registered edits and deterministic eye/mouth compositing; add independent pixel-level rejection for copied variants, baked checkerboards, opaque/oversized hair layers, missing expression changes, registration drift, invalid rig geometry, and bad six-state previews, with two automatic repair turns before installation.
+- Accelerate Irodori WebGPU with selectable Sway sampling, an 8-step default, cached reference/speaker encodings, idle prewarming, BudouX-guided natural phrase chunks targeting 40 characters (up to 44 to avoid tiny tails), and chunk-by-chunk playback/prefetch with per-stage timing logs; keep the bubble on the segment being prepared/spoken instead of flashing the full answer first.
 - Route Realtime through the workspace-write Codex worker while Work mode is selected, retain work history/progress/interruption, isolate Chat mode as read-only, and buffer assistant transcript deltas so the first displayed character is not lost.
 - Start Realtime sessions only from the record button, group voices by approximate masculine/feminine/neutral impression with descriptive labels, and keep character clicks visual-only during Realtime, preventing preview or click speech from overlapping a live conversation.
 - List GPT-Live voices from Codex app-server, save a separate Realtime voice per character, pass it to Realtime V3, suppress normal TTS during Live sessions, and stream delayed assistant transcripts into the persistent speech bubble.

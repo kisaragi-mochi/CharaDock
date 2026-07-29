@@ -51,6 +51,18 @@ fallback used only at the text-to-speech boundary. The original displayed text
 is not replaced. The ISC permission and warranty notice is retained with the
 installed package.
 
+### BudouX
+
+- Project: BudouX
+- Copyright: Google LLC
+- Source: https://github.com/google/budoux
+- Runtime package: `budoux` 0.7.0
+- License: Apache License 2.0
+
+The Japanese phrase segmenter is used locally to choose natural text-to-speech
+chunk boundaries. Its model and parser remain inside the packaged application;
+no response text is sent to an additional service.
+
 ### piper-plus (optional external runtime)
 
 - Project: piper-plus
@@ -142,7 +154,7 @@ notice carried from the model card.
 - Project: ONNX Runtime
 - Provider: Microsoft
 - Source: https://github.com/microsoft/onnxruntime
-- Runtime package: `onnxruntime-web` 1.23.0
+- Runtime package: `onnxruntime-web` 1.27.0
 - License: MIT License
 
 ### Tokenizers.js

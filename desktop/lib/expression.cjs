@@ -5,13 +5,17 @@ function expressionForText(text, { listening = false } = {}) {
   const durationScale = listening ? 0.72 : 1;
   const make = (emotion, forceMouth, forceEyesClosed, durationMs) => ({
     emotion,
+    reaction: emotion,
     forceMouth,
     forceEyesClosed,
     durationMs: Math.round(durationMs * durationScale),
   });
 
   if (/眠|おやす|疲れ|休も|休ん|つら|辛い|悲し|さみし|寂し|ごめん|残念/.test(value)) {
-    return make("soft", 0, false, 2200);
+    return { ...make("soft", 0, false, 2200), reaction: "sad" };
+  }
+  if (/怒|むかつ|腹が立|許せな|最悪/.test(value)) {
+    return { ...make("surprised", 1, false, 1700), reaction: "angry" };
   }
   if (/[!?！？]{2,}|びっくり|驚|まさか|すごい|本当[？?]|えっ|わっ/.test(value)) {
     return make("surprised", 2, false, 1500);

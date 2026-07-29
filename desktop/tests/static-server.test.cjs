@@ -39,10 +39,11 @@ test("snapshot and input APIs retain state", async () => {
     server.setSnapshot({ type: "purupuru-obs-snapshot", version: 1 }, false);
     const snapshot = await (await fetch(`${server.origin()}/api/obs/snapshot`)).json();
     assert.equal(snapshot.type, "purupuru-obs-snapshot");
-    server.pushInput({ voiceRaw: 0.4, forceMouth: 2, durationMs: 500 });
+    server.pushInput({ voiceRaw: 0.4, forceMouth: 2, reaction: "happy", durationMs: 500 });
     const input = await (await fetch(`${server.origin()}/api/obs/input`)).json();
     assert.equal(input.voiceRaw, 0.4);
     assert.equal(Object.prototype.hasOwnProperty.call(input, "forceMouth"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(input, "reaction"), false);
   } finally {
     await server.stop();
   }

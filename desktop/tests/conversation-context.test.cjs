@@ -14,8 +14,8 @@ test("recent conversation context preserves an elliptical weather follow-up", ()
 
 test("conversation backup stays bounded", () => {
   let history = [];
-  for (let index = 0; index < 10; index += 1) history = boundedConversationHistory(history, `u${index}`, `a${index}`);
-  assert.equal(history.length, 12);
-  assert.equal(history[0].text, "u4");
-  assert.equal(history.at(-1).text, "a9");
+  for (let index = 0; index < 30; index += 1) history = boundedConversationHistory(history, `u${index}`, `a${index}`);
+  assert.equal(history.length, 40);
+  assert.equal(history[0].text, "u10");
+  assert.equal(history.at(-1).text, "a29");
 });

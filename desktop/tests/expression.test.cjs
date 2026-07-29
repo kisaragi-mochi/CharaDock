@@ -14,6 +14,8 @@ test("conversation text maps to distinct mascot expressions", () => {
   assert.equal(responseExpression("えっ！？まさか！").emotion, "surprised");
   assert.equal(responseExpression("今日は疲れた。おやすみ").emotion, "soft");
   assert.equal(responseExpression("どう思う？").emotion, "thinking");
+  assert.equal(responseExpression("今日は疲れた。おやすみ").reaction, "sad");
+  assert.equal(responseExpression("それは許せない、腹が立つ").reaction, "angry");
 });
 
 test("user-message reaction is shorter than the reply expression", () => {

@@ -25,7 +25,7 @@ assets/demo-avatar03/**
 ```
 
 This file does not cover `assets/amber-avatar/**`, `assets/bronze-avatar/**`,
-`assets/silver-hood-avatar/**`, `app-icon.ico`, or PuruPet Desktop screenshots.
+`assets/towa-avatar/**`, `app-icon.ico`, or PuruPet Desktop screenshots.
 Those are governed by [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md).
 
 ## Relationship to the software license

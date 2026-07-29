@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+const { splitNaturalSpeechText } = require("./natural-speech-chunks.cjs");
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function numberInRange(value, fallback, min, max) {
@@ -23,24 +25,7 @@ function styleBertVoiceEndpoint(rawUrl) {
 }
 
 function splitTtsText(value, maxLength = 100, maxChunks = 10) {
-  let remaining = String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength * maxChunks);
-  const chunks = [];
-  while (remaining && chunks.length < maxChunks) {
-    if (remaining.length <= maxLength) {
-      chunks.push(remaining);
-      break;
-    }
-    const head = remaining.slice(0, maxLength + 1);
-    let splitAt = -1;
-    for (const marker of ["。", "！", "？", "、", ". ", "! ", "? ", " "]) {
-      const index = head.lastIndexOf(marker);
-      if (index >= Math.floor(maxLength * .45)) splitAt = Math.max(splitAt, index + marker.length);
-    }
-    if (splitAt < 1) splitAt = maxLength;
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
-  }
-  return chunks.filter(Boolean);
+  return splitNaturalSpeechText(value, maxLength, maxChunks);
 }
 
 function audioMimeType(bytes, responseType = "") {

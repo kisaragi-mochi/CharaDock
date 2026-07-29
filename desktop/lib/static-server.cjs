@@ -15,7 +15,7 @@ const MIME = {
   ".woff2": "font/woff2",
 };
 
-const ROOT_FILES = new Set(["index.html", "app.js", "styles.css", "app-icon.ico"]);
+const ROOT_FILES = new Set(["index.html", "app.js", "motion-runtime.js", "styles.css", "app-icon.ico"]);
 const ROOT_DIRS = new Set(["assets", "vendor", "desktop"]);
 
 function jsonResponse(response, status, value) {
@@ -69,7 +69,7 @@ class MascotStaticServer {
   }
 
   pushInput(values = {}) {
-    const expressionKeys = ["forceMouth", "forceEyesClosed", "emotion", "durationMs"];
+    const expressionKeys = ["forceMouth", "forceEyesClosed", "emotion", "reaction", "durationMs"];
     const persistent = { ...values };
     for (const key of expressionKeys) delete persistent[key];
     this.input = { ...this.input, ...persistent, timestamp: Date.now() };

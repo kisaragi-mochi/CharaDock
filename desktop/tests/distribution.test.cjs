@@ -14,7 +14,7 @@ test("desktop distribution contains only the four cleared built-in character set
     "assets/amber-avatar/**/*",
     "assets/bronze-avatar/**/*",
     "assets/sage-avatar/**/*",
-    "assets/silver-hood-avatar/**/*",
+    "assets/towa-avatar/**/*",
   ]);
   assert.equal(files.some((entry) => entry.includes("demo-avatar")), false);
   assert.equal(files.includes("favicon.ico"), false);
@@ -25,4 +25,35 @@ test("desktop distribution includes its license and modification records", () =>
   for (const required of ["LICENSE", "NOTICE", "MODIFICATIONS.md", "DISTRIBUTION_ASSET_LICENSE.md", "THIRD_PARTY_NOTICES.md"]) {
     assert.equal(files.includes(required), true, `${required} must be packaged`);
   }
+});
+
+test("Windows package metadata identifies ochisamu as the publisher", () => {
+  assert.equal(packageJson.author, "ochisamu");
+  assert.match(packageJson.build.copyright, /ochisamu/);
+});
+
+test("voice input UI requires one explicit supported provider", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  const main = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8");
+  const select = html.match(/<select id="speechInputProviderSelect">([\s\S]*?)<\/select>/)?.[1] || "";
+  for (const provider of ["realtime", "sherpa-onnx", "browser", "openai"]) {
+    assert.match(select, new RegExp(`<option value="${provider}">`));
+  }
+  assert.doesNotMatch(select, /<option value="(?:auto|codex-audio)">/);
+  assert.doesNotMatch(main, /audio:sendCodex|mascotInline:chatAudio/);
+});
+
+test("settings conversation stays text-only and character voice routing is explicit", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  assert.doesNotMatch(html, /id="(?:micLipSyncButton|speechInputButton|speechInputMode|micMeter)"/);
+  for (const id of ["characterVoiceMount", "voiceRoutingSummary", "realtimeVoiceSettings", "standardTtsSettings"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+});
+
+test("Codex memory tools proactively create and update character memories", () => {
+  const main = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8");
+  assert.match(main, /name: "memory_save"/);
+  assert.match(main, /name: "memory_update"/);
+  assert.match(main, /Evaluate every user message for durable personalization/);
 });

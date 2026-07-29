@@ -24,12 +24,21 @@
   let realtimeAssistantMessage = null;
   let realtimeAssistantText = "";
   let realtimeAssistantActive = false;
+  let realtimePendingTypedText = "";
   let realtimeUnavailable = false;
   let speechPulseTimer = null;
   let speechAudio = null;
+  let speechAudioContext = null;
+  let speechAudioAnalyser = null;
+  let speechAudioSource = null;
+  let speechAudioFrame = 0;
+  let speechAudioSamples = null;
+  let speechAudioGraphConnected = false;
+  const speechEnvelope = window.PuruPetAudioEnvelope.createAdaptiveSpeechEnvelope();
   let speechTtsStreamId = "";
   let speechPlaybackToken = 0;
   let streamingMessage = null;
+  let renderedConversationCharacterId = "";
   let generatorFile = null;
   let generatorBusy = false;
   let codexAccount = null;
@@ -200,10 +209,37 @@
       select.appendChild(new Option(`${selected.charAt(0).toUpperCase()}${selected.slice(1)}（保存済み）`, selected));
     }
     select.value = selected;
-    select.disabled = state.backend !== "codex";
+    select.disabled = state.backend !== "codex" || state.speechInputProvider !== "realtime";
     if (state.backend !== "codex") setStatus(status, "Realtime音声はCodex app-server接続時に使用します。");
     else if (realtimeVoices.loaded) setStatus(status, `${realtimeVoices.voices.length}種類のRealtime音声を利用できます。`);
     else setStatus(status, "保存済みの声を表示しています。接続時に音声一覧を更新します。");
+  }
+
+  function syncVoiceRoutingUi() {
+    const live = state.backend === "codex" && state.speechInputProvider === "realtime";
+    const realtimePanel = $("#realtimeVoiceSettings");
+    const standardPanel = $("#standardTtsSettings");
+    const providerNames = {
+      system: "Windows標準",
+      "style-bert-vits2": "Style-Bert-VITS2",
+      "piper-plus": "piper-plus",
+      "supertonic-3": "Supertonic 3",
+      kokoro: "Kokoro",
+      "irodori-webgpu": "Irodori TTS",
+    };
+    $("#voiceRoutingBadge").textContent = live ? "LIVE" : "通常TTS";
+    $("#voiceRoutingTitle").textContent = live
+      ? `GPT-Live · ${(state.realtimeVoice || "cove").replace(/^./, (value) => value.toUpperCase())}`
+      : `${providerNames[state.ttsProvider] || "通常TTS"}${state.ttsEnabled ? " · 読み上げON" : " · 読み上げOFF"}`;
+    $("#voiceRoutingDescription").textContent = live
+      ? "録音ボタンでLive接続中は、音声入力も文字入力もこの声で返します。通常TTSは使いません。"
+      : "通常会話の返答を選択中の音声合成で読み上げます。GPT-Liveの声は使いません。";
+    realtimePanel.classList.toggle("is-active", live);
+    realtimePanel.classList.toggle("is-inactive", !live);
+    standardPanel.classList.toggle("is-active", !live);
+    standardPanel.classList.toggle("is-inactive", live);
+    standardPanel.disabled = live;
+    $("#realtimeVoiceSelect").disabled = !live;
   }
 
   async function refreshRealtimeVoices() {
@@ -255,6 +291,21 @@
     return article;
   }
 
+  function renderConversationHistory(entries = []) {
+    const log = $("#chatLog");
+    log.replaceChildren();
+    const history = Array.isArray(entries) ? entries : [];
+    if (!history.length) {
+      appendMessage("assistant", "こんにちは。今日は何をしようか？");
+      return;
+    }
+    for (const entry of history) {
+      if (!["user", "assistant"].includes(entry?.role) || !String(entry?.text || "").trim()) continue;
+      appendMessage(entry.role, String(entry.text));
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
   function showOptimisticCharacterSelection(characterId, selector) {
     $$(selector).forEach((item) => {
       const selected = item.dataset.characterId === characterId;
@@ -286,6 +337,12 @@
       selected.textContent = "✓";
       copy.append(name, summary);
       button.append(image, copy, selected);
+      if (character.generated) {
+        const badge = document.createElement("span");
+        badge.className = "generated-badge";
+        badge.textContent = character.imported ? "読込" : "作成済み";
+        button.appendChild(badge);
+      }
       button.addEventListener("click", async () => {
         showOptimisticCharacterSelection(character.id, "#characterGrid .character-card");
         try {
@@ -342,6 +399,47 @@
     return state.characters.find((character) => character.id === state.characterId) || state.characters[0];
   }
 
+  function renderCharacterMemories() {
+    const list = $("#characterMemoryList");
+    const memories = Array.isArray(state.memories) ? state.memories : [];
+    const labels = {
+      identity: "呼び名",
+      preference: "好み",
+      relationship: "関係性",
+      goal: "目標",
+      background: "背景",
+      other: "その他",
+    };
+    list.replaceChildren();
+    $("#clearCharacterMemoriesButton").hidden = !memories.length;
+    if (!memories.length) {
+      const empty = document.createElement("p");
+      empty.className = "character-memory-empty";
+      empty.textContent = state.backend === "codex"
+        ? "まだメモリはありません。普段どおり会話すると、今後も役立つ好みや呼び名をこのキャラだけが自動で覚えます。"
+        : "まだメモリはありません。会話から自動で覚える機能はCodex app-server接続で利用できます。";
+      list.appendChild(empty);
+      return;
+    }
+    for (const memory of memories) {
+      const item = document.createElement("article");
+      item.className = "character-memory-item";
+      const category = document.createElement("span");
+      category.className = "character-memory-category";
+      category.textContent = labels[memory.category] || labels.other;
+      const content = document.createElement("p");
+      content.textContent = String(memory.content || "");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "character-memory-remove";
+      remove.dataset.memoryId = memory.id;
+      remove.setAttribute("aria-label", `メモリ「${content.textContent}」を削除`);
+      remove.textContent = "×";
+      item.append(category, content, remove);
+      list.appendChild(item);
+    }
+  }
+
   function syncCharacterEditor() {
     const character = currentCharacter();
     if (!character) return;
@@ -353,6 +451,9 @@
     for (const key of motionFields) {
       $(`#${key}Input`).value = character.motion?.[key] ?? (key === "avatarSize" ? 100 : 30);
     }
+    $("#removeCharacterButton").hidden = !character.generated;
+    $("#removeCharacterButton").disabled = false;
+    renderCharacterMemories();
     syncMotionReadouts();
     setStatus($("#characterProfileStatus"), `${character.name}の設定`);
   }
@@ -495,9 +596,14 @@
     const sidebarCharacter = currentCharacter();
     if (sidebarCharacter) {
       $("#sidebarCharacterPreview").src = sidebarCharacter.thumbnailUrl;
-      $("#initialAssistantLabel").textContent = sidebarCharacter.name;
+      const initialAssistantLabel = $("#initialAssistantLabel");
+      if (initialAssistantLabel) initialAssistantLabel.textContent = sidebarCharacter.name;
       const initialAvatar = $("#chatLog .message.is-assistant .message-avatar");
       if (initialAvatar) initialAvatar.textContent = [...sidebarCharacter.name][0];
+    }
+    if (renderedConversationCharacterId !== state.characterId) {
+      renderedConversationCharacterId = state.characterId;
+      renderConversationHistory(state.conversationHistory);
     }
     renderCharacters();
     syncCharacterEditor();
@@ -543,31 +649,21 @@
     syncIrodoriUi();
     $("#englishPronunciationToggle").checked = state.englishPronunciationEnabled !== false;
     $("#englishPronunciationDictionaryInput").value = state.englishPronunciationDictionary || "";
-    $("#speechInputProviderSelect").value = state.speechInputProvider || "auto";
+    $("#speechInputProviderSelect").value = state.speechInputProvider || "browser";
     $("#sherpaOnnxSettings").hidden = $("#speechInputProviderSelect").value !== "sherpa-onnx";
-    const recordedSpeechSelected = ["auto", "codex-audio", "sherpa-onnx", "openai"].includes($("#speechInputProviderSelect").value);
+    const recordedSpeechSelected = ["sherpa-onnx", "openai"].includes($("#speechInputProviderSelect").value);
     $("#voiceActivationSettings").hidden = !recordedSpeechSelected;
     $("#voiceActivationModeSelect").value = state.voiceActivationMode || "vad";
     $("#vadSensitivitySelect").value = state.vadSensitivity || "normal";
     $("#voiceAutoSendToggle").checked = state.voiceAutoSend !== false;
     syncSherpaModelUi(state.sherpaModel);
+    syncVoiceRoutingUi();
     $("#positionLockedToggle").checked = Boolean(state.positionLocked);
     $("#edgeSnapToggle").checked = Boolean(state.edgeSnap);
     const displaySelect = $("#displaySelect");
     displaySelect.replaceChildren(new Option("自動（メインモニター）", ""));
     for (const display of state.displays || []) displaySelect.appendChild(new Option(display.label, display.id));
     displaySelect.value = state.preferredDisplayId || "";
-    const voiceMode = $("#speechInputMode");
-    const providerLabels = {
-      auto: state.sherpaModel?.installed ? `自動 · ${state.sherpaModel.label || "日本語sherpa"}` : "自動 · 端末音声認識",
-      realtime: "GPT-Live / Codex Voice · 実験的",
-      "codex-audio": "Codex音声入力",
-      "sherpa-onnx": "sherpa-onnx",
-      browser: "端末音声認識",
-      openai: "OpenAI文字起こし",
-    };
-    voiceMode.textContent = providerLabels[state.speechInputProvider || "auto"];
-    voiceMode.classList.toggle("is-fallback", !["auto", "realtime"].includes(state.speechInputProvider || "auto"));
     $("#apiKeyState").textContent = state.hasApiKey
       ? `APIキー設定済み（${state.apiKeyPersistence === "encrypted" ? "暗号化保存" : "今回のみ"}）`
       : "APIキー未設定";
@@ -708,7 +804,7 @@
     const source = audioContext.createMediaStreamSource(audioStream);
     source.connect(analyser);
     lipSyncActive = true;
-    $("#micLipSyncButton").setAttribute("aria-pressed", "true");
+    $("#micLipSyncButton")?.setAttribute("aria-pressed", "true");
     const samples = new Uint8Array(analyser.fftSize);
     const update = (now) => {
       if (!lipSyncActive) return;
@@ -720,7 +816,8 @@
       }
       const rms = Math.sqrt(sum / samples.length);
       const level = Math.min(2, rms * 9);
-      $("#micMeter i").style.width = `${Math.min(100, level * 85)}%`;
+      const meter = $("#micMeter i");
+      if (meter) meter.style.width = `${Math.min(100, level * 85)}%`;
       if (now - lastVoiceSentAt > 48) {
         lastVoiceSentAt = now;
         api.sendVoiceLevel(level).catch(() => {});
@@ -733,8 +830,9 @@
   function stopLipSync() {
     lipSyncActive = false;
     cancelAnimationFrame(meterFrame);
-    $("#micLipSyncButton").setAttribute("aria-pressed", "false");
-    $("#micMeter i").style.width = "0%";
+    $("#micLipSyncButton")?.setAttribute("aria-pressed", "false");
+    const meter = $("#micMeter i");
+    if (meter) meter.style.width = "0%";
     api.sendVoiceLevel(0).catch(() => {});
   }
 
@@ -771,18 +869,16 @@
     speechRecognition.onerror = (event) => setStatus($("#chatStatus"), `音声入力: ${event.error}`, true);
     speechRecognition.onend = () => {
       speechRecognition = null;
-      $("#speechInputButton").setAttribute("aria-pressed", "false");
+      $("#speechInputButton")?.setAttribute("aria-pressed", "false");
       setStatus($("#chatStatus"), finalText ? "音声を入力欄へ追加しました。" : "音声入力を終了しました。");
     };
     speechRecognition.start();
-    $("#speechInputButton").setAttribute("aria-pressed", "true");
+    $("#speechInputButton")?.setAttribute("aria-pressed", "true");
     setStatus($("#chatStatus"), "話してください…");
     return true;
   }
 
   async function startFallbackSpeechInput(message = "端末音声認識へ切り替えました。") {
-    $("#speechInputMode").textContent = "端末音声認識";
-    $("#speechInputMode").classList.add("is-fallback");
     setStatus($("#chatStatus"), message, true);
     try {
       if (speechRecognition || mediaRecorder?.state === "recording") return true;
@@ -826,7 +922,7 @@
     realtimeUserTranscript = "";
     realtimeAssistantText = "";
     realtimeAssistantActive = false;
-    $("#speechInputButton").setAttribute("aria-pressed", "false");
+    $("#speechInputButton")?.setAttribute("aria-pressed", "false");
   }
 
   async function stopCodexRealtimeVoice({ quiet = false } = {}) {
@@ -870,9 +966,7 @@
     await peer.setLocalDescription(offer);
     await api.startCodexRealtime({ sdp: peer.localDescription?.sdp || offer.sdp });
     realtimeStarting = false;
-    $("#speechInputButton").setAttribute("aria-pressed", "true");
-    $("#speechInputMode").textContent = "GPT-Live / Codex Voice";
-    $("#speechInputMode").classList.remove("is-fallback");
+    $("#speechInputButton")?.setAttribute("aria-pressed", "true");
     setStatus($("#chatStatus"), "Codex Realtimeへ接続中…そのまま話してください。");
   }
 
@@ -912,7 +1006,8 @@
     if (method === "thread/realtime/transcript/done") {
       const text = String(params.text || "").trim();
       if (params.role === "user" && text) {
-        appendMessage("user", text);
+        if (text !== realtimePendingTypedText) appendMessage("user", text);
+        realtimePendingTypedText = "";
         realtimeUserTranscript = "";
         $("#chatInput").value = "";
         if (!realtimeAssistantActive) {
@@ -935,11 +1030,7 @@
     if (method === "thread/realtime/error") {
       realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtimeAudio();
-      if ((state.speechInputProvider || "auto") === "realtime") {
-        setStatus($("#chatStatus"), params.message || "Codex Realtime音声接続を開始できませんでした。", true);
-      } else {
-        await startFallbackSpeechInput(`${params.message || "Codex Realtime音声接続を開始できませんでした。"} 端末音声認識へ自動で切り替えます。`);
-      }
+      setStatus($("#chatStatus"), params.message || "Codex Realtime音声接続を開始できませんでした。", true);
       return;
     }
     if (method === "thread/realtime/closed") {
@@ -959,21 +1050,10 @@
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = (event) => { if (event.data.size) recordedChunks.push(event.data); };
     mediaRecorder.onstop = async () => {
-      $("#speechInputButton").setAttribute("aria-pressed", "false");
+      $("#speechInputButton")?.setAttribute("aria-pressed", "false");
       try {
         const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-        if (recordingProvider === "codex-audio") {
-          setStatus($("#chatStatus"), "Codexへ音声を送信しています…");
-          appendMessage("user", "🎙 音声メッセージ");
-          const thinking = appendMessage("assistant", "考え中", true);
-          streamingMessage = thinking;
-          setChatBusy(true);
-          const bytes = new Uint8Array(await blob.arrayBuffer());
-          const result = await api.sendCodexAudio({ bytes, mimeType: blob.type });
-          thinking.classList.remove("is-thinking");
-          thinking.querySelector("p").textContent = result.displayText || result.text;
-          setStatus($("#chatStatus"), "Codexが音声へ応答しました。");
-        } else if (recordingProvider === "sherpa-onnx") {
+        if (recordingProvider === "sherpa-onnx") {
           setStatus($("#chatStatus"), "sherpa-onnxで音声を文字にしています…");
           $("#chatInput").value = await transcribeWithSherpaOnnx(blob);
         } else {
@@ -981,7 +1061,7 @@
           const bytes = new Uint8Array(await blob.arrayBuffer());
           $("#chatInput").value = await api.transcribe({ bytes, mimeType: blob.type });
         }
-        if (recordingProvider !== "codex-audio") setStatus($("#chatStatus"), "音声を入力欄へ追加しました。");
+        setStatus($("#chatStatus"), "音声を入力欄へ追加しました。");
       } catch (error) {
         setStatus($("#chatStatus"), error.message, true);
       } finally {
@@ -990,10 +1070,8 @@
       }
     };
     mediaRecorder.start();
-    $("#speechInputButton").setAttribute("aria-pressed", "true");
-    setStatus($("#chatStatus"), provider === "codex-audio"
-      ? "Codex音声入力を録音中…もう一度押すと送信します。"
-      : `${provider === "sherpa-onnx" ? "sherpa-onnx用に" : ""}録音中…もう一度押すと文字に変換します。`);
+    $("#speechInputButton")?.setAttribute("aria-pressed", "true");
+    setStatus($("#chatStatus"), `${provider === "sherpa-onnx" ? "sherpa-onnx用に" : ""}録音中…もう一度押すと文字に変換します。`);
   }
 
   async function toggleSpeechInput() {
@@ -1009,22 +1087,13 @@
       await stopCodexRealtimeVoice();
       return;
     }
-    let provider = state.speechInputProvider || "auto";
-    if (provider === "auto") provider = state.sherpaModel?.installed ? "sherpa-onnx" : "browser";
+    const provider = state.speechInputProvider || "browser";
     if (provider === "browser") {
       if (!startBrowserSpeechRecognition()) setStatus($("#chatStatus"), "この端末では音声認識を利用できません。", true);
       return;
     }
     if (provider === "sherpa-onnx") {
       await toggleRecordedSpeechInput("sherpa-onnx");
-      return;
-    }
-    if (provider === "codex-audio") {
-      if (state.backend !== "codex") {
-        setStatus($("#chatStatus"), "Codex音声入力はCodex接続時のみ利用できます。", true);
-        return;
-      }
-      await toggleRecordedSpeechInput("codex-audio");
       return;
     }
     if (provider === "openai") {
@@ -1057,7 +1126,42 @@
   function stopSpeechPulse() {
     clearInterval(speechPulseTimer);
     speechPulseTimer = null;
+    cancelAnimationFrame(speechAudioFrame);
+    speechAudioFrame = 0;
+    try { speechAudioSource?.disconnect(); } catch {}
+    speechAudioSource = null;
+    speechEnvelope.reset();
     api.sendVoiceLevel(0).catch(() => {});
+  }
+
+  async function startMeasuredSpeechPulse(audio) {
+    stopSpeechPulse();
+    speechAudioContext ||= new AudioContext();
+    if (speechAudioContext.state === "suspended") await speechAudioContext.resume();
+    speechAudioAnalyser ||= speechAudioContext.createAnalyser();
+    speechAudioAnalyser.fftSize = 1024;
+    speechAudioAnalyser.smoothingTimeConstant = 0.1;
+    speechAudioSamples ||= new Float32Array(speechAudioAnalyser.fftSize);
+    speechAudioSource = speechAudioContext.createMediaElementSource(audio);
+    speechAudioSource.connect(speechAudioAnalyser);
+    if (!speechAudioGraphConnected) {
+      speechAudioAnalyser.connect(speechAudioContext.destination);
+      speechAudioGraphConnected = true;
+    }
+    let lastSentAt = 0;
+    const update = (now) => {
+      if (audio !== speechAudio || audio.paused || audio.ended) return;
+      speechAudioAnalyser.getFloatTimeDomainData(speechAudioSamples);
+      let sum = 0;
+      for (const sample of speechAudioSamples) sum += sample * sample;
+      const level = speechEnvelope.sample(Math.sqrt(sum / speechAudioSamples.length), now);
+      if (now - lastSentAt >= 32) {
+        lastSentAt = now;
+        api.sendVoiceLevel(level).catch(() => {});
+      }
+      speechAudioFrame = requestAnimationFrame(update);
+    };
+    speechAudioFrame = requestAnimationFrame(update);
   }
 
   function stopSpeechPlayback() {
@@ -1082,15 +1186,11 @@
       speechAudio.volume = 1;
       speechAudio.playbackRate = Math.min(2, Math.max(.5, Number(playbackRate) || 1));
       speechAudio.preservesPitch = true;
-      speechAudio.onplay = () => {
-        let phase = 0;
-        clearInterval(speechPulseTimer);
-        speechPulseTimer = setInterval(() => {
-          phase += .8;
-          api.sendVoiceLevel(.12 + Math.abs(Math.sin(phase)) * .28).catch(() => {});
-        }, 80);
+      speechAudio.onplay = () => startMeasuredSpeechPulse(speechAudio).catch(() => {});
+      speechAudio.onended = () => {
+        stopSpeechPulse();
+        resolve();
       };
-      speechAudio.onended = resolve;
       speechAudio.onerror = () => {
         const detail = ({ 1: "再生が中断されました", 2: "音声データを読み込めません", 3: "音声形式をデコードできません", 4: "音声形式に対応していません" })[speechAudio.error?.code];
         reject(new Error(`生成した音声を再生できません${detail ? `（${detail}）` : ""}。`));
@@ -1178,6 +1278,20 @@
     const message = input.value.trim();
     if (!message) return;
     input.value = "";
+    if (realtimePeerConnection && !realtimeStarting) {
+      appendMessage("user", message);
+      realtimePendingTypedText = message;
+      setStatus($("#chatStatus"), "Live音声で応答を生成しています…");
+      try {
+        const appended = await api.appendCodexRealtimeSpeech(message);
+        if (!appended) throw new Error("Liveセッションへ文字を送信できませんでした。");
+      } catch (error) {
+        realtimePendingTypedText = "";
+        setStatus($("#chatStatus"), error.message, true);
+      }
+      input.focus();
+      return;
+    }
     appendMessage("user", message);
     const thinking = appendMessage("assistant", "考え中", true);
     streamingMessage = thinking;
@@ -1216,6 +1330,12 @@
         $("#chatLog").scrollTop = $("#chatLog").scrollHeight;
       }
     });
+    api.onChatHistory?.((entries) => {
+      state.conversationHistory = Array.isArray(entries) ? entries : [];
+      if (streamingMessage || realtimeAssistantActive) return;
+      renderedConversationCharacterId = state.characterId;
+      renderConversationHistory(state.conversationHistory);
+    });
     api.onCodexRealtime?.((message) => {
       handleCodexRealtimeEvent(message).catch((error) => {
         setStatus($("#chatStatus"), `音声イベント: ${error.message}`, true);
@@ -1223,6 +1343,34 @@
       });
     });
     api.onCharacterGeneration?.((payload) => updateGeneratorProgress(payload));
+    $("#purupuruImportButton").addEventListener("click", () => $("#purupuruImportInput").click());
+    $("#purupuruImportInput").addEventListener("change", async (event) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0] || null;
+      input.value = "";
+      if (!file) return;
+      if (!/\.purupuru$/i.test(file.name)) {
+        setStatus($("#purupuruImportStatus"), ".purupuruファイルを選択してください。", true);
+        return;
+      }
+      if (file.size > 80 * 1024 * 1024) {
+        setStatus($("#purupuruImportStatus"), ".purupuruは80MB以下にしてください。", true);
+        return;
+      }
+      const button = $("#purupuruImportButton");
+      button.disabled = true;
+      setStatus($("#purupuruImportStatus"), `${file.name} を確認しています…`);
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        state = await api.importPuruPuruCharacter({ bytes, fileName: file.name });
+        syncUi();
+        setStatus($("#purupuruImportStatus"), `${currentCharacter().name}を追加しました。`);
+      } catch (error) {
+        setStatus($("#purupuruImportStatus"), error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
     $("#avatarImageInput").addEventListener("change", async (event) => {
       const file = event.target.files?.[0] || null;
       generatorFile = null;
@@ -1260,9 +1408,12 @@
           fileName: generatorFile.name,
           mimeType: generatorFile.type,
           name: $("#generatedCharacterNameInput").value.trim(),
+          personality: $("#generatedCharacterPersonalityInput").value.trim(),
         });
         generatorFile = null;
         $("#avatarImageInput").value = "";
+        $("#generatedCharacterNameInput").value = "";
+        $("#generatedCharacterPersonalityInput").value = "";
         $("#avatarRightsConfirm").checked = false;
         $("#avatarImageDrop").classList.remove("has-image");
         syncUi();
@@ -1300,8 +1451,8 @@
     $("#chatInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendChat(); }
     });
-    $("#micLipSyncButton").addEventListener("click", toggleLipSync);
-    $("#speechInputButton").addEventListener("click", toggleSpeechInput);
+    $("#micLipSyncButton")?.addEventListener("click", toggleLipSync);
+    $("#speechInputButton")?.addEventListener("click", toggleSpeechInput);
     $$("[data-expression]").forEach((button) => button.addEventListener("click", () => {
       const expressions = {
         neutral: { forceMouth: 0, forceEyesClosed: false, durationMs: 1000 },
@@ -1345,6 +1496,47 @@
         syncUi();
         setStatus($("#characterProfileStatus"), "初期設定へ戻しました。");
       } catch (error) {
+        setStatus($("#characterProfileStatus"), error.message, true);
+      }
+    });
+    $("#characterMemoryList").addEventListener("click", async (event) => {
+      const button = event.target.closest(".character-memory-remove");
+      if (!button?.dataset.memoryId) return;
+      button.disabled = true;
+      try {
+        state = await api.removeMemory(button.dataset.memoryId);
+        syncUi();
+        setStatus($("#characterProfileStatus"), "このキャラのメモリから削除しました。");
+      } catch (error) {
+        button.disabled = false;
+        setStatus($("#characterProfileStatus"), error.message, true);
+      }
+    });
+    $("#clearCharacterMemoriesButton").addEventListener("click", async () => {
+      const character = currentCharacter();
+      if (!state.memories?.length || !window.confirm(`${character.name}が覚えている利用者メモリをすべて削除しますか？`)) return;
+      try {
+        state = await api.clearMemories();
+        syncUi();
+        setStatus($("#characterProfileStatus"), `${character.name}のメモリをすべて削除しました。`);
+      } catch (error) {
+        setStatus($("#characterProfileStatus"), error.message, true);
+      }
+    });
+    $("#removeCharacterButton").addEventListener("click", async () => {
+      const character = currentCharacter();
+      if (!character?.generated) return;
+      const confirmed = window.confirm(`追加したキャラ「${character.name}」を削除しますか？\n\n画像と、このキャラ専用の設定・音声設定・メモリも端末から削除されます。この操作は元に戻せません。`);
+      if (!confirmed) return;
+      const button = $("#removeCharacterButton");
+      button.disabled = true;
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        state = await api.removeCharacter(character.id);
+        syncUi();
+        setStatus($("#characterProfileStatus"), `${character.name}を削除しました。`);
+      } catch (error) {
+        button.disabled = false;
         setStatus($("#characterProfileStatus"), error.message, true);
       }
     });
@@ -1492,7 +1684,7 @@
     }
     $("#speechInputProviderSelect").addEventListener("change", () => {
       $("#sherpaOnnxSettings").hidden = $("#speechInputProviderSelect").value !== "sherpa-onnx";
-      $("#voiceActivationSettings").hidden = !["auto", "codex-audio", "sherpa-onnx", "openai"].includes($("#speechInputProviderSelect").value);
+      $("#voiceActivationSettings").hidden = !["sherpa-onnx", "openai"].includes($("#speechInputProviderSelect").value);
       saveSettings().catch((error) => setStatus($("#connectionStatus"), error.message, true));
     });
     $("#sherpaModelSelect").addEventListener("change", () => {
@@ -1660,7 +1852,7 @@
   async function init() {
     if (!api) throw new Error("Electron bridge is unavailable");
     const characterVoiceCard = $("#characterVoiceCard");
-    $("#characterGrid").insertAdjacentElement("afterend", characterVoiceCard);
+    $("#characterVoiceMount").appendChild(characterVoiceCard);
     state = await api.getState();
     api.onSherpaModelProgress((model) => {
       state.sherpaModel = model;

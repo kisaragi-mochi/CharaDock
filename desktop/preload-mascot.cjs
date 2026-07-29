@@ -43,7 +43,7 @@ window.addEventListener("DOMContentLoaded", () => {
     <form id="desktopMascotComposer">
       <button id="desktopMascotModeButton" type="button" aria-label="会話モードと作業モードを切り替える">会話</button>
       <button id="desktopMascotWorkTarget" type="button" aria-label="作業先フォルダーを変更する"></button>
-      <button id="desktopMascotWorkHistoryButton" type="button" aria-label="作業履歴を開く" aria-expanded="false">履歴</button>
+      <button id="desktopMascotWorkHistoryButton" type="button" aria-label="履歴を開く" aria-expanded="false">履歴</button>
       <button id="desktopMascotMicButton" type="button" aria-label="音声入力" aria-pressed="false">●</button>
       <textarea id="desktopMascotInput" rows="1" maxlength="6000" aria-label="メッセージ" placeholder="短く話しかける…"></textarea>
       <button id="desktopMascotSendButton" type="submit" aria-label="送信">↑</button>
@@ -55,12 +55,12 @@ window.addEventListener("DOMContentLoaded", () => {
   const workPanel = document.createElement("section");
   workPanel.id = "desktopMascotWorkPanel";
   workPanel.setAttribute("role", "dialog");
-  workPanel.setAttribute("aria-label", "作業履歴");
+  workPanel.setAttribute("aria-label", "履歴");
   workPanel.setAttribute("aria-modal", "false");
   workPanel.setAttribute("aria-hidden", "true");
   workPanel.innerHTML = `
     <header>
-      <div><strong>作業履歴</strong><span id="desktopMascotWorkPanelSummary">実行内容と結果</span></div>
+      <div><strong id="desktopMascotHistoryTitle">履歴</strong><span id="desktopMascotWorkPanelSummary">会話と作業の記録</span></div>
       <button id="desktopMascotWorkPanelClose" type="button" aria-label="作業履歴を閉じる">×</button>
     </header>
     <div id="desktopMascotWorkHistoryList"></div>`;
@@ -80,6 +80,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const workHistoryButton = dock.querySelector("#desktopMascotWorkHistoryButton");
   const workHistoryList = workPanel.querySelector("#desktopMascotWorkHistoryList");
   const workPanelSummary = workPanel.querySelector("#desktopMascotWorkPanelSummary");
+  const historyTitle = workPanel.querySelector("#desktopMascotHistoryTitle");
   const hint = dock.querySelector("#desktopMascotHint");
   let statusTimer;
   let autoCloseTimer;
@@ -126,6 +127,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let bubbleHideDuration = 9000;
   let bubblePersistent = false;
   let workHistoryState = { activeWorkRunId: null, runs: [] };
+  let chatHistoryState = [];
   let workPanelCloseTimer;
   let permissionTimer;
   let ttsAudio = null;
@@ -138,6 +140,9 @@ window.addEventListener("DOMContentLoaded", () => {
   let ttsAudioSamples = null;
   let ttsAudioGraphConnected = false;
   let ttsEnvelope = 0;
+  let ttsDynamicPeak = .022;
+  let ttsNoiseFloor = .0015;
+  let ttsEnvelopeSampleAt = 0;
   let ttsBusy = false;
   const activeTtsStreamIds = new Set();
   let streamTtsQueue = [];
@@ -169,6 +174,7 @@ window.addEventListener("DOMContentLoaded", () => {
     workPanelCloseTimer = setTimeout(() => setWorkPanelOpen(false), duration);
   };
   const renderWorkHistory = (payload = workHistoryState) => {
+    historyTitle.textContent = "作業履歴";
     workHistoryState = payload && Array.isArray(payload.runs) ? payload : { activeWorkRunId: null, runs: [] };
     workHistoryList.replaceChildren();
     workPanelSummary.textContent = workHistoryState.activeWorkRunId ? "作業を実行しています" : `${workHistoryState.runs.length}件を保持`;
@@ -246,6 +252,38 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const renderConversationHistory = (payload = chatHistoryState) => {
+    chatHistoryState = Array.isArray(payload) ? payload : [];
+    historyTitle.textContent = "会話履歴";
+    workPanelSummary.textContent = `${Math.floor(chatHistoryState.length / 2)}往復を保持`;
+    workHistoryList.replaceChildren();
+    if (!chatHistoryState.length) {
+      const empty = document.createElement("p");
+      empty.className = "desktop-mascot-work-empty";
+      empty.textContent = "このキャラクターとの会話はまだありません";
+      workHistoryList.appendChild(empty);
+      return;
+    }
+    for (const entry of chatHistoryState) {
+      const item = document.createElement("article");
+      item.className = `desktop-mascot-work-run is-chat-${entry.role}`;
+      const head = document.createElement("div");
+      head.className = "desktop-mascot-work-run-head";
+      const role = document.createElement("span");
+      role.className = "desktop-mascot-work-status";
+      role.textContent = entry.role === "assistant" ? "キャラクター" : "あなた";
+      const time = document.createElement("span");
+      time.className = "desktop-mascot-work-meta";
+      time.textContent = formatWorkTime(entry.createdAt);
+      head.append(role, time);
+      const text = document.createElement("p");
+      text.className = "desktop-mascot-work-request";
+      text.textContent = String(entry.text || "");
+      item.append(head, text);
+      workHistoryList.appendChild(item);
+    }
+  };
+
   const resizeInput = () => {
     const maxHeight = document.body.classList.contains("is-work-mode") ? 78 : 68;
     input.style.height = "0px";
@@ -263,7 +301,12 @@ window.addEventListener("DOMContentLoaded", () => {
     workTarget.textContent = `作業先 · ${state.workDirectoryName || "未選択"}`;
     workTarget.title = workTarget.textContent;
     input.placeholder = workMode ? "このフォルダーでやること…" : "短く話しかける…";
-    if (!workMode) setWorkPanelOpen(false);
+    workHistoryButton.setAttribute("aria-label", workMode ? "作業履歴を開く" : "会話履歴を開く");
+    workPanel.querySelector("#desktopMascotWorkPanelClose").setAttribute("aria-label", workMode ? "作業履歴を閉じる" : "会話履歴を閉じる");
+    if (workPanel.classList.contains("is-open")) {
+      if (workMode) renderWorkHistory(workHistoryState);
+      else renderConversationHistory(chatHistoryState);
+    }
     resizeInput();
   };
 
@@ -429,6 +472,9 @@ window.addEventListener("DOMContentLoaded", () => {
     try { ttsAudioSource?.disconnect(); } catch {}
     ttsAudioSource = null;
     ttsEnvelope = 0;
+    ttsDynamicPeak = .022;
+    ttsNoiseFloor = .0015;
+    ttsEnvelopeSampleAt = 0;
     ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
   };
   const stopTtsPulse = () => {
@@ -437,7 +483,30 @@ window.addEventListener("DOMContentLoaded", () => {
     cancelAnimationFrame(ttsAudioFrame);
     ttsAudioFrame = null;
     ttsEnvelope = 0;
+    ttsDynamicPeak = .022;
+    ttsNoiseFloor = .0015;
+    ttsEnvelopeSampleAt = 0;
     ipcRenderer.invoke("mascotInline:voice", 0).catch(() => {});
+  };
+  const adaptiveTtsLevel = (rawRms, now) => {
+    const rms = Math.max(0, Math.min(1, Number(rawRms) || 0));
+    const elapsedMs = ttsEnvelopeSampleAt ? Math.max(8, Math.min(100, now - ttsEnvelopeSampleAt)) : 16;
+    ttsEnvelopeSampleAt = now;
+    const frameScale = elapsedMs / 16.667;
+    ttsDynamicPeak = Math.max(rms, ttsDynamicPeak * Math.pow(.988, frameScale), .018);
+    if (rms < Math.max(.008, ttsNoiseFloor * 2.2)) {
+      ttsNoiseFloor += (rms - ttsNoiseFloor) * (1 - Math.pow(.985, frameScale));
+    }
+    ttsNoiseFloor = Math.max(.0004, Math.min(.006, ttsNoiseFloor));
+    const gate = Math.max(.0024, ttsNoiseFloor * 1.75);
+    const ceiling = Math.max(gate + .012, ttsDynamicPeak * .76);
+    const normalized = Math.max(0, Math.min(1, (rms - gate) / (ceiling - gate)));
+    const target = Math.pow(normalized, .72) * .5;
+    const baseFollow = target > ttsEnvelope ? .58 : .24;
+    const follow = 1 - Math.pow(1 - baseFollow, frameScale);
+    ttsEnvelope += (target - ttsEnvelope) * follow;
+    if (normalized === 0 && ttsEnvelope < .018) ttsEnvelope = 0;
+    return Math.max(0, Math.min(.5, ttsEnvelope));
   };
   const textLipLevel = (text, index, tick) => {
     const value = String(text || "");
@@ -463,8 +532,8 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       ttsAudioContext ||= new AudioContext();
       ttsAudioAnalyser ||= ttsAudioContext.createAnalyser();
-      ttsAudioAnalyser.fftSize = 512;
-      ttsAudioAnalyser.smoothingTimeConstant = .18;
+      ttsAudioAnalyser.fftSize = 1024;
+      ttsAudioAnalyser.smoothingTimeConstant = .1;
       ttsAudioSamples ||= new Float32Array(ttsAudioAnalyser.fftSize);
       try { ttsAudioSource?.disconnect(); } catch {}
       ttsAudioSource = ttsAudioContext.createMediaElementSource(audio);
@@ -481,12 +550,10 @@ window.addEventListener("DOMContentLoaded", () => {
         let sum = 0;
         for (const sample of ttsAudioSamples) sum += sample * sample;
         const rms = Math.sqrt(sum / ttsAudioSamples.length);
-        const target = Math.max(0, Math.min(.5, (rms - .004) * 5.2));
-        const follow = target > ttsEnvelope ? .4 : .16;
-        ttsEnvelope += (target - ttsEnvelope) * follow;
-        if (now - lastSentAt >= 44) {
+        const level = adaptiveTtsLevel(rms, now);
+        if (now - lastSentAt >= 32) {
           lastSentAt = now;
-          ipcRenderer.invoke("mascotInline:voice", ttsEnvelope < .03 ? 0 : Math.min(.5, Math.pow(ttsEnvelope, .9))).catch(() => {});
+          ipcRenderer.invoke("mascotInline:voice", level).catch(() => {});
         }
         ttsAudioFrame = requestAnimationFrame(update);
       };
@@ -545,8 +612,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   const prepareSpeechSegment = async (segment, provider, token) => {
     const text = String(segment?.text || segment || "").trim();
-    const spokenText = String(segment?.spokenText || text).trim();
-    if (!text || token !== ttsPlaybackToken) return null;
+    const hasSpokenText = segment && typeof segment === "object"
+      && Object.prototype.hasOwnProperty.call(segment, "spokenText");
+    const spokenText = String(hasSpokenText ? segment.spokenText : text).trim();
+    if (!text || !spokenText || token !== ttsPlaybackToken) return null;
     if (!isGeneratedTtsProvider(provider)) return { segment, text, spokenText, sources: null, playbackRate: 1 };
     const result = await ipcRenderer.invoke("mascotInline:synthesizeTts", spokenText);
     const sources = result?.audioDataUrls || [];
@@ -668,9 +737,20 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   const queueStreamSpeech = (segments) => {
     if (!streamTtsConfig.enabled) return;
+    let firstQueuedText = "";
     for (const segment of Array.isArray(segments) ? segments : []) {
       const text = String(segment?.text || segment || "").trim();
-      if (text) streamTtsQueue.push(typeof segment === "object" ? { ...segment, text } : { text });
+      if (text) {
+        firstQueuedText ||= text;
+        streamTtsQueue.push(typeof segment === "object" ? { ...segment, text } : { text });
+      }
+    }
+    // While synthesis is pending, show the text that is about to be spoken.
+    // Do not flash the already-complete answer before playback catches up.
+    if (!thinkingFillerActive && !streamCurrentSpeechText && firstQueuedText) {
+      streamCurrentSpeechText = firstQueuedText;
+      if (!bubble.classList.contains("is-expanded")) bubbleText.textContent = firstQueuedText;
+      syncBubbleOverflow();
     }
     streamTtsQueueSignal?.();
     streamTtsQueueSignal = null;
@@ -722,7 +802,8 @@ window.addEventListener("DOMContentLoaded", () => {
   workHistoryButton.addEventListener("click", async () => {
     const open = !workPanel.classList.contains("is-open");
     setWorkPanelOpen(open);
-    if (open) renderWorkHistory(await ipcRenderer.invoke("mascotInline:getWorkHistory").catch(() => workHistoryState));
+    if (open && appState?.interactionMode === "work") renderWorkHistory(await ipcRenderer.invoke("mascotInline:getWorkHistory").catch(() => workHistoryState));
+    else if (open) renderConversationHistory(await ipcRenderer.invoke("mascotInline:getConversationHistory").catch(() => chatHistoryState));
   });
   workPanel.querySelector("#desktopMascotWorkPanelClose").addEventListener("click", () => setWorkPanelOpen(false));
   workPanel.addEventListener("pointerenter", () => clearTimeout(workPanelCloseTimer));
@@ -792,8 +873,15 @@ window.addEventListener("DOMContentLoaded", () => {
     input.value = "";
     resizeInput();
     setSendingControls(true);
-    setStatus(appState?.interactionMode === "work" ? "作業を開始…" : "考え中…", 30_000);
+    const useActiveRealtime = Boolean(realtimePeer);
+    setStatus(useActiveRealtime ? "Live音声で応答を生成…" : appState?.interactionMode === "work" ? "作業を開始…" : "考え中…", 30_000);
     try {
+      if (useActiveRealtime) {
+        const appended = await ipcRenderer.invoke("mascotInline:realtimeAppendSpeech", message);
+        if (!appended) throw new Error("Liveセッションへ文字を送信できませんでした。");
+        setStatus("Liveへ文字を送信しました", 5000);
+        return;
+      }
       const result = await ipcRenderer.invoke("mascotInline:chat", message);
       if (["screen", "browser", "computer"].includes(result.permissionRequest?.type)) {
         showPermission(result);
@@ -985,26 +1073,6 @@ window.addEventListener("DOMContentLoaded", () => {
     return ipcRenderer.invoke("mascotInline:transcribe", { bytes, mimeType: blob.type });
   };
 
-  const sendCodexAudioBlob = async (blob) => {
-    setSendingControls(true);
-    setOpen(true);
-    setStatus("Codexへ音声を送信しています…", 30_000);
-    try {
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      const result = await ipcRenderer.invoke("mascotInline:chatAudio", { bytes, mimeType: blob.type });
-      if (!result.streamed) showSpeech({ text: result.text, durationMs: 9000 });
-      setStatus(result.mode === "work" ? `${result.workDirectoryName || "選択フォルダー"}で音声作業を完了` : "Codexが音声へ応答しました");
-      return result;
-    } catch (error) {
-      const interrupted = /interrupt|cancel|abort|中断/i.test(String(error.message || ""));
-      showSpeech({ text: interrupted ? "応答を中断しました。" : `エラー: ${error.message}`, durationMs: 12_000 });
-      setStatus(interrupted ? "応答を中断しました" : "音声を送信できませんでした", 5000);
-      throw error;
-    } finally {
-      setSendingControls(false);
-    }
-  };
-
   const setVadUi = (phase) => {
     const active = phase !== "off";
     micButton.setAttribute("aria-pressed", String(active));
@@ -1050,10 +1118,6 @@ window.addEventListener("DOMContentLoaded", () => {
     vadProcessing = true;
     setVadUi("processing");
     try {
-      if (provider === "codex-audio") {
-        await sendCodexAudioBlob(blob);
-        return;
-      }
       setStatus(provider === "sherpa-onnx" ? "sherpa-onnxで認識中…" : "OpenAIで文字起こし中…", 30_000);
       const transcript = String(await transcribeRecordedBlob(blob, provider) || "").trim();
       if (!transcript) {
@@ -1164,8 +1228,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const startVadListening = async (provider) => {
     if (vadActive) return;
-    if (!["codex-audio", "sherpa-onnx", "openai"].includes(provider)) throw new Error("この音声入力方式ではVADを利用できません");
-    if (provider === "codex-audio" && appState?.backend !== "codex") throw new Error("Codex app-server接続へ切り替えてください");
+    if (!["sherpa-onnx", "openai"].includes(provider)) throw new Error("この音声入力方式ではVADを利用できません");
     if (provider === "sherpa-onnx" && !appState?.sherpaModel?.installed) {
       throw new Error("設定からsherpa-onnx日本語モデルをダウンロードしてください");
     }
@@ -1255,10 +1318,6 @@ window.addEventListener("DOMContentLoaded", () => {
       try {
         setStatus(provider === "sherpa-onnx" ? "sherpa-onnxで認識中…" : "OpenAIで文字起こし中…", 30_000);
         const blob = new Blob(recordedSpeechChunks, { type: recordedSpeechRecorder.mimeType || "audio/webm" });
-        if (recordedSpeechProvider === "codex-audio") {
-          await sendCodexAudioBlob(blob);
-          return;
-        }
         input.value = await transcribeRecordedBlob(blob, recordedSpeechProvider);
         resizeInput();
         input.focus();
@@ -1334,13 +1393,12 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     appState = await ipcRenderer.invoke("mascotInline:getState").catch(() => appState);
-    let provider = appState?.speechInputProvider || "auto";
-    if (provider === "auto") provider = appState?.sherpaModel?.installed ? "sherpa-onnx" : "browser";
+    const provider = appState?.speechInputProvider || "browser";
     if (provider === "browser") {
       ensureFallbackRecognition();
       return;
     }
-    if (provider === "codex-audio" || provider === "sherpa-onnx" || provider === "openai") {
+    if (provider === "sherpa-onnx" || provider === "openai") {
       if ((appState?.voiceActivationMode || "vad") !== "manual") {
         await startVadListening(provider).catch((error) => setStatus(`音声入力: ${error.message}`, 5000));
         return;
@@ -1375,7 +1433,12 @@ window.addEventListener("DOMContentLoaded", () => {
     showSpeech(payload);
   });
   ipcRenderer.on("mascot:workHistory", (_event, payload) => {
-    renderWorkHistory(payload);
+    workHistoryState = payload && Array.isArray(payload.runs) ? payload : { activeWorkRunId: null, runs: [] };
+    if (appState?.interactionMode === "work") renderWorkHistory(workHistoryState);
+  });
+  ipcRenderer.on("mascot:conversationHistory", (_event, payload) => {
+    chatHistoryState = Array.isArray(payload) ? payload : [];
+    if (workPanel.classList.contains("is-open") && appState?.interactionMode !== "work") renderConversationHistory(chatHistoryState);
   });
   ipcRenderer.on("mascot:stream", (_event, payload) => {
     if (payload?.phase === "start") {
@@ -1402,7 +1465,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (payload?.phase === "delta") {
       streamFullText = String(payload.displayText || payload.text || "");
-      if (bubble.classList.contains("is-expanded") || !streamCurrentSpeechText) {
+      // Generated/system TTS owns the compact bubble while it is active. The
+      // complete streaming answer remains available from the `全文` action.
+      if (bubble.classList.contains("is-expanded") || !streamTtsConfig.enabled) {
         bubbleText.textContent = streamFullText;
       }
       bubble.classList.add("is-visible");
@@ -1477,12 +1542,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (method === "thread/realtime/error") {
       realtimeUnavailable ||= Boolean(params.unavailable);
       closeRealtime();
-      if ((appState?.speechInputProvider || "auto") === "realtime") {
-        setStatus(params.message || "Codex Realtime接続エラー", 5000);
-      } else {
-        setStatus(`${params.message || "Codex Realtime接続エラー"} 端末音声へ切替`, 5000);
-        ensureFallbackRecognition();
-      }
+      setStatus(params.message || "Codex Realtime接続エラー", 5000);
       return;
     }
     if (method === "thread/realtime/closed") closeRealtime();
@@ -1526,9 +1586,12 @@ window.addEventListener("DOMContentLoaded", () => {
       if (!thinkingFillerActive) return;
       thinkingFillerActive = false;
       streamCurrentSpeechText = "";
-      if (!bubble.classList.contains("is-expanded") && streamFullText) bubbleText.textContent = streamFullText;
-      syncBubbleOverflow();
+      const hasQueuedSpeech = streamTtsQueue.length > 0;
       drainStreamTtsQueue();
+      if (!hasQueuedSpeech && streamTtsFinished && !bubble.classList.contains("is-expanded") && streamFullText) {
+        bubbleText.textContent = streamFullText;
+        syncBubbleOverflow();
+      }
     });
   });
   ipcRenderer.invoke("mascotInline:getState").then((state) => {
@@ -1536,6 +1599,10 @@ window.addEventListener("DOMContentLoaded", () => {
     applyInteractionMode(state);
     applyCharacter(state.characters?.find((character) => character.id === state.characterId));
     applyWindowSettings(state);
-    ipcRenderer.invoke("mascotInline:getWorkHistory").then(renderWorkHistory).catch(() => {});
+    chatHistoryState = Array.isArray(state.conversationHistory) ? state.conversationHistory : [];
+    ipcRenderer.invoke("mascotInline:getWorkHistory").then((payload) => {
+      workHistoryState = payload;
+      if (state.interactionMode === "work") renderWorkHistory(payload);
+    }).catch(() => {});
   }).catch(() => {});
 });

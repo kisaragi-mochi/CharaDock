@@ -413,6 +413,10 @@ class CodexAppServerClient {
     return Boolean(this.threadId && this.realtimeHandlers.has(this.threadId));
   }
 
+  hasActiveTurn() {
+    return Boolean(this.turnStarting || this.activeTurnId);
+  }
+
   async appendRealtimeSpeech(text) {
     const threadId = this.threadId;
     const normalized = String(text || "").trim().slice(0, 1000);

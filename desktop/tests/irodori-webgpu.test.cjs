@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { IRODORI_CHUNK_LENGTH, IRODORI_FIRST_CHUNK_LENGTH, MODEL_NAMES, irodoriModelStatus, resolveIrodoriModelDirectory, splitIrodoriText, validateIrodoriModelDirectory } = require("../lib/irodori-webgpu.cjs");
+const { IRODORI_CHUNK_LENGTH, IRODORI_CHUNK_OVERFLOW, IRODORI_FIRST_CHUNK_LENGTH, MODEL_NAMES, irodoriModelStatus, resolveIrodoriModelDirectory, splitIrodoriText, validateIrodoriModelDirectory } = require("../lib/irodori-webgpu.cjs");
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-irodori-"));
@@ -45,7 +45,7 @@ test("Irodori remains unavailable until model, tokenizer, and reference WAV are 
 test("Irodori splits long Japanese text at punctuation into short inference chunks", () => {
   const chunks = splitIrodoriText("最初の文章です。次の文章は少し長いので、自然な読点でも区切れるようにします。".repeat(8));
   assert.ok(chunks.length > 2);
-  assert.ok(chunks.every((chunk) => chunk.length <= IRODORI_CHUNK_LENGTH));
+  assert.ok(chunks.every((chunk) => chunk.length <= IRODORI_CHUNK_LENGTH + IRODORI_CHUNK_OVERFLOW));
   assert.match(chunks[0], /。$/);
 });
 
@@ -57,9 +57,12 @@ test("Irodori keeps short sentences in separate inference chunks", () => {
   ]);
 });
 
-test("Irodori emits a short first chunk for low time-to-first-audio", () => {
+test("Irodori uses a 40-character natural-boundary ceiling without losing text", () => {
   const chunks = splitIrodoriText("これは最初の音声を早く再生するために、意図的に少し長くしている文章です。続きもあります。");
   assert.ok(chunks.length > 1);
-  assert.ok(chunks[0].length <= IRODORI_FIRST_CHUNK_LENGTH);
+  assert.equal(IRODORI_CHUNK_LENGTH, 40);
+  assert.equal(IRODORI_CHUNK_OVERFLOW, 4);
+  assert.equal(IRODORI_FIRST_CHUNK_LENGTH, 40);
+  assert.ok(chunks[0].length <= IRODORI_FIRST_CHUNK_LENGTH + IRODORI_CHUNK_OVERFLOW);
   assert.equal(chunks.join(""), "これは最初の音声を早く再生するために、意図的に少し長くしている文章です。続きもあります。");
 });

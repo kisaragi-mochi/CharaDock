@@ -24,3 +24,12 @@ test("speech text removes markdown links and raw URLs", () => {
   assert.equal(sanitizeSpeechText("- [公式サイト](https://example.com) を確認 https://example.com/a"), "公式サイト を確認");
   assert.equal(sanitizeSpeechText("晴れです。 citeturn5search2"), "晴れです。");
 });
+
+test("speech text skips code, file paths, hashes, emoji, and symbol-only content", () => {
+  assert.equal(
+    sanitizeSpeechText("結果はこちら ✅ `npm test` C:\\work\\app.js --verbose abcdef0123456789abcdef0123456789 ***"),
+    "結果はこちら",
+  );
+  assert.equal(sanitizeSpeechText("```js\nconsole.log('hello')\n``` https://example.com | ==="), "");
+  assert.equal(sanitizeSpeechText("[インストーラー](https://example.com/app.exe)を保存しました。"), "インストーラーを保存しました。");
+});

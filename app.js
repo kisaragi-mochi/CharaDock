@@ -4,6 +4,7 @@
   "use strict";
 
   const DEFAULT_AVATAR_IMAGE_SIZE = { w: 1024, h: 1536 };
+  const { createIdleGazeController, createReactionController } = window.PuruPuruMotionRuntime;
   const CROP = { x: 0, y: 0, w: DEFAULT_AVATAR_IMAGE_SIZE.w, h: DEFAULT_AVATAR_IMAGE_SIZE.h };
   const DEFAULT_FACE_CENTER = { x: 512, y: 726 };
   const TAU = Math.PI * 2;
@@ -88,22 +89,22 @@
     eyesClosedMouthOpen: "assets/bronze-avatar/eyes-closed-mouth-open.png",
   };
   const BRONZE_AVATAR_SOURCE_KIND = "asset-bronze-avatar";
-  const SILVER_HOOD_AVATAR_ASSETS = {
-    backHair: "assets/silver-hood-avatar/back-hair.png",
-    frontHair: "assets/silver-hood-avatar/front-hair.png",
-    eyesOpenMouthClosed: "assets/silver-hood-avatar/eyes-open-mouth-closed.png",
-    eyesOpenMouthHalf: "assets/silver-hood-avatar/eyes-open-mouth-half.png",
-    eyesOpenMouthOpen: "assets/silver-hood-avatar/eyes-open-mouth-open.png",
-    eyesClosedMouthClosed: "assets/silver-hood-avatar/eyes-closed-mouth-closed.png",
-    eyesClosedMouthHalf: "assets/silver-hood-avatar/eyes-closed-mouth-half.png",
-    eyesClosedMouthOpen: "assets/silver-hood-avatar/eyes-closed-mouth-open.png",
+  const TOWA_AVATAR_ASSETS = {
+    backHair: "assets/towa-avatar/back-hair.png",
+    frontHair: "assets/towa-avatar/front-hair.png",
+    eyesOpenMouthClosed: "assets/towa-avatar/eyes-open-mouth-closed.png",
+    eyesOpenMouthHalf: "assets/towa-avatar/eyes-open-mouth-half.png",
+    eyesOpenMouthOpen: "assets/towa-avatar/eyes-open-mouth-open.png",
+    eyesClosedMouthClosed: "assets/towa-avatar/eyes-closed-mouth-closed.png",
+    eyesClosedMouthHalf: "assets/towa-avatar/eyes-closed-mouth-half.png",
+    eyesClosedMouthOpen: "assets/towa-avatar/eyes-closed-mouth-open.png",
   };
-  const SILVER_HOOD_AVATAR_SOURCE_KIND = "asset-silver-hood-avatar";
+  const TOWA_AVATAR_SOURCE_KIND = "asset-towa-avatar";
   const DEFAULT_SETTINGS_URL = "assets/amber-avatar/default-settings.json";
   const DEMO_AVATAR02_SETTINGS_URL = "assets/demo-avatar02/default-settings.json";
   const DEMO_AVATAR03_SETTINGS_URL = "assets/demo-avatar03/default-settings.json";
   const BRONZE_AVATAR_SETTINGS_URL = "assets/bronze-avatar/default-settings.json";
-  const SILVER_HOOD_AVATAR_SETTINGS_URL = "assets/silver-hood-avatar/default-settings.json";
+  const TOWA_AVATAR_SETTINGS_URL = "assets/towa-avatar/default-settings.json";
   const AVATAR_PACKAGE_ASSETS = {
     backHair: "avatar/back-hair.png",
     frontHair: "avatar/front-hair.png",
@@ -835,6 +836,7 @@
     forceMouth: null,
     forceEyesClosed: null,
     emotion: null,
+    reaction: null,
     expressionUntil: 0,
     updatedAt: 0,
     connected: false,
@@ -881,6 +883,9 @@
   let lastBlinkPoseX = 0;
   let lastBlinkPoseY = 0;
   let idleMotionPlan = null;
+  const idleGazeMotion = createIdleGazeController();
+  const reactionMotion = createReactionController();
+  let reactionMotionOutput = reactionMotion.update(0);
   let voiceLevel = 0;
   let voicePeak = 0;
   let mouthMotionLevel = 0;
@@ -3312,7 +3317,7 @@
     return kind === DEMO_AVATAR02_SOURCE_KIND ||
       kind === DEMO_AVATAR03_SOURCE_KIND ||
       kind === BRONZE_AVATAR_SOURCE_KIND ||
-      kind === SILVER_HOOD_AVATAR_SOURCE_KIND;
+      kind === TOWA_AVATAR_SOURCE_KIND;
   }
 
   function sourceMapIncludesPath(assetMap, pathPart) {
@@ -3328,13 +3333,13 @@
     if (settingsUrl.includes("assets/demo-avatar02/")) return DEMO_AVATAR02_SOURCE_KIND;
     if (settingsUrl.includes("assets/demo-avatar03/")) return DEMO_AVATAR03_SOURCE_KIND;
     if (settingsUrl.includes("assets/bronze-avatar/")) return BRONZE_AVATAR_SOURCE_KIND;
-    if (settingsUrl.includes("assets/silver-hood-avatar/")) return SILVER_HOOD_AVATAR_SOURCE_KIND;
+    if (settingsUrl.includes("assets/towa-avatar/")) return TOWA_AVATAR_SOURCE_KIND;
 
     const assetMap = record?.source?.assetMap;
     if (sourceMapIncludesPath(assetMap, "assets/demo-avatar02/")) return DEMO_AVATAR02_SOURCE_KIND;
     if (sourceMapIncludesPath(assetMap, "assets/demo-avatar03/")) return DEMO_AVATAR03_SOURCE_KIND;
     if (sourceMapIncludesPath(assetMap, "assets/bronze-avatar/")) return BRONZE_AVATAR_SOURCE_KIND;
-    if (sourceMapIncludesPath(assetMap, "assets/silver-hood-avatar/")) return SILVER_HOOD_AVATAR_SOURCE_KIND;
+    if (sourceMapIncludesPath(assetMap, "assets/towa-avatar/")) return TOWA_AVATAR_SOURCE_KIND;
     return "";
   }
 
@@ -3446,7 +3451,7 @@
       case DEMO_AVATAR02_SOURCE_KIND:
       case DEMO_AVATAR03_SOURCE_KIND:
       case BRONZE_AVATAR_SOURCE_KIND:
-      case SILVER_HOOD_AVATAR_SOURCE_KIND:
+      case TOWA_AVATAR_SOURCE_KIND:
         return "同梱キャラ";
       default: return "保存済み";
     }
@@ -3873,7 +3878,7 @@
       case DEMO_AVATAR02_SOURCE_KIND: return DEMO_AVATAR02_ASSETS;
       case DEMO_AVATAR03_SOURCE_KIND: return DEMO_AVATAR03_ASSETS;
       case BRONZE_AVATAR_SOURCE_KIND: return BRONZE_AVATAR_ASSETS;
-      case SILVER_HOOD_AVATAR_SOURCE_KIND: return SILVER_HOOD_AVATAR_ASSETS;
+      case TOWA_AVATAR_SOURCE_KIND: return TOWA_AVATAR_ASSETS;
       default: break;
     }
     if (record?.source?.assetMap && typeof record.source.assetMap === "object") return record.source.assetMap;
@@ -3886,7 +3891,7 @@
       case DEMO_AVATAR02_SOURCE_KIND: return DEMO_AVATAR02_SETTINGS_URL;
       case DEMO_AVATAR03_SOURCE_KIND: return DEMO_AVATAR03_SETTINGS_URL;
       case BRONZE_AVATAR_SOURCE_KIND: return BRONZE_AVATAR_SETTINGS_URL;
-      case SILVER_HOOD_AVATAR_SOURCE_KIND: return SILVER_HOOD_AVATAR_SETTINGS_URL;
+      case TOWA_AVATAR_SOURCE_KIND: return TOWA_AVATAR_SETTINGS_URL;
       default: break;
     }
     if (record?.source?.settingsUrl) return String(record.source.settingsUrl);
@@ -6739,16 +6744,16 @@
     return true;
   }
 
-  async function ensureSilverHoodAvatarCharacterProfile() {
-    if (autoCharacterSourceWasDeleted(SILVER_HOOD_AVATAR_SOURCE_KIND)) return false;
+  async function ensureTowaAvatarCharacterProfile() {
+    if (autoCharacterSourceWasDeleted(TOWA_AVATAR_SOURCE_KIND)) return false;
     const profiles = await listCharacterProfiles();
-    if (profiles.some((profile) => managedDemoAvatarSourceKindForProfile(profile) === SILVER_HOOD_AVATAR_SOURCE_KIND)) return false;
+    if (profiles.some((profile) => managedDemoAvatarSourceKindForProfile(profile) === TOWA_AVATAR_SOURCE_KIND)) return false;
 
     const record = await buildCharacterProfileRecordFromAssetMap({
-      assetMap: SILVER_HOOD_AVATAR_ASSETS,
-      name: "キャラ5",
-      sourceKind: SILVER_HOOD_AVATAR_SOURCE_KIND,
-      settingsUrl: SILVER_HOOD_AVATAR_SETTINGS_URL,
+      assetMap: TOWA_AVATAR_ASSETS,
+      name: "トワ",
+      sourceKind: TOWA_AVATAR_SOURCE_KIND,
+      settingsUrl: TOWA_AVATAR_SETTINGS_URL,
     });
     await putCharacterProfile(record);
     return true;
@@ -6794,8 +6799,8 @@
       await ensureBronzeAvatarCharacterProfile().catch((error) => {
         console.warn("bronze-avatar キャラの自動登録をスキップしました。", error);
       });
-      await ensureSilverHoodAvatarCharacterProfile().catch((error) => {
-        console.warn("silver-hood-avatar キャラの自動登録をスキップしました。", error);
+      await ensureTowaAvatarCharacterProfile().catch((error) => {
+        console.warn("towa-avatar キャラの自動登録をスキップしました。", error);
       });
       characterLibraryReady = true;
       characterDirty = { settings: false, avatarImages: false, itemImages: false, thumbnail: false };
@@ -6903,11 +6908,13 @@
           obsExternalInput.angleX = clamp(Number(data.angleX ?? data.targetX) || 0, -3, 3);
           obsExternalInput.angleY = clamp(Number(data.angleY ?? data.targetY) || 0, -3, 3);
           obsExternalInput.voiceRaw = clamp(Number(data.voiceRaw) || 0, 0, 2);
-          if (Object.prototype.hasOwnProperty.call(data, "forceMouth") || Object.prototype.hasOwnProperty.call(data, "forceEyesClosed") || Object.prototype.hasOwnProperty.call(data, "emotion")) {
+          if (Object.prototype.hasOwnProperty.call(data, "forceMouth") || Object.prototype.hasOwnProperty.call(data, "forceEyesClosed") || Object.prototype.hasOwnProperty.call(data, "emotion") || Object.prototype.hasOwnProperty.call(data, "reaction")) {
             obsExternalInput.forceMouth = Number.isInteger(data.forceMouth) ? clamp(data.forceMouth, 0, 2) : null;
             obsExternalInput.forceEyesClosed = typeof data.forceEyesClosed === "boolean" ? data.forceEyesClosed : null;
             obsExternalInput.emotion = ["happy", "surprised", "soft"].includes(data.emotion) ? data.emotion : null;
+            obsExternalInput.reaction = ["neutral", "listening", "thinking", "soft", "sad", "happy", "surprised", "angry"].includes(data.reaction) ? data.reaction : "neutral";
             obsExternalInput.expressionUntil = performance.now() + clamp(Number(data.durationMs) || 1200, 100, 10000);
+            reactionMotion.trigger(obsExternalInput.reaction, performance.now(), clamp(Number(data.durationMs) || 1200, 100, 10000));
           }
           obsExternalInput.updatedAt = performance.now();
           obsExternalInput.connected = true;
@@ -6972,6 +6979,8 @@
         obsExternalInput.forceMouth = null;
         obsExternalInput.forceEyesClosed = null;
         obsExternalInput.emotion = null;
+        obsExternalInput.reaction = null;
+        reactionMotion.clear(nowMs);
       }
       return;
     }
@@ -9407,82 +9416,16 @@
     state.targetY = clamp(y, -1.6, 1.6);
   }
 
-  function idleMotionEase(t) {
-    const x = clamp(t, 0, 1);
-    return x * x * x * (x * (x * 6 - 15) + 10);
-  }
-
   function idleMotionTargetFromRaw(rawX, rawY) {
     return {
-      x: clamp(rawX * ((rawX < 0 ? state.rangeLeft : state.rangeRight) / 100) * IDLE_MOTION_RANGE_BOOST, -1.1, 1.1),
-      y: clamp(rawY * ((rawY < 0 ? state.rangeUp : state.rangeDown) / 100) * IDLE_MOTION_RANGE_BOOST, -0.9, 0.9),
+      x: clamp(rawX * ((rawX < 0 ? state.rangeLeft : state.rangeRight) / 100) * 0.62, -0.48, 0.48),
+      y: clamp(rawY * ((rawY < 0 ? state.rangeUp : state.rangeDown) / 100) * 0.28, -0.14, 0.14),
     };
-  }
-
-  function randomIdleMotionTarget() {
-    const roll = Math.random();
-    // 「ほぼ静止」「正面戻り」「左右へ視線を流す」を混ぜる。
-    // 以前の値は小さすぎて、デフォルト可動範囲では動いていないように見えたため、
-    // マウスで顔をゆっくり動かしていると分かる程度まで振れ幅を広げる。
-    if (roll < 0.12) return idleMotionTargetFromRaw(randomBetween(-0.18, 0.18), randomBetween(-0.12, 0.12));
-    if (roll < 0.18) return idleMotionTargetFromRaw(0, 0);
-    const sideBias = Math.random() < 0.5 ? -1 : 1;
-    const rawX = sideBias * randomBetween(0.55, 1.0);
-    const rawY = randomBetween(-0.45, 0.55);
-    return idleMotionTargetFromRaw(rawX, rawY);
   }
 
   function resetIdleMotionPlan(nowMs = performance.now(), immediateMove = false) {
-    if (immediateMove) {
-      const target = randomIdleMotionTarget();
-      idleMotionPlan = {
-        phase: "move",
-        startedAt: nowMs,
-        duration: randomBetween(650, 1200),
-        fromX: state.targetX,
-        fromY: state.targetY,
-        toX: target.x,
-        toY: target.y,
-      };
-      return;
-    }
-    idleMotionPlan = {
-      phase: "hold",
-      startedAt: nowMs,
-      duration: randomBetween(350, 900),
-      fromX: state.targetX,
-      fromY: state.targetY,
-      toX: state.targetX,
-      toY: state.targetY,
-    };
-  }
-
-  function beginNextIdleMotionPhase(nowMs) {
-    const fromX = state.targetX;
-    const fromY = state.targetY;
-    const shouldHold = Math.random() < 0.18;
-    if (shouldHold) {
-      idleMotionPlan = {
-        phase: "hold",
-        startedAt: nowMs,
-        duration: randomBetween(400, 1300),
-        fromX,
-        fromY,
-        toX: fromX,
-        toY: fromY,
-      };
-      return;
-    }
-    const target = randomIdleMotionTarget();
-    idleMotionPlan = {
-      phase: "move",
-      startedAt: nowMs,
-      duration: randomBetween(900, 2400),
-      fromX,
-      fromY,
-      toX: target.x,
-      toY: target.y,
-    };
+    idleMotionPlan = { quiet: true };
+    idleGazeMotion.reset(nowMs, { immediate: immediateMove });
   }
 
   function updateIdleMotionTarget(nowMs) {
@@ -9493,19 +9436,16 @@
     if (isFaceTrackingActive()) return;
     if (interactionModeActive()) return;
     if (!idleMotionPlan) resetIdleMotionPlan(nowMs);
-
-    const elapsed = nowMs - idleMotionPlan.startedAt;
-    if (elapsed >= idleMotionPlan.duration) {
-      beginNextIdleMotionPhase(nowMs);
+    const gaze = idleGazeMotion.update(nowMs, {
+      amplitudeScale: reactionMotionOutput.idleAmplitudeScale,
+      speedScale: reactionMotionOutput.idleSpeedScale,
+    });
+    const target = idleMotionTargetFromRaw(gaze.gaze, Math.abs(gaze.gaze) * 0.08);
+    state.targetX = target.x;
+    state.targetY = target.y;
+    if (gaze.justSettled && state.autoBlink && !blinkEvent && nowMs - lastPoseBlinkAt > 5200) {
+      if (startBlinkEvent("poseSettle")) lastPoseBlinkAt = nowMs;
     }
-    if (idleMotionPlan.phase === "hold") {
-      state.targetX = idleMotionPlan.toX;
-      state.targetY = idleMotionPlan.toY;
-      return;
-    }
-    const t = idleMotionEase((nowMs - idleMotionPlan.startedAt) / Math.max(1, idleMotionPlan.duration));
-    state.targetX = lerp(idleMotionPlan.fromX, idleMotionPlan.toX, t);
-    state.targetY = lerp(idleMotionPlan.fromY, idleMotionPlan.toY, t);
   }
 
   function affineFromTriangles(src, dst) {
@@ -10265,7 +10205,7 @@
     return activeCharacterSourceKind === "default" ||
       activeCharacterSourceKind === DEMO_AVATAR03_SOURCE_KIND ||
       activeCharacterSourceKind === BRONZE_AVATAR_SOURCE_KIND ||
-      activeCharacterSourceKind === SILVER_HOOD_AVATAR_SOURCE_KIND ? 1 : 0;
+      activeCharacterSourceKind === TOWA_AVATAR_SOURCE_KIND ? 1 : 0;
   }
 
   function frontHairRootFollowPoint(x, y, hairPoint) {
@@ -10826,13 +10766,14 @@
   function computeCharacterTransform() {
     const fit = Math.min(stage.w / (CROP.w + 50), stage.h / (CROP.h * 0.76));
     const frozenSetup = shouldFreezeCharacterMotion();
+    const reactionScale = frozenSetup ? 1 : reactionMotionOutput.scale;
     // 呼吸・重心ドリフト(C)。breathStrength=0 で現状同等。
     const breathAmt = frozenSetup ? 0 : state.breathStrength / 100;
     const breath = Math.sin(TAU * animationSeconds * 0.18); // 約5.6秒周期
     const breathScale = 1 + breath * 0.024 * breathAmt;
     const breathY = breath * 3.2 * breathAmt;
     const swayX = Math.sin(TAU * (animationSeconds * 0.1 + 0.5)) * 4.4 * breathAmt;
-    const baseScale = fit * (state.avatarSize / 100) * breathScale;
+    const baseScale = fit * (state.avatarSize / 100) * breathScale * reactionScale;
     const pyokoVoice = frozenSetup ? 0 : voiceLevel * pyokoScale();
     const bounce = frozenSetup ? 0 : pyokoVoice * 18 + Math.sin(TAU * animationSeconds * 0.42) * 1.5 + breathY;
     const squash = pyokoVoice;
@@ -10841,15 +10782,17 @@
     const drawW = CROP.w * scaleX;
     const drawH = CROP.h * scaleY;
     const avatarX = DESKTOP_MASCOT_MODE ? 0 : state.avatarX;
-    const centerX = stage.w * 0.5 + avatarX + state.angleX * 20 * (state.angleStrength / 100) + swayX;
-    const centerY = stage.h * 0.5 + state.avatarY - bounce + state.angleY * 22 * (state.angleStrength / 100);
+    const reactionShakeX = frozenSetup ? 0 : reactionMotionOutput.shakeX * CROP.w * baseScale;
+    const reactionOffsetY = frozenSetup ? 0 : reactionMotionOutput.offsetY * CROP.h * baseScale;
+    const centerX = stage.w * 0.5 + avatarX + state.angleX * 20 * (state.angleStrength / 100) + swayX + reactionShakeX;
+    const centerY = stage.h * 0.5 + state.avatarY - bounce + state.angleY * 22 * (state.angleStrength / 100) + reactionOffsetY;
     const rollAmt = frozenSetup ? 0 : state.rollStrength / 100;
     const rollIdle = Math.sin(TAU * (animationSeconds * 0.13 + 0.3)) * 5.0 * rollAmt; // 約7.7秒周期の首傾け
     const rotation =
       (Math.PI / 180) *
       (state.angleX * 2.2 * (state.angleStrength / 100) +
         Math.sin(TAU * (animationSeconds * 0.34 + 0.1)) * 0.7 +
-        rollIdle);
+        rollIdle) + (frozenSetup ? 0 : reactionMotionOutput.tilt);
 
     const neckPivot = currentNeckPivot();
     const pivotX = neckPivot.x;
@@ -13182,6 +13125,7 @@
       }
 
       animationSeconds += delta;
+      reactionMotionOutput = reactionMotion.update(timestamp);
 
       if (OBS_MODE) {
         applyObsExternalTarget(timestamp);

@@ -22,7 +22,7 @@ test("realtime voice list exposes only the voice set accepted by Realtime V3", (
   });
 });
 
-test("Realtime sessions start only from voice input and keep transcript deltas intact", () => {
+test("Realtime sessions start only from voice input, accept typed turns, and keep transcript deltas intact", () => {
   const root = path.join(__dirname, "..");
   const html = fs.readFileSync(path.join(root, "control.html"), "utf8");
   const control = fs.readFileSync(path.join(root, "control.js"), "utf8");
@@ -32,8 +32,9 @@ test("Realtime sessions start only from voice input and keep transcript deltas i
   assert.doesNotMatch(html, /id="realtimeVoiceTestButton"/);
   assert.match(html, /聞こえ方の目安/);
   assert.match(control, /await startCodexRealtimeVoice\(\)/);
-  assert.doesNotMatch(control, /appendCodexRealtimeSpeech/);
-  assert.doesNotMatch(mascot, /playbackText|realtimePlaybackOnly|realtimeAppendSpeech/);
+  assert.match(control, /await api\.appendCodexRealtimeSpeech\(message\)/);
+  assert.match(mascot, /mascotInline:realtimeAppendSpeech/);
+  assert.doesNotMatch(mascot, /playbackText|realtimePlaybackOnly/);
   assert.match(control, /cove: \{ impression: "男性寄り", description: "落ち着いて率直" \}/);
   assert.match(control, /maple: \{ impression: "女性寄り", description: "陽気で率直" \}/);
   assert.match(control, /arbor: \{ impression: "中性的", description: "気さくで万能" \}/);
@@ -42,6 +43,11 @@ test("Realtime sessions start only from voice input and keep transcript deltas i
   assert.match(main, /await stopActiveRealtime\(\)\.catch/);
   assert.match(preload, /audio:realtimeStart/);
   assert.match(main, /if \(!assistantTranscript\.active\) assistantTranscript\.text = ""/);
+  assert.match(main, /new RealtimeTurnBuffer\(\)/);
+  assert.match(main, /realtimeTurnBuffer\.addAssistant\(assistantTranscript\.text\)/);
+  assert.match(main, /realtimeTurnBuffer\.addUser\(request\)/);
+  assert.match(main, /await appendRealtimeReactionSpeech\(spokenText\)/);
+  assert.match(main, /client\.hasActiveTurn\?\.\(\)/);
   assert.match(control, /if \(!realtimeAssistantActive\)/);
   assert.match(control, /realtimeAssistantMessage = null;\s+realtimeAssistantText = ""/);
   assert.match(control, /realtimeAssistantText \+= delta/);

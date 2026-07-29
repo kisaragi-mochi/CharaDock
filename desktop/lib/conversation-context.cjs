@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 function boundedConversationHistory(history, userText, assistantText) {
+  const createdAt = new Date().toISOString();
   return [
     ...(Array.isArray(history) ? history : []),
-    { role: "user", text: String(userText || "").trim() },
-    { role: "assistant", text: String(assistantText || "").trim() },
-  ].filter((entry) => entry.text).slice(-12);
+    { role: "user", text: String(userText || "").trim(), createdAt },
+    { role: "assistant", text: String(assistantText || "").trim(), createdAt },
+  ].filter((entry) => entry.text).slice(-40);
 }
 
 function recentConversationContext(history) {

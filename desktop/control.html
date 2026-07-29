@@ -55,13 +55,8 @@
 
           <form id="chatForm" class="composer">
             <textarea id="chatInput" rows="3" maxlength="12000" placeholder="メッセージを入力…（Ctrl＋Enterで送信）"></textarea>
-            <div class="composer-actions">
-              <div class="voice-actions">
-                <button id="micLipSyncButton" class="icon-text-button" type="button" aria-pressed="false"><span>◉</span>マイク連動</button>
-                <button id="speechInputButton" class="icon-text-button" type="button" aria-pressed="false"><span>⌁</span>音声入力</button>
-                <span id="speechInputMode" class="voice-mode">Codex Realtime</span>
-                <span id="micMeter" class="mic-meter" aria-hidden="true"><i></i></span>
-              </div>
+            <div class="composer-actions is-text-only">
+              <span class="composer-hint">設定画面では文字入力のみ</span>
               <button id="sendButton" class="button button-primary" type="submit">送信 <span>↗</span></button>
               <button id="stopButton" class="button button-danger" type="button" hidden>中断 <span>■</span></button>
             </div>
@@ -73,10 +68,19 @@
       <section class="page" data-page-panel="character">
         <header class="page-header"><div><p class="eyebrow">キャラクター</p><h1>見た目と振る舞い</h1></div></header>
         <p class="page-lead">クリックすると透明ウィンドウのキャラクターがすぐ切り替わります。</p>
-        <div id="characterGrid" class="character-grid"></div>
+        <section class="character-add-group" aria-labelledby="characterAddTitle">
+          <header class="character-section-heading"><div><p class="eyebrow">Add Character</p><h2 id="characterAddTitle">キャラクターを追加</h2></div><p>完成済みのパッケージを読み込むか、一枚の画像から新しく作成できます。</p></header>
+        <section class="card avatar-import-card">
+          <div><p class="eyebrow">PuruPuru Package</p><h2>.purupuruからキャラクターを追加</h2><p>画像・表情差分・髪レイヤー・調整値をアプリ内へコピーします。元ファイルを移動・削除しても使えます。</p></div>
+          <div class="avatar-import-actions">
+            <input id="purupuruImportInput" type="file" accept=".purupuru,application/vnd.purupuru.avatar+zip" hidden />
+            <button id="purupuruImportButton" class="button button-secondary" type="button">.purupuruを選択</button>
+            <p id="purupuruImportStatus" class="inline-status" role="status">80MBまで</p>
+          </div>
+        </section>
         <section id="avatarGeneratorCard" class="card avatar-generator">
           <header>
-            <div><p class="eyebrow">Codex Avatar Studio</p><h2>一枚絵からキャラクターを追加</h2><p>Codexが元絵を解析し、目・口・髪の標準差分と性格・話し方をまとめて作成します。</p></div>
+            <div><p class="eyebrow">Codex Avatar Studio</p><h2>一枚絵からキャラクターを追加</h2><p>目の開閉×口3段階の6差分と、独立して揺れる前髪を生成し、画素単位の品質検査後に追加します。</p></div>
             <span class="codex-only-badge">Codexのみ</span>
           </header>
           <div class="generator-content">
@@ -87,7 +91,8 @@
             </label>
             <div class="generator-form">
               <label>キャラクター名（任意）<input id="generatedCharacterNameInput" type="text" maxlength="40" placeholder="空欄なら画像から提案" /></label>
-              <div class="generator-notes"><span>✦</span><p>元絵の雰囲気から性格と話し方を設定します。生成中はCodexの利用枠を消費し、数分かかることがあります。</p></div>
+              <label>性格・話し方（任意）<textarea id="generatedCharacterPersonalityInput" rows="3" maxlength="2000" placeholder="例：明るく好奇心旺盛。短く親しみやすく話す。空欄なら画像から提案"></textarea></label>
+              <div class="generator-notes"><span>✦</span><p>名前や性格が空欄の場合だけ、元絵の雰囲気から提案します。生成中はCodexの利用枠を消費し、数分かかることがあります。</p></div>
               <label class="rights-confirm"><input id="avatarRightsConfirm" type="checkbox" /><span>この画像をアップロード・加工・利用する権利があります</span></label>
               <button id="generateCharacterButton" class="button button-primary" type="button" disabled>CodexでPuruPuru化</button>
               <div id="generatorProgress" class="generator-progress" aria-live="polite">
@@ -97,12 +102,19 @@
           </div>
           <div id="generatorUnavailable" class="generator-unavailable">AI接続を「Codex app-server」にすると利用できます。</div>
         </section>
+        </section>
+        <header class="character-section-heading is-list-heading"><div><p class="eyebrow">Library</p><h2>キャラクター一覧</h2></div></header>
+        <div id="characterGrid" class="character-grid"></div>
         <section class="card profile-editor">
           <header><div><h2>キャラクター設定</h2><p>名前と性格は会話にも反映されます。吹き出しはキャラクターに重なる位置へ調整できます。</p></div></header>
           <div class="profile-fields">
             <label>名前<input id="characterNameInput" type="text" maxlength="40" /></label>
             <label class="profile-personality">性格・話し方<textarea id="characterPersonalityInput" rows="4" maxlength="2000"></textarea></label>
           </div>
+          <section class="character-memory" aria-labelledby="characterMemoryTitle">
+            <header><div><h3 id="characterMemoryTitle">このキャラのメモリ</h3><p>会話から自動で覚えた呼び名・好み・継続目標です。ほかのキャラとは共有しません。</p></div><button id="clearCharacterMemoriesButton" class="button button-quiet" type="button" hidden>すべて忘れる</button></header>
+            <div id="characterMemoryList" class="character-memory-list"></div>
+          </section>
           <div class="profile-position-grid">
             <label>吹き出し 左 (%)<input id="bubbleLeftInput" type="number" min="2" max="70" step="1" /></label>
             <label>上 (%)<input id="bubbleTopInput" type="number" min="2" max="65" step="1" /></label>
@@ -132,9 +144,11 @@
           <div class="profile-actions">
             <button id="saveCharacterProfileButton" class="button button-primary" type="button">このキャラに保存</button>
             <button id="resetCharacterProfileButton" class="button button-quiet" type="button">初期設定へ戻す</button>
+            <button id="removeCharacterButton" class="button button-danger" type="button" hidden>作成したキャラを削除</button>
             <p id="characterProfileStatus" class="inline-status" role="status"></p>
           </div>
         </section>
+        <div id="characterVoiceMount"></div>
         <div class="card feature-card">
           <div><span class="card-icon">◌</span><div><h2>動きと反応</h2><p>自動まばたき、呼吸、髪揺れ、アプリ上のマウス追従、音量リップシンクを利用します。</p></div></div>
           <label class="switch-row"><span><strong>マウスを目で追う</strong><small>カーソルがキャラクター上にある間だけ追従</small></span><input id="mouseFollowToggle" type="checkbox" /><i></i></label>
@@ -183,7 +197,7 @@
             <div class="stack-actions">
               <button id="codexLoginButton" class="button button-secondary" type="button">ChatGPTでログイン</button>
               <p id="codexAccountState" class="hint">アカウント状態を確認しています…</p>
-              <p class="hint">自動では日本語のローカル認識を優先します。Codex Realtimeは提供状況が不安定な実験機能のため、明示的に選んだ場合だけ接続します。</p>
+              <p class="hint">音声入力方式はデスクトップ設定で明示的に選択します。Codex Realtimeは選択した場合だけ接続します。</p>
             </div>
           </section>
           <section class="card settings-card" id="openaiSettings">
@@ -209,9 +223,7 @@
             <div class="tts-settings speech-input-settings">
               <h3>音声入力</h3>
               <label>認識方式<select id="speechInputProviderSelect">
-                <option value="auto">自動（日本語・ローカル優先）</option>
                 <option value="realtime">GPT-Live / Codex Voice（実験的）</option>
-                <option value="codex-audio">Codex音声入力（提供状況依存）</option>
                 <option value="sherpa-onnx">sherpa-onnx（ローカル）</option>
                 <option value="browser">端末音声認識</option>
                 <option value="openai">OpenAI文字起こし</option>
@@ -242,12 +254,14 @@
             </div>
             <section id="characterVoiceCard" class="card settings-card character-voice-card">
               <header><div><p class="eyebrow">キャラクターの声</p><h2><span id="characterTtsLabel">このキャラクター</span>の音声</h2><p>選択中のキャラクターだけに、音声方式と声を保存します。</p></div></header>
-              <div class="tts-settings realtime-voice-settings">
+              <div id="voiceRoutingSummary" class="voice-routing-summary" role="status"><span id="voiceRoutingBadge">通常TTS</span><div><strong id="voiceRoutingTitle">現在の音声方式を確認中</strong><p id="voiceRoutingDescription">設定を読み込んでいます。</p></div></div>
+              <div id="realtimeVoiceSettings" class="tts-settings realtime-voice-settings voice-mode-panel">
                 <h3>GPT-Live / Codex Voice</h3>
                 <label>Realtimeの声<select id="realtimeVoiceSelect"><option value="cove">Cove（標準）</option></select></label>
                 <p id="realtimeVoiceStatus" class="hint">Realtime用の音声一覧を確認しています…</p>
                 <p class="hint">男性寄り・女性寄り・中性的は聞こえ方の目安です。OpenAI公式の性別分類ではなく、言語や話し方でも印象は変わります。Realtimeセッションは録音ボタンからのみ開始し、キャラクタークリックは表情と吹き出しだけで反応します。</p>
               </div>
+              <fieldset id="standardTtsSettings" class="voice-mode-panel standard-tts-settings">
               <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>読み上げのON/OFFは全キャラクター共通です</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
               <div class="tts-settings">
               <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2</option><option value="piper-plus">piper-plus（ローカル）</option><option value="supertonic-3">Supertonic 3（ローカル）</option><option value="kokoro">Kokoro（WebGPU / CPU）</option><option value="irodori-webgpu">Irodori TTS（WebGPU）</option></select></label>
@@ -373,6 +387,7 @@
               <button id="ttsTestButton" class="button button-quiet" type="button">この音声を試す</button>
               <p id="ttsStatus" class="hint" role="status"></p>
               </div>
+              </fieldset>
             </section>
           </section>
           <section class="card settings-card">
@@ -439,6 +454,7 @@
       </footer>
     </div>
   </section>
+  <script src="./audio-envelope.js"></script>
   <script src="./control.js"></script>
 </body>
 </html>

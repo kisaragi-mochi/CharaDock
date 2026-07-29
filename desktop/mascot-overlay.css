@@ -32,7 +32,7 @@
   --pet-danger-fill-hover: rgba(188,86,83,.2);
 }
 :root[data-character="bronze-avatar"] { --pet-accent: #dc9568; --pet-accent-strong: #b8663d; --pet-accent-ink: #25130c; }
-:root[data-character="silver-hood-avatar"] { --pet-accent: #9eafd2; --pet-accent-strong: #6f82b3; --pet-accent-ink: #101624; }
+:root[data-character="towa-avatar"] { --pet-accent: #33b5b3; --pet-accent-strong: #168d91; --pet-accent-ink: #071b1c; }
 :root[data-character="sage-avatar"] { --pet-accent: #8cae9f; --pet-accent-strong: #527969; --pet-accent-ink: #0c1d18; }
 html, body, #stage { -webkit-app-region: drag; user-select: none; background: transparent !important; }
 #stage { transition: opacity 180ms ease, transform 260ms cubic-bezier(.2,.8,.2,1), filter 180ms ease; transform-origin: 42% 54%; }
@@ -218,8 +218,8 @@ body.is-work-panel-open #desktopMascotBubble.is-visible { opacity: 0; transform:
   bottom: 0;
   pointer-events: auto;
   display: grid;
-  grid-template-columns: auto auto minmax(0,1fr) auto;
-  grid-template-areas: "mode mic input send";
+  grid-template-columns: auto auto auto minmax(0,1fr) auto;
+  grid-template-areas: "mode history mic input send";
   align-items: center;
   gap: 6px;
   width: min(calc(100% - 44px), 460px);
@@ -262,7 +262,7 @@ body.is-work-panel-open #desktopMascotBubble.is-visible { opacity: 0; transform:
   white-space: nowrap;
 }
 #desktopMascotWorkHistoryButton {
-  display: none;
+  display: block;
   grid-area: history;
   min-width: 42px;
   height: 22px;

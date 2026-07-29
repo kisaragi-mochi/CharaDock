@@ -240,8 +240,8 @@ class ProjectStaticTests(unittest.TestCase):
         settings = json.loads((bronze_dir / "default-settings.json").read_text(encoding="utf-8"))
         self.assertEqual(settings["avatarImageSize"], {"width": 1254, "height": 1254})
 
-    def test_silver_hood_avatar_assets_are_present_and_1254x1254_png(self) -> None:
-        avatar_dir = ROOT / "assets" / "silver-hood-avatar"
+    def test_towa_avatar_assets_are_present_and_1254x1254_png(self) -> None:
+        avatar_dir = ROOT / "assets" / "towa-avatar"
         self.assertTrue(avatar_dir.is_dir())
         for filename in [
             "back-hair.png",
@@ -269,11 +269,11 @@ class ProjectStaticTests(unittest.TestCase):
         self.assertIn("const DEMO_AVATAR02_SOURCE_KIND = \"asset-demo-avatar02\"", app)
         self.assertIn("const DEMO_AVATAR03_SOURCE_KIND = \"asset-demo-avatar03\"", app)
         self.assertIn("const BRONZE_AVATAR_SOURCE_KIND = \"asset-bronze-avatar\"", app)
-        self.assertIn("const SILVER_HOOD_AVATAR_SOURCE_KIND = \"asset-silver-hood-avatar\"", app)
+        self.assertIn("const TOWA_AVATAR_SOURCE_KIND = \"asset-towa-avatar\"", app)
         self.assertIn("async function ensureDemoAvatar02CharacterProfile()", app)
         self.assertIn("async function ensureDemoAvatar03CharacterProfile()", app)
         self.assertIn("async function ensureBronzeAvatarCharacterProfile()", app)
-        self.assertIn("async function ensureSilverHoodAvatarCharacterProfile()", app)
+        self.assertIn("async function ensureTowaAvatarCharacterProfile()", app)
         self.assertIn("function applyObsExternalExpression(nowMs)", app)
 
         validate_body = self.js_function_body(app, "function validateAvatarImageDimensions(")
@@ -435,7 +435,7 @@ class ProjectStaticTests(unittest.TestCase):
     def test_public_character_previews_include_hair_layers(self) -> None:
         readme = self.read_text("README.md")
         site_builder = self.read_text("scripts/build_site.mjs")
-        for name in ["amber-complete-v2.png", "bronze-complete-v2.png", "silver-complete-v2.png", "sage-complete-v1.png"]:
+        for name in ["amber-complete-v2.png", "bronze-complete-v2.png", "towa-complete-v1.png", "sage-complete-v1.png"]:
             relative = f"docs/images/characters/{name}"
             self.assertTrue((ROOT / relative).is_file(), relative)
             self.assertIn(relative, readme)

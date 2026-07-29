@@ -10,7 +10,7 @@ const outputDir = path.join(root, "docs", "images", "characters");
 const characters = [
   ["amber-avatar", "amber-complete-v2.png"],
   ["bronze-avatar", "bronze-complete-v2.png"],
-  ["silver-hood-avatar", "silver-complete-v2.png"],
+  ["towa-avatar", "towa-complete-v1.png"],
   ["sage-avatar", "sage-complete-v1.png"],
 ];
 

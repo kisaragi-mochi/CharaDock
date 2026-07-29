@@ -5,7 +5,7 @@ unless an individual asset notice says otherwise.
 
 The PuruPet Desktop distribution contains only the four newly prepared character
 sets under `assets/amber-avatar`, `assets/bronze-avatar`,
-`assets/silver-hood-avatar`, and `assets/sage-avatar`, plus `app-icon.ico` and screenshots that visibly
+`assets/towa-avatar`, and `assets/sage-avatar`, plus `app-icon.ico` and screenshots that visibly
 incorporate these characters, including `docs/images/purupet-work-mode.png`.
 
 Public distribution of these character sets is permitted only if the distributor

@@ -2,7 +2,7 @@
 
 ## 公開前の必須確認
 
-- [ ] `assets/amber-avatar/**`、`assets/bronze-avatar/**`、`assets/silver-hood-avatar/**`、`assets/sage-avatar/**`の元絵と生成差分を公開配布できる権利がある。
+- [ ] `assets/amber-avatar/**`、`assets/bronze-avatar/**`、`assets/towa-avatar/**`、`assets/sage-avatar/**`の元絵と生成差分を公開配布できる権利がある。
 - [ ] `docs/images/purupet-work-mode.png`と`app-icon.ico`を公開できる。
 - [ ] `DISTRIBUTION_ASSET_LICENSE.md`の条件が権利者の意図と一致している。
 - [ ] 上流PuruPuru PNGTuberの`LICENSE`、`NOTICE`、`MODIFICATIONS.md`、`THIRD_PARTY_NOTICES.md`を残している。

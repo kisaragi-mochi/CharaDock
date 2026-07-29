@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 const fs = require("node:fs");
 const path = require("node:path");
-const { splitTtsText } = require("./style-bert-vits2.cjs");
+const { splitNaturalSpeechText } = require("./natural-speech-chunks.cjs");
 
-const IRODORI_CHUNK_LENGTH = 48;
-const IRODORI_FIRST_CHUNK_LENGTH = 24;
+// BudouX still chooses an earlier clause/sentence boundary when available;
+// this is only the upper bound for a single inference chunk.
+const IRODORI_CHUNK_LENGTH = 40;
+const IRODORI_FIRST_CHUNK_LENGTH = 40;
+const IRODORI_CHUNK_OVERFLOW = 4;
 const IRODORI_MAX_CHUNKS = 24;
 
 const MODEL_NAMES = Object.freeze([
@@ -95,18 +98,19 @@ function splitIrodoriText(value) {
   for (const sentence of sentences) {
     if (chunks.length >= IRODORI_MAX_CHUNKS) break;
     if (!chunks.length && sentence.length > IRODORI_FIRST_CHUNK_LENGTH) {
-      const first = splitTtsText(sentence, IRODORI_FIRST_CHUNK_LENGTH, IRODORI_MAX_CHUNKS)[0];
+      const first = splitNaturalSpeechText(sentence, IRODORI_FIRST_CHUNK_LENGTH, IRODORI_MAX_CHUNKS, { maxOverflow: IRODORI_CHUNK_OVERFLOW })[0];
       if (first) chunks.push(first);
       const remainder = sentence.slice(first?.length || 0).trim();
-      if (remainder) chunks.push(...splitTtsText(remainder, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length));
+      if (remainder) chunks.push(...splitNaturalSpeechText(remainder, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length, { maxOverflow: IRODORI_CHUNK_OVERFLOW }));
     } else {
-      chunks.push(...splitTtsText(sentence, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length));
+      chunks.push(...splitNaturalSpeechText(sentence, IRODORI_CHUNK_LENGTH, IRODORI_MAX_CHUNKS - chunks.length, { maxOverflow: IRODORI_CHUNK_OVERFLOW }));
     }
   }
   return chunks.slice(0, IRODORI_MAX_CHUNKS);
 }
 
 module.exports = {
+  IRODORI_CHUNK_OVERFLOW,
   IRODORI_CHUNK_LENGTH,
   IRODORI_FIRST_CHUNK_LENGTH,
   MODEL_NAMES,
