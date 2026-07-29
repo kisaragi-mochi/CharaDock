@@ -18,13 +18,14 @@ on:
       - 'assets/bronze-avatar/back-hair.png'
       - 'assets/bronze-avatar/front-hair.png'
       - 'assets/bronze-avatar/eyes-open-mouth-closed.png'
-      - 'assets/silver-hood-avatar/back-hair.png'
-      - 'assets/silver-hood-avatar/front-hair.png'
-      - 'assets/silver-hood-avatar/eyes-open-mouth-closed.png'
+      - 'assets/towa-avatar/back-hair.png'
+      - 'assets/towa-avatar/front-hair.png'
+      - 'assets/towa-avatar/eyes-open-mouth-closed.png'
       - 'assets/sage-avatar/back-hair.png'
       - 'assets/sage-avatar/front-hair.png'
       - 'assets/sage-avatar/eyes-open-mouth-closed.png'
       - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -51,6 +52,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
 
       - name: Build static site
         run: npm run site:build

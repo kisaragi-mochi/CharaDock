@@ -3,8 +3,10 @@
   "use strict";
 
   const api = window.mascotDesktop;
+  const i18n = window.CharaDockI18n;
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
+  const localized = (japanese, english) => state?.language === "en" ? english : japanese;
   let state = null;
   let audioStream = null;
   let audioContext = null;
@@ -592,6 +594,7 @@
   }
 
   function syncUi() {
+    i18n?.setLanguage(state.language || "ja");
     document.documentElement.dataset.character = state.characterId || "amber-avatar";
     const sidebarCharacter = currentCharacter();
     if (sidebarCharacter) {
@@ -616,6 +619,7 @@
     $("#codexChatReasoningEffortSelect").value = state.codexChatReasoningEffort || "";
     setCodexModelOptions($("#codexWorkModelInput"), state.codexWorkModel || state.codexModel || "");
     $("#codexWorkReasoningEffortSelect").value = state.codexWorkReasoningEffort || "";
+    $("#languageSelect").value = state.language || "ja";
     $("#alwaysOnTopToggle").checked = Boolean(state.alwaysOnTop);
     $("#clickThroughToggle").checked = Boolean(state.clickThrough);
     $("#mouseFollowToggle").checked = Boolean(state.mouseFollow);
@@ -745,6 +749,7 @@
 
   async function saveSettings() {
     state = await api.saveSettings({
+      language: $("#languageSelect").value,
       backend: $("input[name='backend']:checked")?.value || "codex",
       openaiModel: $("#openaiModelInput").value.trim(),
       transcriptionModel: $("#transcriptionModelInput").value.trim(),
@@ -1514,7 +1519,10 @@
     });
     $("#clearCharacterMemoriesButton").addEventListener("click", async () => {
       const character = currentCharacter();
-      if (!state.memories?.length || !window.confirm(`${character.name}が覚えている利用者メモリをすべて削除しますか？`)) return;
+      if (!state.memories?.length || !window.confirm(localized(
+        `${character.name}が覚えている利用者メモリをすべて削除しますか？`,
+        `Forget everything ${character.name} remembers about you?`,
+      ))) return;
       try {
         state = await api.clearMemories();
         syncUi();
@@ -1526,7 +1534,10 @@
     $("#removeCharacterButton").addEventListener("click", async () => {
       const character = currentCharacter();
       if (!character?.generated) return;
-      const confirmed = window.confirm(`追加したキャラ「${character.name}」を削除しますか？\n\n画像と、このキャラ専用の設定・音声設定・メモリも端末から削除されます。この操作は元に戻せません。`);
+      const confirmed = window.confirm(localized(
+        `追加したキャラ「${character.name}」を削除しますか？\n\n画像と、このキャラ専用の設定・音声設定・メモリも端末から削除されます。この操作は元に戻せません。`,
+        `Delete the custom character “${character.name}”?\n\nIts images, character-specific settings, voice settings, and memories will be removed from this device. This cannot be undone.`,
+      ));
       if (!confirmed) return;
       const button = $("#removeCharacterButton");
       button.disabled = true;
@@ -1544,7 +1555,7 @@
       if (input.checked && input.value !== "codex") await stopCodexRealtimeVoice({ quiet: true });
       await saveSettings();
     }));
-    ["#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#englishPronunciationToggle", "#positionLockedToggle", "#edgeSnapToggle"]
+    ["#languageSelect", "#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#englishPronunciationToggle", "#positionLockedToggle", "#edgeSnapToggle"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
     $("#ttsProviderSelect").addEventListener("change", () => {
       $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
@@ -1629,7 +1640,7 @@
     $("#irodoriVoiceRenameButton").addEventListener("click", async () => {
       const voice = state.irodori?.voices?.find((item) => item.id === state.irodori.voiceId);
       if (!voice) return;
-      const name = window.prompt("参照音声の名前", voice.name);
+      const name = window.prompt(localized("参照音声の名前", "Reference voice name"), voice.name);
       if (name == null || !name.trim()) return;
       try {
         state = await api.renameIrodoriVoice({ id: voice.id, name });
@@ -1640,7 +1651,10 @@
     });
     $("#irodoriVoiceRemoveButton").addEventListener("click", async () => {
       const voice = state.irodori?.voices?.find((item) => item.id === state.irodori.voiceId);
-      if (!voice || !window.confirm(`参照音声「${voice.name}」をアプリ内から削除しますか？`)) return;
+      if (!voice || !window.confirm(localized(
+        `参照音声「${voice.name}」をアプリ内から削除しますか？`,
+        `Delete the reference voice “${voice.name}” from the app?`,
+      ))) return;
       try {
         state = await api.removeIrodoriVoice(voice.id);
         syncUi();
@@ -1656,7 +1670,10 @@
     ]) {
       $(`#${prefix}ModelDownloadButton`).addEventListener("click", async () => {
         try {
-          if (provider === "piper-plus" && !window.confirm("つくよみちゃんコーパスのクレジットと利用条件を確認し、同意してダウンロードしますか？")) return;
+          if (provider === "piper-plus" && !window.confirm(localized(
+            "つくよみちゃんコーパスのクレジットと利用条件を確認し、同意してダウンロードしますか？",
+            "Have you reviewed and accepted the Tsukuyomi-chan Corpus credits and terms, and do you want to download it?",
+          ))) return;
           const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", kokoro: "kokoro" }[provider];
           syncTtsSampleModelUi(prefix, {
             ...(state[stateKey]?.sampleModel || {}),
@@ -1673,7 +1690,7 @@
       $(`#${prefix}ModelRemoveButton`).addEventListener("click", async () => {
         const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", kokoro: "kokoro" }[provider];
         const label = state[stateKey]?.sampleModel?.label || "ダウンロード済みモデル";
-        if (!window.confirm(`${label}を端末から削除しますか？`)) return;
+        if (!window.confirm(localized(`${label}を端末から削除しますか？`, `Delete ${label} from this device?`))) return;
         try {
           state = await api.removeTtsModel(provider);
           syncUi();
@@ -1704,7 +1721,8 @@
       }
     });
     $("#sherpaModelRemoveButton").addEventListener("click", async () => {
-      if (!window.confirm(`${state.sherpaModel?.label || "ダウンロード済みのsherpa-onnx音声モデル"}を削除しますか？`)) return;
+      const label = state.sherpaModel?.label || localized("ダウンロード済みのsherpa-onnx音声モデル", "the downloaded sherpa-onnx speech model");
+      if (!window.confirm(localized(`${label}を削除しますか？`, `Delete ${label}?`))) return;
       state.sherpaModel = await api.removeSherpaModel($("#sherpaModelSelect").value);
       syncSherpaModelUi(state.sherpaModel);
     });
@@ -1762,7 +1780,10 @@
     $("#codexLoginButton").addEventListener("click", async () => {
       try {
         if ($("#codexLoginButton").dataset.action === "logout") {
-          if (!window.confirm("ChatGPTからログアウトします。Codex CLI全体のログインも解除されます。続けますか？")) return;
+          if (!window.confirm(localized(
+            "ChatGPTからログアウトします。Codex CLI全体のログインも解除されます。続けますか？",
+            "Sign out of ChatGPT? This also signs the entire Codex CLI out. Continue?",
+          ))) return;
           $("#codexLoginButton").disabled = true;
           setStatus($("#connectionStatus"), "ChatGPTからログアウトしています…");
           await api.logoutCodex();

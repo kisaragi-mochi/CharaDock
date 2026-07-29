@@ -40,6 +40,7 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const preferences = new Preferences(path.join(directory, "preferences.json"));
   const state = preferences.publicState();
+  assert.equal(state.language, "ja");
   assert.equal(state.onboardingComplete, false);
   assert.equal(state.positionLocked, false);
   assert.equal(state.edgeSnap, true);
@@ -81,6 +82,16 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.codexWorkReasoningEffort, "");
   assert.equal(state.hasWorkDirectory, false);
   assert.equal(state.workDirectoryName, "");
+});
+
+test("preferences persist only supported interface languages", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  const preferences = new Preferences(file);
+  preferences.patch({ language: "en" });
+  assert.equal(new Preferences(file).publicState().language, "en");
+  fs.writeFileSync(file, JSON.stringify({ language: "fr" }));
+  assert.equal(new Preferences(file).publicState().language, "ja");
 });
 
 test("preferences store a separate realtime voice for each character", () => {

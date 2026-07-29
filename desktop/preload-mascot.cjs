@@ -154,6 +154,11 @@ window.addEventListener("DOMContentLoaded", () => {
   let streamCurrentSpeechText = "";
   let thinkingFillerActive = false;
 
+  const applyInterfaceLanguage = (language) => {
+    document.documentElement.dataset.uiLanguage = language === "en" ? "en" : "ja";
+    window.CharaDockI18n?.setLanguage(language);
+  };
+
   const formatWorkTime = (value) => {
     const date = new Date(value);
     return Number.isNaN(date.valueOf()) ? "" : date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
@@ -1555,6 +1560,7 @@ window.addEventListener("DOMContentLoaded", () => {
   ipcRenderer.on("mascot:windowSettings", (_event, settings) => applyWindowSettings(settings));
   ipcRenderer.on("mascot:mode", (_event, state) => {
     appState = { ...appState, ...state };
+    applyInterfaceLanguage(appState.language);
     applyInteractionMode(appState);
   });
   ipcRenderer.on("mascot:tts", (_event, payload) => {
@@ -1596,6 +1602,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   ipcRenderer.invoke("mascotInline:getState").then((state) => {
     appState = state;
+    applyInterfaceLanguage(state.language);
     applyInteractionMode(state);
     applyCharacter(state.characters?.find((character) => character.id === state.characterId));
     applyWindowSettings(state);

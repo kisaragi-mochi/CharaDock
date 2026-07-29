@@ -402,6 +402,7 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.16); box-s
 .backend-card:has(input:checked) .backend-check { display: grid; }
 .settings-grid, .desktop-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .settings-card { display: grid; align-content: start; gap: 16px; }
+.language-card { grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); align-items: end; margin-bottom: 14px; }
 .settings-card .switch-row + .switch-row { padding-top: 13px; border-top: 1px solid rgba(255, 255, 255, .065); }
 .tts-settings, .tts-provider-settings { display: grid; gap: 11px; }
 .tts-settings { padding: 13px; background: var(--field); border: 1px solid var(--line); border-radius: 13px; }
@@ -499,6 +500,7 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.16); box-s
   .avatar-import-actions { justify-items: stretch; }
   .page { padding: 26px 20px 36px; }
   .settings-grid, .desktop-grid, .backend-grid, .profile-position-grid, .motion-slider-grid { grid-template-columns: 1fr; }
+  .language-card { grid-template-columns: 1fr; }
   .motion-slider-grid label:first-child { grid-column: auto; }
   .generator-content { grid-template-columns: 1fr; }
   .character-grid, .onboarding-character-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -5,6 +5,7 @@ const { DEFAULT_REALTIME_VOICE, normalizeRealtimeVoice } = require("./realtime-v
 const { normalizeCharacterMemories } = require("./character-memory.cjs");
 
 const DEFAULTS = Object.freeze({
+  language: "ja",
   backend: "codex",
   characterId: "amber-avatar",
   openaiModel: "gpt-5.6-luna",
@@ -182,6 +183,7 @@ class Preferences {
         if (!Object.prototype.hasOwnProperty.call(parsed, "codexChatModel")) this.data.codexChatModel = parsed.codexModel;
         if (!Object.prototype.hasOwnProperty.call(parsed, "codexWorkModel")) this.data.codexWorkModel = parsed.codexModel;
       }
+      if (!["ja", "en"].includes(this.data.language)) this.data.language = "ja";
       if (!["manual", "vad"].includes(this.data.voiceActivationMode)) this.data.voiceActivationMode = "vad";
       if (!["low", "normal", "high"].includes(this.data.vadSensitivity)) this.data.vadSensitivity = "normal";
       if (typeof this.data.englishPronunciationEnabled !== "boolean") this.data.englishPronunciationEnabled = true;
