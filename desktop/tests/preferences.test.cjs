@@ -167,6 +167,9 @@ test("preferences restore bounded per-character conversations and work history",
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
   const file = path.join(directory, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({
+    characterProfiles: {
+      "amber-avatar": { name: "琥珀", personality: "元の設定" },
+    },
     conversationHistories: {
       "amber-avatar": Array.from({ length: 45 }, (_, index) => ({
         role: index % 2 ? "assistant" : "user",
@@ -193,7 +196,10 @@ test("preferences restore bounded per-character conversations and work history",
   assert.equal(restored.data.conversationHistories["amber-avatar"][0].text, "message-5");
   assert.equal(Object.prototype.hasOwnProperty.call(restored.data.conversationHistories, "invalid"), false);
   assert.equal(restored.data.characterMemories["amber-avatar"][0].content, "短い説明が好き");
+  assert.equal(restored.data.characterProfiles["amber-avatar"].name, "コハク");
+  assert.equal(restored.data.characterProfiles["amber-avatar"].personality, "元の設定");
   assert.equal(restored.data.workHistory[0].status, "interrupted");
+  assert.equal(restored.data.workHistory[0].characterName, "コハク");
   assert.match(restored.data.workHistory[0].result, /アプリの終了/);
   assert.equal(Object.prototype.hasOwnProperty.call(restored.publicState(), "conversationHistories"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(restored.publicState(), "characterMemories"), false);

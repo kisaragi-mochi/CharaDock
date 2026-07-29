@@ -217,8 +217,9 @@ Only the MediaPipe runtime and models that cannot be restored by `npm install` a
 
 Desktop distributions exclude the upstream legacy demo characters and legacy favicon. Upstream samples left in the source tree are retained only for browser-editor compatibility and validation; they are not covered by Apache-2.0.
 
-> [!WARNING]
-> Before publishing, the rights holder must confirm that the source illustrations and generated variants of the four new characters may be copied, modified, and publicly distributed. A license document cannot create rights to the source artwork by itself.
+### Bundled character provenance
+
+The source illustrations and derived variants for Kohaku, Sepia, Towa, and Sage were created for this project with OpenAI `gpt-image-2`; they are not the upstream repository's legacy demo characters. Under the [OpenAI Terms of Use](https://openai.com/policies/terms-of-use/), as between the creator and OpenAI and to the extent permitted by law, the creator owns the generated Output. AI-generated Output may not be unique, and independently existing third-party rights are not waived or guaranteed by that provision. Distribution-specific usage conditions are recorded in [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md).
 
 ## Contributing
 

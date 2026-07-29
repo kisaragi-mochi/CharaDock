@@ -446,7 +446,7 @@ class ProjectStaticTests(unittest.TestCase):
             self.assertTrue((ROOT / relative).is_file(), relative)
             self.assertIn(relative, readme)
             self.assertIn(relative, site_builder)
-        self.assertNotIn("assets/amber-avatar/eyes-open-mouth-closed.png\" alt=\"琥珀", readme)
+        self.assertNotIn("assets/amber-avatar/eyes-open-mouth-closed.png\" alt=\"コハク", readme)
 
     def test_public_copy_calls_human_characters_companions(self) -> None:
         public_copy = "\n".join([
@@ -513,6 +513,9 @@ class ProjectStaticTests(unittest.TestCase):
         self.assertIn("ソフトウェアコードとドキュメント: [Apache License 2.0](./LICENSE)", readme_ja)
         self.assertIn("The software code and documentation text are licensed under [Apache License 2.0](./LICENSE)", asset_license)
         self.assertIn("The Apache-2.0 license does not grant rights to the upstream bundled demo avatars", asset_license)
+        self.assertIn("gpt-image-2", readme)
+        self.assertIn("gpt-image-2", readme_ja)
+        self.assertIn("gpt-image-2", self.read_text("DISTRIBUTION_ASSET_LICENSE.md"))
 
     def test_asset_license_keeps_demo_assets_separate(self) -> None:
         asset_license = self.read_text("ASSET_LICENSE.md")

@@ -70,6 +70,9 @@ const DEFAULTS = Object.freeze({
 const PUBLIC_KEYS = new Set(Object.keys(DEFAULTS));
 const LEGACY_TOWA_CHARACTER_ID = "user-avatar-ms5afs58";
 const BUILT_IN_TOWA_CHARACTER_ID = "towa-avatar";
+const BUILT_IN_KOHAKU_CHARACTER_ID = "amber-avatar";
+const LEGACY_KOHAKU_DISPLAY_NAME = "琥珀";
+const BUILT_IN_KOHAKU_DISPLAY_NAME = "コハク";
 
 function normalizeConversationHistories(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -134,6 +137,24 @@ function migrateBundledTowaPreferenceData(data) {
     for (const run of data.workHistory) {
       if (run?.characterId === LEGACY_TOWA_CHARACTER_ID) {
         run.characterId = BUILT_IN_TOWA_CHARACTER_ID;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+function migrateBundledKohakuDisplayName(data) {
+  let changed = false;
+  const profile = data.characterProfiles?.[BUILT_IN_KOHAKU_CHARACTER_ID];
+  if (profile?.name === LEGACY_KOHAKU_DISPLAY_NAME) {
+    profile.name = BUILT_IN_KOHAKU_DISPLAY_NAME;
+    changed = true;
+  }
+  if (Array.isArray(data.workHistory)) {
+    for (const run of data.workHistory) {
+      if (run?.characterId === BUILT_IN_KOHAKU_CHARACTER_ID && run.characterName === LEGACY_KOHAKU_DISPLAY_NAME) {
+        run.characterName = BUILT_IN_KOHAKU_DISPLAY_NAME;
         changed = true;
       }
     }
@@ -229,7 +250,9 @@ class Preferences {
       this.data.characterMemories = normalizeCharacterMemories(this.data.characterMemories);
       this.data.workHistory = normalizeWorkHistory(this.data.workHistory);
       if (typeof parsed.encryptedApiKey === "string") this.data.encryptedApiKey = parsed.encryptedApiKey;
-      if (migrateBundledTowaPreferenceData(this.data)) this.save();
+      const migratedTowa = migrateBundledTowaPreferenceData(this.data);
+      const migratedKohaku = migrateBundledKohakuDisplayName(this.data);
+      if (migratedTowa || migratedKohaku) this.save();
     } catch (error) {
       if (error?.code !== "ENOENT") console.warn("Preferences load failed:", error);
     }

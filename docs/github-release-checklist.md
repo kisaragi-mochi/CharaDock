@@ -2,7 +2,8 @@
 
 ## 公開前の必須確認
 
-- [ ] `assets/amber-avatar/**`、`assets/bronze-avatar/**`、`assets/towa-avatar/**`、`assets/sage-avatar/**`の元絵と生成差分を公開配布できる権利がある。
+- [x] 組み込み4キャラクターの元絵と生成差分がOpenAI `gpt-image-2`で作成された来歴を、READMEと`DISTRIBUTION_ASSET_LICENSE.md`に記録した。
+- [ ] 生成時の入力に、許諾のない第三者画像・商標・実在人物の肖像が含まれていないことを最終確認する。
 - [ ] `docs/images/purupet-work-mode.png`と`app-icon.ico`を公開できる。
 - [ ] `DISTRIBUTION_ASSET_LICENSE.md`の条件が権利者の意図と一致している。
 - [ ] 上流PuruPuru PNGTuberの`LICENSE`、`NOTICE`、`MODIFICATIONS.md`、`THIRD_PARTY_NOTICES.md`を残している。

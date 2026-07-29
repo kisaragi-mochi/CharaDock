@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="./docs/images/purupet-hero.webp" alt="PuruPet Desktopに収録された琥珀、セピア、トワ、セージ" width="960">
+  <img src="./docs/images/purupet-hero.webp" alt="PuruPet Desktopに収録されたコハク、セピア、トワ、セージ" width="960">
 </p>
 
 PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNGTuber)を基にした非公式派生アプリです。キャラクターが呼吸し、視線を動かし、声で会話し、必要なら選択したフォルダーの中でCodexと作業します。入力欄や履歴は必要なときだけ現れ、普段はデスクトップの片隅で静かに過ごします。
@@ -89,9 +89,9 @@ PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruP
 
 デスクトップ配布物には新規4キャラクターだけを収録します。
 
-| 琥珀 | セピア | トワ | セージ |
+| コハク | セピア | トワ | セージ |
 |:---:|:---:|:---:|:---:|
-| <img src="./docs/images/characters/amber-complete-v2.png" alt="琥珀" width="190"> | <img src="./docs/images/characters/bronze-complete-v2.png" alt="セピア" width="190"> | <img src="./docs/images/characters/towa-complete-v1.png" alt="トワ" width="190"> | <img src="./docs/images/characters/sage-complete-v1.png" alt="セージ" width="190"> |
+| <img src="./docs/images/characters/amber-complete-v2.png" alt="コハク" width="190"> | <img src="./docs/images/characters/bronze-complete-v2.png" alt="セピア" width="190"> | <img src="./docs/images/characters/towa-complete-v1.png" alt="トワ" width="190"> | <img src="./docs/images/characters/sage-complete-v1.png" alt="セージ" width="190"> |
 | 快活で素直。前向きに背中を押す。 | 余裕と洞察があり、頼れる。 | 機転が利き、発見を一緒に試す。 | 穏やかな知性派。複雑なことを整理する。 |
 
 各キャラクターは通常の目・口差分に加え、嬉しい・驚き・やさしい表情差分を持ちます。選択キャラに合わせて設定画面とコンパニオンUIのアクセントも変化します。
@@ -217,8 +217,9 @@ npm run site:build
 
 デスクトップ配布物には上流の旧デモキャラクターと旧faviconを含めません。ソースツリーに残る上流サンプルは、ブラウザー編集画面の互換性・検証用であり、Apache-2.0の対象ではありません。
 
-> [!WARNING]
-> 新規4キャラクターの元絵と生成差分を複製・加工・公開配布できることを、公開前に権利者が確認してください。ライセンス文書を置くだけでは元画像の権利は発生しません。
+### 組み込みキャラクター画像の来歴
+
+コハク、セピア、トワ、セージの元絵と生成差分は、このプロジェクトのためにOpenAI `gpt-image-2`で作成したもので、上流リポジトリの旧デモキャラクターではありません。[OpenAI利用規約](https://openai.com/policies/terms-of-use/)では、OpenAIと作成者との関係において、適用法で認められる範囲で作成者が生成Outputを所有するとされています。一方で、生成Outputは一意とは限らず、独立して存在する第三者の権利まで放棄・保証するものではありません。配布時の利用条件は[DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)に記録しています。
 
 ## コントリビューション
 

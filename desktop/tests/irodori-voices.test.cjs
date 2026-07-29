@@ -33,8 +33,8 @@ test("Irodori imports, renames, selects, and removes app-owned voices", () => {
     const second = library.importWave(emptyWave(), "Voice 2", first.voices);
     assert.equal(library.publicVoices(second.voices, second.record.id).length, 2);
     assert.equal(library.selectedVoice(second.voices, second.record.id).id, second.record.id);
-    const renamed = library.rename(second.voices, first.record.id, "琥珀の声");
-    assert.equal(renamed[0].name, "琥珀の声");
+    const renamed = library.rename(second.voices, first.record.id, "コハクの声");
+    assert.equal(renamed[0].name, "コハクの声");
     const remaining = library.remove(renamed, first.record.id);
     assert.equal(remaining.length, 1);
     assert.equal(fs.existsSync(library.voicePath(first.record)), false);
