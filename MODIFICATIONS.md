@@ -1,6 +1,6 @@
 # Modifications
 
-PuruPet Desktop is an unofficial derivative of
+CharaDock is an unofficial derivative of
 [PuruPuru PNGTuber](https://github.com/rotejin/PuruPuruPNGTuber).
 
 Copyright 2026 ochisamu for the modifications and newly added desktop application code.

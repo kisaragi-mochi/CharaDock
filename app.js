@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Modified in 2026 by ochisamu for the unofficial PuruPet Desktop derivative.
+// Modified in 2026 by ochisamu for the unofficial CharaDock derivative.
 (() => {
   "use strict";
 
@@ -200,7 +200,7 @@
   // control-group廃止で未使用（Phase 2）。旧アコーディオン開閉状態の保存に使われていた。
   // const UI_STATE_STORAGE_KEY = "move-avatar-ui-state-v6";
   // Phase 2: ナビレール一本化に伴い旧2階層タブは廃止。以下2つは移行読取専用で残す。
-  const WORKSPACE_STORAGE_KEY = "purupuru-workspace-v1";
+  const WORKSPACE_STORAGE_KEY = "charadock-workspace-v1";
   const ADJUST_CATEGORY_STORAGE_KEY = "purupuru-adjust-category-v1";
   const SECTION_STORAGE_KEY = "purupuru-section-v1";
 

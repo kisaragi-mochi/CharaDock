@@ -1,12 +1,12 @@
 @echo off
 setlocal
 
-set "PURUPET_NODE=C:\Program Files\nodejs\node.exe"
-if not exist "%PURUPET_NODE%" (
-  set "PURUPET_NODE="
-  for /f "delims=" %%N in ('where node 2^>nul') do if not defined PURUPET_NODE set "PURUPET_NODE=%%N"
+set "CHARADOCK_NODE=C:\Program Files\nodejs\node.exe"
+if not exist "%CHARADOCK_NODE%" (
+  set "CHARADOCK_NODE="
+  for /f "delims=" %%N in ('where node 2^>nul') do if not defined CHARADOCK_NODE set "CHARADOCK_NODE=%%N"
 )
-if not defined PURUPET_NODE (
+if not defined CHARADOCK_NODE (
   echo Windows node.exe was not found. 1>&2
   exit /b 1
 )
@@ -18,7 +18,7 @@ if not exist "node_modules\electron-builder\out\cli\cli.js" (
   exit /b 1
 )
 
-"%PURUPET_NODE%" node_modules\electron-builder\out\cli\cli.js --win nsis portable
-set "PURUPET_BUILD_EXIT=%ERRORLEVEL%"
+"%CHARADOCK_NODE%" node_modules\electron-builder\out\cli\cli.js --win nsis portable
+set "CHARADOCK_BUILD_EXIT=%ERRORLEVEL%"
 popd
-exit /b %PURUPET_BUILD_EXIT%
+exit /b %CHARADOCK_BUILD_EXIT%

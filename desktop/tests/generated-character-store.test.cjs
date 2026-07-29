@@ -89,7 +89,7 @@ function testPuruPuruPackage() {
 }
 
 test("generated character removal clears its record and per-character settings", () => {
-  const userData = path.join(os.tmpdir(), "purupet-generated-store-plan");
+  const userData = path.join(os.tmpdir(), "charadock-generated-store-plan");
   const assetDir = path.join(generatedCharactersRoot(userData), "user-avatar-1");
   const plan = createGeneratedCharacterRemovalPlan({
     characterId: "user-avatar-1",
@@ -111,7 +111,7 @@ test("generated character removal clears its record and per-character settings",
 });
 
 test("generated character deletion is restricted to one direct child of app storage", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-generated-store-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-generated-store-"));
   try {
     const userData = path.join(root, "user-data");
     const directory = path.join(generatedCharactersRoot(userData), "user-avatar-safe");
@@ -128,7 +128,7 @@ test("generated character deletion is restricted to one direct child of app stor
 });
 
 test(".purupuru import validates and installs app-owned avatar files", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-import-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-import-"));
   try {
     const packageBytes = testPuruPuruPackage();
     const parsed = parsePuruPuruPackage(packageBytes);

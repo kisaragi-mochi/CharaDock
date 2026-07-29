@@ -1,6 +1,6 @@
 ---
 name: build-windows-binaries
-description: Build and verify this repository's Electron Windows NSIS installer and portable executable from WSL without Wine. Use when Codex needs to create, rebuild, overwrite, smoke-test, hash, or deliver PuruPet Windows binaries, especially after electron-builder fails with `wine ENOENT` or Windows Node sees a UNC project path.
+description: Build and verify this repository's Electron Windows NSIS installer and portable executable from WSL without Wine. Use when Codex needs to create, rebuild, overwrite, smoke-test, hash, or deliver CharaDock Windows binaries, especially after electron-builder fails with `wine ENOENT` or Windows Node sees a UNC project path.
 ---
 
 # Build Windows Binaries
@@ -18,8 +18,8 @@ Build through Windows Node, not WSL electron-builder. The WSL path fails at NSIS
    ```
 
 3. Require both fresh artifacts:
-   - `dist/PuruPet Desktop Setup 0.1.0.exe`
-   - `dist/PuruPet Desktop 0.1.0.exe`
+   - `dist/CharaDock Setup 0.1.0.exe`
+   - `dist/CharaDock 0.1.0.exe`
 
    Reject either file if it is missing or smaller than 100 MB. A failed WSL NSIS run can leave a small, invalid installer stub.
 4. Verify the packaged files needed by the change are present in `dist/win-unpacked/resources/app.asar`. For TTS changes, explicitly verify the relevant worker/client files.

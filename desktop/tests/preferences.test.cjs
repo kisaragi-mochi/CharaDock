@@ -8,7 +8,7 @@ const test = require("node:test");
 const { Preferences } = require("../lib/preferences.cjs");
 
 test("preferences encrypts the API key and never exposes it publicly", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   const safeStorage = {
     isEncryptionAvailable: () => true,
@@ -26,7 +26,7 @@ test("preferences encrypts the API key and never exposes it publicly", () => {
 });
 
 test("preferences keeps API key in memory when encryption is unavailable", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const preferences = new Preferences(path.join(directory, "preferences.json"), {
     isEncryptionAvailable: () => false,
   });
@@ -37,7 +37,7 @@ test("preferences keeps API key in memory when encryption is unavailable", () =>
 });
 
 test("new installs enable onboarding and desktop positioning defaults", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const preferences = new Preferences(path.join(directory, "preferences.json"));
   const state = preferences.publicState();
   assert.equal(state.onboardingComplete, false);
@@ -84,7 +84,7 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
 });
 
 test("preferences store a separate realtime voice for each character", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({
     realtimeVoice: "sol",
@@ -99,7 +99,7 @@ test("preferences store a separate realtime voice for each character", () => {
 });
 
 test("preferences promote the former generated Towa to the bundled character", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({
     characterId: "user-avatar-ms5afs58",
@@ -121,7 +121,7 @@ test("preferences promote the former generated Towa to the bundled character", (
 });
 
 test("preferences persist and sanitize English pronunciation settings", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   const preferences = new Preferences(file);
   preferences.patch({ englishPronunciationEnabled: false, englishPronunciationDictionary: "Foo=フー" });
@@ -136,7 +136,7 @@ test("preferences persist and sanitize English pronunciation settings", () => {
 });
 
 test("preferences migrate the former Codex model to chat and work", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({ codexModel: "legacy-model" }));
   const state = new Preferences(file).publicState();
@@ -145,7 +145,7 @@ test("preferences migrate the former Codex model to chat and work", () => {
 });
 
 test("preferences migrate removed wake-word activation to VAD", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({ voiceActivationMode: "wake-word", voiceWakeWord: "ぷるぺっと" }));
   const state = new Preferences(file).publicState();
@@ -156,7 +156,7 @@ test("preferences migrate removed wake-word activation to VAD", () => {
 
 test("preferences migrate removed automatic and Codex audio input choices", () => {
   for (const removedProvider of ["auto", "codex-audio"]) {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
     const file = path.join(directory, "preferences.json");
     fs.writeFileSync(file, JSON.stringify({ speechInputProvider: removedProvider }));
     assert.equal(new Preferences(file).data.speechInputProvider, "browser");
@@ -164,7 +164,7 @@ test("preferences migrate removed automatic and Codex audio input choices", () =
 });
 
 test("preferences restore bounded per-character conversations and work history", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-prefs-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({
     characterProfiles: {
@@ -207,7 +207,7 @@ test("preferences restore bounded per-character conversations and work history",
 });
 
 test("preferences migrate the former Irodori default to Sway 8", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-preferences-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-preferences-"));
   const file = path.join(root, "preferences.json");
   fs.writeFileSync(file, JSON.stringify({ irodoriSteps: 16 }));
   const preferences = new Preferences(file);
@@ -218,7 +218,7 @@ test("preferences migrate the former Irodori default to Sway 8", () => {
 });
 
 test("preferences expose only the work folder name to renderer windows", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-work-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-work-"));
   const preferences = new Preferences(path.join(directory, "preferences.json"));
   preferences.patch({ interactionMode: "work", workDirectory: path.join(directory, "private-project") });
   const state = preferences.publicState();

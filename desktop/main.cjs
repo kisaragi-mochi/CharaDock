@@ -970,7 +970,7 @@ function ensureWorkClient() {
       developerInstructions: WORK_MODE_INSTRUCTIONS,
       sandbox: "workspace-write",
       approvalPolicy: "never",
-      serviceName: "purupuru_desktop_worker",
+      serviceName: "charadock_worker",
       personality: "friendly",
       webSearchMode: "live",
     });
@@ -989,7 +989,7 @@ async function chooseWorkDirectory() {
   if (preferences.data.backend !== "codex") throw new Error("作業モードはCodex app-server接続時のみ利用できます。");
   const current = validWorkDirectory();
   const result = await dialog.showOpenDialog({
-    title: "PuruPetの作業先を選択",
+    title: "CharaDockの作業先を選択",
     defaultPath: current || app.getPath("documents"),
     properties: ["openDirectory", "createDirectory"],
     buttonLabel: "このフォルダーで作業",
@@ -1185,7 +1185,7 @@ function createMascotWindow() {
   const bounds = isBoundsVisible(saved) ? saved : defaultMascotBounds();
   mascotWindow = new BrowserWindow({
     ...bounds,
-    title: "PuruPet Mascot",
+    title: "CharaDock Mascot",
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
@@ -1238,7 +1238,7 @@ function createControlWindow() {
     minHeight: 620,
     maxWidth: 1080,
     maxHeight: 900,
-    title: "PuruPet Desktop",
+    title: "CharaDock",
     backgroundColor: "#16141d",
     show: false,
     webPreferences: {
@@ -1372,7 +1372,7 @@ function createTray() {
   const source = nativeImage.createFromPath(path.join(projectRoot, "app-icon.ico"));
   const icon = source.resize({ width: 32, height: 32, quality: "best" });
   tray = new Tray(icon);
-  tray.setToolTip("PuruPet Desktop");
+  tray.setToolTip("CharaDock");
   tray.on("double-click", showControlWindow);
   rebuildTrayMenu();
 }
@@ -1507,7 +1507,7 @@ async function runSmokeTest() {
   const controlTitle = await controlWindow.webContents.executeJavaScript("document.title");
   const mascotCanvas = await mascotWindow.webContents.executeJavaScript("Boolean(document.querySelector('#stage') && document.querySelector('#desktopMascotChatButton') && document.querySelector('#desktopMascotStopButton'))");
   const controlInterruptReady = await controlWindow.webContents.executeJavaScript("Boolean(document.querySelector('#stopButton'))");
-  if (!String(controlTitle).includes("PuruPet") || !mascotCanvas || !controlInterruptReady) throw new Error("renderer smoke check failed");
+  if (!String(controlTitle).includes("CharaDock") || !mascotCanvas || !controlInterruptReady) throw new Error("renderer smoke check failed");
   const ttsDownloadUiReady = await controlWindow.webContents.executeJavaScript(`[
     'piperPlusModelDownloadButton', 'supertonicModelDownloadButton', 'kokoroModelDownloadButton', 'irodoriModelDownloadButton',
     'piperPlusModelDownloadProgress', 'supertonicModelDownloadProgress', 'kokoroModelDownloadProgress', 'irodoriModelDownloadProgress'
@@ -1571,7 +1571,7 @@ async function runSmokeTest() {
   if (!screenPermissionVisible) throw new Error("conversational screen-share permission was not shown");
   await new Promise((resolve) => setTimeout(resolve, 180));
   const smokeOutputDir = app.isPackaged || projectRoot.toLowerCase().includes(".asar")
-    ? path.join(app.getPath("temp"), "purupuru-desktop-smoke")
+    ? path.join(app.getPath("temp"), "charadock-smoke")
     : path.join(projectRoot, "work", "desktop-smoke");
   fs.mkdirSync(smokeOutputDir, { recursive: true });
   fs.writeFileSync(path.join(smokeOutputDir, "mascot-screen-permission.png"), (await mascotWindow.capturePage()).toPNG());
@@ -1659,10 +1659,10 @@ async function runSmokeTest() {
   const writableControl = browserControlPayload.controls.find((control) => control.tag === "textarea" || ["text", "search"].includes(control.type));
   if (!writableControl) throw new Error("interactive browser did not expose a writable control reference");
   await handleBrowserToolCall(smokeBrowserSession, {
-    tool: "browser_type", arguments: { ref: writableControl.ref, text: "PuruPet browser smoke", replace: true },
+    tool: "browser_type", arguments: { ref: writableControl.ref, text: "CharaDock browser smoke", replace: true },
   });
-  const browserTypedValue = await browserWindow.webContents.executeJavaScript(`document.querySelector('[data-purupet-browser-control-ref="${writableControl.ref}"]')?.value || ''`);
-  if (browserTypedValue !== "PuruPet browser smoke") throw new Error("interactive browser text entry did not reach the referenced control");
+  const browserTypedValue = await browserWindow.webContents.executeJavaScript(`document.querySelector('[data-charadock-browser-control-ref="${writableControl.ref}"]')?.value || ''`);
+  if (browserTypedValue !== "CharaDock browser smoke") throw new Error("interactive browser text entry did not reach the referenced control");
   assertBrowserCrossHostBlocked: {
     try {
       browserUrlForSession(smokeBrowserSession, "https://example.com/");
@@ -1689,7 +1689,7 @@ async function runSmokeTest() {
   await new Promise((resolve) => setTimeout(resolve, 250));
   const outputDir = app.isPackaged
     || projectRoot.toLowerCase().includes(".asar")
-    ? path.join(app.getPath("temp"), "purupuru-desktop-smoke")
+    ? path.join(app.getPath("temp"), "charadock-smoke")
     : path.join(projectRoot, "work", "desktop-smoke");
   fs.mkdirSync(outputDir, { recursive: true });
   const longAnswer = Array.from({ length: 36 }, (_, index) => `${index + 1}. 長い回答でも省略部分を安全に展開し、読みやすさを保ちます。`).join("\n");
@@ -2074,7 +2074,7 @@ async function runSmokeTest() {
       workDirectory: preferences.data.workDirectory,
     };
     const realtimeWorkDirectory = verifyRealtimeWorkMode
-      ? fs.mkdtempSync(path.join(app.getPath("temp"), "purupet-realtime-work-"))
+      ? fs.mkdtempSync(path.join(app.getPath("temp"), "charadock-realtime-work-"))
       : "";
     try {
       if (verifyRealtimeWorkMode) {
@@ -2197,13 +2197,13 @@ async function runSmokeTest() {
       interactionMode: preferences.data.interactionMode,
       workDirectory: preferences.data.workDirectory,
     };
-    const workspace = fs.mkdtempSync(path.join(app.getPath("temp"), "purupet-work-mode-"));
+    const workspace = fs.mkdtempSync(path.join(app.getPath("temp"), "charadock-work-mode-"));
     try {
       preferences.patch({ interactionMode: "work", workDirectory: workspace });
       resetWorkClient();
-      const result = await sendChatMessage("Create RESULT.txt in the current workspace containing exactly purupet-work-mode-ok followed by a newline. Do not create any other files.");
+      const result = await sendChatMessage("Create RESULT.txt in the current workspace containing exactly charadock-work-mode-ok followed by a newline. Do not create any other files.");
       const output = fs.readFileSync(path.join(workspace, "RESULT.txt"), "utf8");
-      if (output !== "purupet-work-mode-ok\n" || result.mode !== "work") throw new Error("work mode file-write verification failed");
+      if (output !== "charadock-work-mode-ok\n" || result.mode !== "work") throw new Error("work mode file-write verification failed");
       console.log("codex-work-mode: workspace write ok");
     } finally {
       preferences.patch(previous);
@@ -2265,7 +2265,7 @@ async function ensureIrodoriWindow() {
   }
   irodoriReadyPromise = new Promise((resolve) => { resolveIrodoriReady = resolve; });
   irodoriWindow = new BrowserWindow({
-    title: "PuruPet Irodori TTS WebGPU",
+    title: "CharaDock Irodori TTS WebGPU",
     show: false,
     width: 320,
     height: 240,
@@ -2429,7 +2429,7 @@ async function ensureKokoroWindow() {
   }
   kokoroReadyPromise = new Promise((resolve) => { resolveKokoroReady = resolve; });
   kokoroWindow = new BrowserWindow({
-    title: "PuruPet Kokoro TTS",
+    title: "CharaDock Kokoro TTS",
     show: false,
     width: 320,
     height: 240,
@@ -3706,7 +3706,7 @@ async function captureCurrentDisplayOnce() {
     const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize, fetchWindowIcons: false });
     const source = sources.find((item) => String(item.display_id) === String(display.id)) || sources[0];
     if (!source || source.thumbnail.isEmpty()) throw new Error("画面を取得できませんでした。Windowsの画面キャプチャ許可を確認してください。");
-    const directory = fs.mkdtempSync(path.join(app.getPath("temp"), "purupet-screen-share-"));
+    const directory = fs.mkdtempSync(path.join(app.getPath("temp"), "charadock-screen-share-"));
     const imagePath = path.join(directory, "screen.png");
     fs.writeFileSync(imagePath, source.thumbnail.toPNG(), { mode: 0o600 });
     return { directory, imagePath };
@@ -3718,7 +3718,7 @@ function cleanupStaleTemporaryInputs() {
   try {
     for (const entry of fs.readdirSync(tempRoot, { withFileTypes: true })) {
       if (!entry.isDirectory()
-        || !["purupet-screen-share-", "purupet-audio-input-"].some((prefix) => entry.name.startsWith(prefix))) continue;
+        || !["charadock-screen-share-", "charadock-audio-input-"].some((prefix) => entry.name.startsWith(prefix))) continue;
       fs.rmSync(path.join(tempRoot, entry.name), { recursive: true, force: true });
     }
   } catch (error) {
@@ -3788,11 +3788,11 @@ function ensureBrowserWindow(browserSession) {
     minWidth: 720,
     minHeight: 520,
     show: false,
-    title: "PuruPet Browser · 許可中",
+    title: "CharaDock Browser · 許可中",
     backgroundColor: "#17131d",
     autoHideMenuBar: true,
     webPreferences: {
-      partition: `purupet-browser-session-${browserSession.id}`,
+      partition: `charadock-browser-session-${browserSession.id}`,
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -3818,7 +3818,7 @@ function ensureBrowserWindow(browserSession) {
   browserWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     const host = activeBrowserSession?.allowedHost || "許可待ち";
-    browserWindow?.setTitle(`PuruPet Browser · ${host} · 許可中`);
+    browserWindow?.setTitle(`CharaDock Browser · ${host} · 許可中`);
   });
   browserWindow.on("closed", () => {
     if (retainedBrowserAuthorization?.id === browserSession.id) {
@@ -3845,13 +3845,13 @@ async function browserSnapshot(window) {
     };
     const links = [...document.querySelectorAll('a[href]')].filter(visible).slice(0, 120).map((link, index) => {
       const ref = 'link-' + (index + 1);
-      link.dataset.purupetBrowserRef = ref;
+      link.dataset.charadockBrowserRef = ref;
       return { ref, text: (link.innerText || link.getAttribute('aria-label') || link.title || '').trim().slice(0, 240), href: link.href };
     });
     const controls = [...document.querySelectorAll('button, input:not([type="hidden"]), textarea, select, [contenteditable="true"], [role="button"], [role="checkbox"], [role="tab"]')]
       .filter(visible).slice(0, 160).map((element, index) => {
         const ref = 'control-' + (index + 1);
-        element.dataset.purupetBrowserControlRef = ref;
+        element.dataset.charadockBrowserControlRef = ref;
         const labels = element.labels ? [...element.labels].map((label) => label.innerText || label.textContent || '').join(' ') : '';
         const type = String(element.type || element.getAttribute('role') || element.tagName || '').toLowerCase();
         const label = (element.getAttribute('aria-label') || labels || element.innerText || element.placeholder || element.title || element.name || '').trim().slice(0, 240);
@@ -3899,7 +3899,7 @@ async function followBrowserLink(browserSession, ref) {
   const window = ensureBrowserWindow(browserSession);
   if (window.webContents.getURL() === "") throw new Error("先にページを開いてください。");
   const href = await window.webContents.executeJavaScript(`(() => {
-    const element = document.querySelector('[data-purupet-browser-ref=${JSON.stringify(String(ref || ""))}]');
+    const element = document.querySelector('[data-charadock-browser-ref=${JSON.stringify(String(ref || ""))}]');
     return element?.href || '';
   })()`);
   if (!href) throw new Error("指定されたリンクが現在のページにありません。ページを読み直してください。");
@@ -3918,7 +3918,7 @@ async function clickBrowserControl(browserSession, ref) {
   try {
     const clicked = await window.webContents.executeJavaScript(`(() => {
       const ref = ${reference};
-      const element = document.querySelector('[data-purupet-browser-ref="' + CSS.escape(ref) + '"], [data-purupet-browser-control-ref="' + CSS.escape(ref) + '"]');
+      const element = document.querySelector('[data-charadock-browser-ref="' + CSS.escape(ref) + '"], [data-charadock-browser-control-ref="' + CSS.escape(ref) + '"]');
       if (!element || element.disabled || element.getAttribute('aria-disabled') === 'true') return false;
       element.scrollIntoView({ block: 'center', inline: 'center' });
       element.focus({ preventScroll: true });
@@ -3941,7 +3941,7 @@ async function typeInBrowserControl(browserSession, ref, text, replace = true) {
   const value = String(text || "").slice(0, 2000);
   if (!value) throw new Error("入力する文字がありません。");
   const focused = await window.webContents.executeJavaScript(`(() => {
-    const element = document.querySelector('[data-purupet-browser-control-ref="' + CSS.escape(${JSON.stringify(String(ref || ""))}) + '"]');
+    const element = document.querySelector('[data-charadock-browser-control-ref="' + CSS.escape(${JSON.stringify(String(ref || ""))}) + '"]');
     if (!element || element.disabled || element.getAttribute('aria-disabled') === 'true') return false;
     if (!element.matches('input, textarea, [contenteditable="true"]')) return false;
     element.scrollIntoView({ block: 'center', inline: 'center' });
@@ -3970,7 +3970,7 @@ async function typeInBrowserControl(browserSession, ref, text, replace = true) {
 async function selectBrowserOption(browserSession, ref, rawValue) {
   const window = ensureBrowserWindow(browserSession);
   const selected = await window.webContents.executeJavaScript(`(() => {
-    const element = document.querySelector('[data-purupet-browser-control-ref="' + CSS.escape(${JSON.stringify(String(ref || ""))}) + '"]');
+    const element = document.querySelector('[data-charadock-browser-control-ref="' + CSS.escape(${JSON.stringify(String(ref || ""))}) + '"]');
     if (!(element instanceof HTMLSelectElement) || element.disabled) return false;
     const requested = ${JSON.stringify(String(rawValue || ""))};
     const option = [...element.options].find((item) => item.value === requested || item.textContent.trim() === requested);
@@ -4423,7 +4423,7 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
         ].join("\n\n"),
         sandbox: "read-only",
         approvalPolicy: "never",
-        serviceName: "purupuru_desktop_computer",
+        serviceName: "charadock_computer",
         personality: "friendly",
         webSearchMode: "disabled",
         dynamicTools: COMPUTER_DYNAMIC_TOOLS,
@@ -4460,7 +4460,7 @@ async function sendChatMessage(message, { localImagePath = "", browserSession = 
         ].join("\n\n"),
         sandbox: workMode ? "workspace-write" : "read-only",
         approvalPolicy: "never",
-        serviceName: "purupuru_desktop_browser",
+        serviceName: "charadock_browser",
         personality: "friendly",
         webSearchMode: "disabled",
         dynamicTools: BROWSER_DYNAMIC_TOOLS,
@@ -4599,7 +4599,7 @@ async function generateCharacterFromImage(payload) {
     ].join("\n"),
     sandbox: "workspace-write",
     approvalPolicy: "never",
-    serviceName: "purupuru_avatar_generator",
+    serviceName: "charadock_avatar_generator",
     personality: "friendly",
   });
   try {

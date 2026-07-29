@@ -6,8 +6,8 @@ const { normalizeSpeechPronunciation, parseUserPronunciations } = require("../li
 
 test("known alphabetic product names are pronounced as words", () => {
   assert.equal(
-    normalizeSpeechPronunciation("Codexでbrowserとsherpa-onnxを使う"),
-    "コーデックスでブラウザーとシェルパオニキスを使う",
+    normalizeSpeechPronunciation("CharaDockでCodexとsherpa-onnxを使う"),
+    "キャラドックでコーデックスとシェルパオニキスを使う",
   );
 });
 
@@ -16,7 +16,7 @@ test("all-caps abbreviations are expanded to Japanese letter names", () => {
 });
 
 test("unknown words and code-like identifiers are preserved", () => {
-  assert.equal(normalizeSpeechPronunciation("PuruPet foo.js build_123"), "PuruPet foo.js build_123");
+  assert.equal(normalizeSpeechPronunciation("Xqzvpt foo.js build_123"), "Xqzvpt foo.js build_123");
 });
 
 test("CMUdict supplies Japanese readings for general English words", () => {

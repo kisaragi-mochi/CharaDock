@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in PuruPet Desktop, an unofficial derivative of PuruPuru PNGTuber.
+Thanks for your interest in CharaDock, an unofficial derivative of PuruPuru PNGTuber.
 
 By contributing software code or documentation text, you agree that your contribution is provided under the Apache License 2.0 unless explicitly stated otherwise before submission.
 

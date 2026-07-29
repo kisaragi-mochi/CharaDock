@@ -44,7 +44,7 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-public static class PuruPetInput {
+public static class CharaDockInput {
   [StructLayout(LayoutKind.Sequential)] public struct INPUT { public UInt32 type; public InputUnion U; }
   [StructLayout(LayoutKind.Explicit)] public struct InputUnion { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }
   [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public Int32 dx; public Int32 dy; public UInt32 mouseData; public UInt32 dwFlags; public UInt32 time; public IntPtr dwExtraInfo; }
@@ -65,10 +65,10 @@ public static class PuruPetInput {
 }
 '@
 switch ($payload.action) {
-  'click' { [PuruPetInput]::Click([int]$payload.x,[int]$payload.y,[string]$payload.button,[int]$payload.clicks) }
-  'scroll' { [PuruPetInput]::Scroll([int]$payload.x,[int]$payload.y,[int]$payload.delta) }
-  'type' { [PuruPetInput]::TypeText([string]$payload.text) }
-  'key' { [PuruPetInput]::Hotkey([string[]]$payload.keys) }
+  'click' { [CharaDockInput]::Click([int]$payload.x,[int]$payload.y,[string]$payload.button,[int]$payload.clicks) }
+  'scroll' { [CharaDockInput]::Scroll([int]$payload.x,[int]$payload.y,[int]$payload.delta) }
+  'type' { [CharaDockInput]::TypeText([string]$payload.text) }
+  'key' { [CharaDockInput]::Hotkey([string[]]$payload.keys) }
   default { throw 'Unsupported input action' }
 }
 `;

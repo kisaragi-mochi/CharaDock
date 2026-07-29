@@ -8,7 +8,7 @@ const test = require("node:test");
 const { synthesizeSupertonicInWorker } = require("../lib/supertonic-worker-client.cjs");
 
 test("Supertonic worker returns only serialized audio and cleans temporary files", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-supertonic-client-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-supertonic-client-"));
   let captured;
   try {
     const result = await synthesizeSupertonicInWorker({ text: "音声テスト" }, {
@@ -17,7 +17,7 @@ test("Supertonic worker returns only serialized audio and cleans temporary files
       workerPath: "worker.cjs",
       execFileImpl: (command, args, options, callback) => {
         captured = { command, args, options };
-        fs.writeFileSync(options.env.PURUPET_SUPERTONIC_RESULT, JSON.stringify({
+        fs.writeFileSync(options.env.CHARADOCK_SUPERTONIC_RESULT, JSON.stringify({
           ok: true,
           result: { audioDataUrls: ["data:audio/wav;base64,UklGRg=="] },
         }));

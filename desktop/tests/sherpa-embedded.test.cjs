@@ -10,7 +10,7 @@ const {
 } = require("../lib/sherpa-embedded.cjs");
 
 test("embedded sherpa model is optional and reports installation state", () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-sherpa-"));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-sherpa-"));
   const manager = new EmbeddedSherpaOnnx(base, { modelId: "whisper-tiny-multilingual-int8" });
   assert.equal(manager.status().installed, false);
   assert.match(manager.runtimeInfo().version, /^1\./);
@@ -26,7 +26,7 @@ test("embedded sherpa model is optional and reports installation state", () => {
 });
 
 test("embedded sherpa switches between Japanese model configurations", () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-sherpa-"));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-sherpa-"));
   const manager = new EmbeddedSherpaOnnx(base);
   assert.equal(manager.status().modelId, "reazonspeech-ja-int8");
   assert.ok(manager.recognizerConfig(SHERPA_MODELS["reazonspeech-ja-int8"]).modelConfig.transducer);
@@ -40,7 +40,7 @@ test("embedded sherpa switches between Japanese model configurations", () => {
 });
 
 test("embedded sherpa rejects transcription until the optional model is installed", async () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-sherpa-"));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-sherpa-"));
   const manager = new EmbeddedSherpaOnnx(base);
   await assert.rejects(
     manager.transcribe({ samples: new Float32Array([0.1, 0.2]), sampleRate: 16_000 }),

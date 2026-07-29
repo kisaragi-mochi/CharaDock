@@ -14,7 +14,7 @@ const {
 } = require("../lib/piper-plus.cjs");
 
 function piperFixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-piper-test-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-piper-test-"));
   const bin = path.join(root, "bin");
   const models = path.join(root, "models");
   const temporaryRoot = path.join(root, "temporary");

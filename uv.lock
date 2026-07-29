@@ -7,6 +7,6 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "purupet-desktop"
+name = "charadock"
 version = "0.1.0"
 source = { virtual = "." }

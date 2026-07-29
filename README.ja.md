@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="./app-icon.ico" width="88" height="88" alt="PuruPet Desktop">
+  <img src="./app-icon.png" width="88" height="88" alt="CharaDock アプリアイコン">
 </p>
 
-<h1 align="center">PuruPet Desktop</h1>
+<h1 align="center">CharaDock</h1>
 
-<p align="center"><strong>デスクトップに、会話できる相棒を。</strong></p>
+<p align="center"><strong>キャラクターに、居場所と鼓動を。</strong></p>
 <p align="center">話して、覚えて、一緒に作業する。透過キャラクターとCodexをつないだWindowsデスクトップコンパニオン。</p>
 
 <p align="center">
@@ -27,10 +27,10 @@
 </p>
 
 <p align="center">
-  <img src="./docs/images/purupet-hero.webp" alt="PuruPet Desktopに収録されたコハク、セピア、トワ、セージ" width="960">
+  <img src="./docs/images/charadock-hero.webp" alt="CharaDockに収録されたコハク、セピア、トワ、セージ" width="960">
 </p>
 
-PuruPet Desktopは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNGTuber)を基にした非公式派生アプリです。キャラクターが呼吸し、視線を動かし、声で会話し、必要なら選択したフォルダーの中でCodexと作業します。入力欄や履歴は必要なときだけ現れ、普段はデスクトップの片隅で静かに過ごします。
+CharaDockは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNGTuber)を基にした非公式派生アプリです。キャラクターが呼吸し、視線を動かし、声で会話し、必要なら選択したフォルダーの中でCodexと作業します。入力欄や履歴は必要なときだけ現れ、普段はデスクトップの片隅で静かに過ごします。
 
 > [!IMPORTANT]
 > 現在はプレリリースです。コードはApache-2.0ですが、画像には別の利用条件があります。公開・フォーク・配布前に[ライセンスと素材](#ライセンスと素材)を確認してください。
@@ -144,7 +144,7 @@ npm run desktop
 
 ### Codex app-server
 
-アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、PuruPetは受け取りません。app-serverから取得したモデル一覧をプルダウン表示し、会話と作業で別々にモデルとreasoning effortを設定できます。
+アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、CharaDockは受け取りません。app-serverから取得したモデル一覧をプルダウン表示し、会話と作業で別々にモデルとreasoning effortを設定できます。
 
 GPT-Live / Codex Voiceは実験機能です。利用可否はアカウントや上流実装に依存します。Realtimeセッションは新しい空のタスクとして、録音ボタンを押したときだけ開始します。作業モードでは選択フォルダー限定のworkspace-writeスレッドへ接続し、音声で依頼した作業も履歴へ残します。
 
@@ -212,14 +212,14 @@ npm run site:build
 - ソフトウェアコードとドキュメント: [Apache License 2.0](./LICENSE)
 - 元プロジェクトと変更点: [NOTICE](./NOTICE)、[MODIFICATIONS.md](./MODIFICATIONS.md)
 - 第三者依存関係: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
-- デスクトップ版の新規4キャラクター: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
+- デスクトップ版の新規4キャラクターとCharaDockアイコン: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
 - 元ブラウザー版に残る上流サンプル素材: [ASSET_LICENSE.md](./ASSET_LICENSE.md)
 
 デスクトップ配布物には上流の旧デモキャラクターと旧faviconを含めません。ソースツリーに残る上流サンプルは、ブラウザー編集画面の互換性・検証用であり、Apache-2.0の対象ではありません。
 
-### 組み込みキャラクター画像の来歴
+### 組み込みビジュアル素材の来歴
 
-コハク、セピア、トワ、セージの元絵と生成差分は、このプロジェクトのためにOpenAI `gpt-image-2`で作成したもので、上流リポジトリの旧デモキャラクターではありません。[OpenAI利用規約](https://openai.com/policies/terms-of-use/)では、OpenAIと作成者との関係において、適用法で認められる範囲で作成者が生成Outputを所有するとされています。一方で、生成Outputは一意とは限らず、独立して存在する第三者の権利まで放棄・保証するものではありません。配布時の利用条件は[DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)に記録しています。
+コハク、セピア、トワ、セージの元絵と生成差分は、このプロジェクトのためにOpenAI `gpt-image-2`で作成したもので、上流リポジトリの旧デモキャラクターではありません。CharaDockアイコンもOpenAIの画像生成で作成し、マルチ解像度のアプリアセットとしてローカルで仕上げています。[OpenAI利用規約](https://openai.com/policies/terms-of-use/)では、OpenAIと作成者との関係において、適用法で認められる範囲で作成者が生成Outputを所有するとされています。一方で、生成Outputは一意とは限らず、独立して存在する第三者の権利まで放棄・保証するものではありません。配布時の利用条件は[DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)に記録しています。
 
 ## コントリビューション
 
@@ -228,4 +228,4 @@ npm run site:build
 - [Support](./.github/SUPPORT.md)
 - [GitHub公開チェックリスト](./docs/github-release-checklist.md)
 
-PuruPet Desktop is not endorsed by or affiliated with the original PuruPuru PNGTuber developer.
+CharaDock is not endorsed by or affiliated with the original PuruPuru PNGTuber developer.

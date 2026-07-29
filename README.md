@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="./app-icon.ico" width="88" height="88" alt="PuruPet Desktop">
+  <img src="./app-icon.png" width="88" height="88" alt="CharaDock app icon">
 </p>
 
-<h1 align="center">PuruPet Desktop</h1>
+<h1 align="center">CharaDock</h1>
 
-<p align="center"><strong>A companion you can talk to, right on your desktop.</strong></p>
+<p align="center"><strong>Give your character a place—and a pulse.</strong></p>
 <p align="center">Talk, remember, and work together. A Windows desktop companion that connects transparent characters with Codex.</p>
 
 <p align="center">
@@ -27,10 +27,10 @@
 </p>
 
 <p align="center">
-  <img src="./docs/images/purupet-hero.webp" alt="Kohaku, Sepia, Towa, and Sage, the four characters included with PuruPet Desktop" width="960">
+  <img src="./docs/images/charadock-hero.webp" alt="Kohaku, Sepia, Towa, and Sage, the four characters included with CharaDock" width="960">
 </p>
 
-PuruPet Desktop is an unofficial derivative of [rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNGTuber). Its characters breathe, look around, speak with you, and—when asked—work with Codex inside a folder you choose. The input, history, and work controls appear only when needed; the character stays quietly at the edge of your desktop the rest of the time.
+CharaDock is an unofficial derivative of [rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNGTuber). Its characters breathe, look around, speak with you, and—when asked—work with Codex inside a folder you choose. The input, history, and work controls appear only when needed; the character stays quietly at the edge of your desktop the rest of the time.
 
 > [!IMPORTANT]
 > This project is currently a pre-release. The software is Apache-2.0, but visual assets have separate terms. Review [Licenses and assets](#licenses-and-assets) before publishing, forking, or distributing it.
@@ -63,7 +63,7 @@ Temporary requests, guesses, content copied from external websites, secrets, con
 
 ### Choose how the character listens and speaks
 
-The input provider is always selected explicitly. PuruPet does not start Codex Realtime automatically or silently fall back to another provider after a failure.
+The input provider is always selected explicitly. CharaDock does not start Codex Realtime automatically or silently fall back to another provider after a failure.
 
 - **Input:** Codex Realtime, local sherpa-onnx, system speech recognition, or OpenAI transcription
 - **Local recognition:** Japanese Parakeet CTC, ReazonSpeech Zipformer, SenseVoice, and Whisper base / tiny
@@ -112,7 +112,7 @@ npm ci
 npm run desktop
 ```
 
-The first-run guide configures the AI connection, character, and speech provider. PuruPet also detects the Windows Store Codex installation. If `codex` is not on `PATH`, set `CODEX_CLI_PATH` to the executable.
+The first-run guide configures the AI connection, character, and speech provider. CharaDock also detects the Windows Store Codex installation. If `codex` is not on `PATH`, set `CODEX_CLI_PATH` to the executable.
 
 1. Move the pointer over the `✦` beside the character to open the input.
 2. Start a conversation, or select `Conversation` to switch into `Work` mode.
@@ -144,13 +144,13 @@ Browser actions run in a visible, dedicated window and support navigation, links
 
 ### Codex app-server
 
-PuruPet starts the local `codex app-server --stdio` process. Codex manages the ChatGPT authentication token; PuruPet never receives it. Models returned by app-server appear in a dropdown, and conversation and work can use separate models and reasoning-effort settings.
+CharaDock starts the local `codex app-server --stdio` process. Codex manages the ChatGPT authentication token; CharaDock never receives it. Models returned by app-server appear in a dropdown, and conversation and work can use separate models and reasoning-effort settings.
 
 GPT-Live / Codex Voice is experimental and its availability depends on the account and upstream implementation. Realtime starts as a new empty task only when recording is enabled. In Work mode it connects to a workspace-write task scoped to the selected folder, and voice-requested work is also saved to history.
 
 ### OpenAI API and local processing
 
-PuruPet can use the Responses API for conversation and the Transcriptions API for speech recognition. API keys are never passed to the renderer and use OS-encrypted storage where available. sherpa-onnx, system recognition, normal lip sync, and supported TTS engines run locally. Audio leaves the device only when Codex Realtime or OpenAI transcription is explicitly selected.
+CharaDock can use the Responses API for conversation and the Transcriptions API for speech recognition. API keys are never passed to the renderer and use OS-encrypted storage where available. sherpa-onnx, system recognition, normal lip sync, and supported TTS engines run locally. Audio leaves the device only when Codex Realtime or OpenAI transcription is explicitly selected.
 
 ## Create a character from one image
 
@@ -212,14 +212,14 @@ Only the MediaPipe runtime and models that cannot be restored by `npm install` a
 - Software code and documentation: [Apache License 2.0](./LICENSE)
 - Upstream project and changes: [NOTICE](./NOTICE), [MODIFICATIONS.md](./MODIFICATIONS.md)
 - Third-party dependencies: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
-- Four new desktop characters: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
+- Four new desktop characters and the CharaDock icon: [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md)
 - Upstream sample assets retained by the browser editor: [ASSET_LICENSE.md](./ASSET_LICENSE.md)
 
 Desktop distributions exclude the upstream legacy demo characters and legacy favicon. Upstream samples left in the source tree are retained only for browser-editor compatibility and validation; they are not covered by Apache-2.0.
 
-### Bundled character provenance
+### Bundled visual asset provenance
 
-The source illustrations and derived variants for Kohaku, Sepia, Towa, and Sage were created for this project with OpenAI `gpt-image-2`; they are not the upstream repository's legacy demo characters. Under the [OpenAI Terms of Use](https://openai.com/policies/terms-of-use/), as between the creator and OpenAI and to the extent permitted by law, the creator owns the generated Output. AI-generated Output may not be unique, and independently existing third-party rights are not waived or guaranteed by that provision. Distribution-specific usage conditions are recorded in [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md).
+The source illustrations and derived variants for Kohaku, Sepia, Towa, and Sage were created for this project with OpenAI `gpt-image-2`; they are not the upstream repository's legacy demo characters. The CharaDock icon was also created with OpenAI image generation and finalized locally as a multi-resolution app asset. Under the [OpenAI Terms of Use](https://openai.com/policies/terms-of-use/), as between the creator and OpenAI and to the extent permitted by law, the creator owns the generated Output. AI-generated Output may not be unique, and independently existing third-party rights are not waived or guaranteed by that provision. Distribution-specific usage conditions are recorded in [DISTRIBUTION_ASSET_LICENSE.md](./DISTRIBUTION_ASSET_LICENSE.md).
 
 ## Contributing
 
@@ -228,4 +228,4 @@ The source illustrations and derived variants for Kohaku, Sepia, Towa, and Sage 
 - [Support](./.github/SUPPORT.md)
 - [GitHub release checklist](./docs/github-release-checklist.md)
 
-PuruPet Desktop is not endorsed by or affiliated with the original PuruPuru PNGTuber developer.
+CharaDock is not endorsed by or affiliated with the original PuruPuru PNGTuber developer.

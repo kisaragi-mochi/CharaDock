@@ -14,7 +14,7 @@ const {
 } = require("../lib/tts-model-download.cjs");
 
 function temporaryDirectory() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "purupet-tts-model-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "charadock-tts-model-test-"));
 }
 
 function streamResponse(bytes) {

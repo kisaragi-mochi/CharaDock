@@ -2,7 +2,7 @@
 (function exposeAudioEnvelope(root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  if (root) root.PuruPetAudioEnvelope = api;
+  if (root) root.CharaDockAudioEnvelope = api;
 })(typeof globalThis === "object" ? globalThis : null, () => {
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));

@@ -8,7 +8,7 @@ const test = require("node:test");
 const { MascotStaticServer } = require("../lib/static-server.cjs");
 
 function fixtureRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupuru-server-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-server-"));
   fs.mkdirSync(path.join(root, "assets"), { recursive: true });
   fs.mkdirSync(path.join(root, "source"), { recursive: true });
   fs.writeFileSync(path.join(root, "index.html"), "<h1>ok</h1>");

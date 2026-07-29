@@ -1,6 +1,6 @@
-# Bundled Character Asset Terms
+# Bundled Visual Asset Terms
 
-To the extent that copyright or related rights exist in the bundled character
+To the extent that copyright or related rights exist in the bundled visual
 assets, those rights are reserved by the project author unless an individual
 asset notice says otherwise.
 
@@ -11,26 +11,33 @@ variations for Kohaku, Sepia, Towa, and Sage were created for this project with
 OpenAI `gpt-image-2` under the project author's direction. They are not the
 legacy demo characters from the upstream PuruPuru PNGTuber repository.
 
+The CharaDock application icon was also created for this project with OpenAI
+image generation under the project author's direction, then resized and
+packaged as the PNG and multi-resolution Windows ICO files in this repository.
+
 Under the applicable OpenAI terms, as between the user and OpenAI and to the
 extent permitted by law, the user owns the generated Output. AI-generated
 Output may not be unique, and this statement does not waive or guarantee
 clearance of any independently existing third-party rights. See:
 https://openai.com/policies/terms-of-use/
 
-The PuruPet Desktop distribution contains only the four newly prepared character
+The CharaDock distribution contains only the four newly prepared character
 sets under `assets/amber-avatar`, `assets/bronze-avatar`,
-`assets/towa-avatar`, and `assets/sage-avatar`, plus `app-icon.ico` and screenshots that visibly
-incorporate these characters, including `docs/images/purupet-work-mode.png`.
+`assets/towa-avatar`, and `assets/sage-avatar`; the CharaDock icon in
+`app-icon.png` and `app-icon.ico`; and screenshots that visibly incorporate
+these characters, including `docs/images/charadock-work-mode.png`.
 
-Public distribution of these character sets as part of PuruPet Desktop is
+Public distribution of these character sets as part of CharaDock is
 permitted under the usage conditions below. This notice does not grant rights
 to OpenAI trademarks, the upstream project, or any independently existing
 third-party material.
 
-Recipients may display these bundled characters while using PuruPet Desktop and
+Recipients may display these bundled characters while using CharaDock and
 may capture non-commercial screenshots or short recordings of the running app.
 The character image files may not be extracted, redistributed as an asset pack,
 sold, used for model training, or represented as the recipient's own artwork.
+The CharaDock icon may be used to identify unchanged copies of CharaDock, but
+may not be repurposed as another product's icon, logo, or standalone asset.
 
 User-imported characters remain subject to the rights and permissions attached
 to the user's source image. Users must have permission to upload, transform and

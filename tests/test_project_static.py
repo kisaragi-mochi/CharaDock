@@ -428,7 +428,14 @@ class ProjectStaticTests(unittest.TestCase):
     def test_public_readme_explains_ai_assisted_pngtuber_workflow(self) -> None:
         readme = self.read_text("README.md")
         readme_ja = self.read_text("README.ja.md")
-        self.assertIn("PuruPet Desktop", readme)
+        package = json.loads(self.read_text("package.json"))
+        self.assertIn("CharaDock", readme)
+        self.assertIn("Give your character a place—and a pulse.", readme)
+        self.assertEqual(package["name"], "charadock")
+        self.assertEqual(package["build"]["appId"], "jp.ochisamu.charadock.desktop")
+        self.assertEqual(package["build"]["productName"], "CharaDock")
+        self.assertTrue((ROOT / "app-icon.png").is_file())
+        self.assertNotIn("PuruPet", "\n".join((readme, readme_ja, self.read_text("desktop/control.html"))))
         self.assertIn("Codex Avatar Studio", readme)
         self.assertIn("Conversation / Work", readme)
         self.assertIn(".agents/skills/build-purupuru-avatar/", readme)
@@ -471,7 +478,10 @@ class ProjectStaticTests(unittest.TestCase):
         self.assertIn('href="./ja.html" lang="ja"', english)
         self.assertIn('href="./" lang="en"', japanese)
         self.assertIn('["index.html", "ja.html"]', builder)
-        self.assertIn('"purupet-site-language"', script)
+        self.assertIn('"charadock-site-language"', script)
+        self.assertIn('./assets/app-icon.png', english)
+        self.assertIn('./assets/app-icon.png', japanese)
+        self.assertIn('["app-icon.png", "assets/app-icon.png"]', builder)
 
     def test_purupuru_package_is_documented_as_self_contained(self) -> None:
         readme = self.read_text("README.md")
@@ -1786,7 +1796,7 @@ class ProjectStaticTests(unittest.TestCase):
         app = self.read_text("app.js")
 
         self.assertIn('"purupuru-section-v1"', app)
-        self.assertIn('"purupuru-workspace-v1"', app)
+        self.assertIn('"charadock-workspace-v1"', app)
         self.assertIn('"purupuru-adjust-category-v1"', app)
         # 旧2階層タブからの移行読取分岐が残っていること。
         self.assertIn("WORKSPACE_STORAGE_KEY", app)

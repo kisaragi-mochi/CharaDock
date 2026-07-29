@@ -50,7 +50,7 @@ class CodexAppServerClient {
     developerInstructions = CODEX_MASCOT_INSTRUCTIONS,
     sandbox = "read-only",
     approvalPolicy = "never",
-    serviceName = "purupuru_desktop_mascot",
+    serviceName = "charadock",
     personality = "friendly",
     webSearchMode = "",
     dynamicTools = [],
@@ -151,8 +151,8 @@ class CodexAppServerClient {
     this.readline.on("line", (line) => this.handleLine(line));
     await this.request("initialize", {
       clientInfo: {
-        name: "purupuru_desktop_mascot",
-        title: "PuruPet Desktop",
+        name: "charadock",
+        title: "CharaDock",
         version: "0.1.0",
       },
       capabilities: { experimentalApi: true },

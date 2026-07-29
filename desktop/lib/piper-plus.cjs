@@ -92,7 +92,7 @@ async function synthesizePiperPlus({
   const model = validatePiperPlusModel(modelPath);
   const chunks = splitTtsText(text);
   if (!chunks.length) return { audioDataUrls: [] };
-  const temporaryDirectory = fs.mkdtempSync(path.join(temporaryRoot, "purupet-piper-"));
+  const temporaryDirectory = fs.mkdtempSync(path.join(temporaryRoot, "charadock-piper-"));
   const audioDataUrls = [];
   try {
     for (let index = 0; index < chunks.length; index += 1) {

@@ -22,7 +22,7 @@ test("Kokoro exposes the five Japanese voices", () => {
 });
 
 test("Kokoro model validation requires GPU, CPU, and Japanese voice files", (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-kokoro-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-kokoro-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   assert.equal(validateKokoroModelDirectory(directory).ready, false);
   for (const relativePath of MODEL_FILES) {

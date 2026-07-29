@@ -13,7 +13,7 @@ Check:
 ## Useful details to include
 
 - Operating system
-- PuruPet Desktop version and Codex CLI version
+- CharaDock version and Codex CLI version
 - Selected AI backend (Codex app-server or OpenAI API)
 - Whether the problem occurs in conversation mode or work mode
 - Browser and version

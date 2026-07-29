@@ -20,7 +20,7 @@ async function synthesizeSupertonicInWorker(request, {
   temporaryRoot = os.tmpdir(),
   execFileImpl = execFile,
 } = {}) {
-  const temporaryDirectory = fs.mkdtempSync(path.join(temporaryRoot, "purupet-supertonic-"));
+  const temporaryDirectory = fs.mkdtempSync(path.join(temporaryRoot, "charadock-supertonic-"));
   const requestPath = path.join(temporaryDirectory, "request.json");
   const resultPath = path.join(temporaryDirectory, "result.json");
   try {
@@ -34,8 +34,8 @@ async function synthesizeSupertonicInWorker(request, {
           env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: "1",
-            PURUPET_SUPERTONIC_REQUEST: requestPath,
-            PURUPET_SUPERTONIC_RESULT: resultPath,
+            CHARADOCK_SUPERTONIC_REQUEST: requestPath,
+            CHARADOCK_SUPERTONIC_RESULT: resultPath,
           },
           windowsHide: true,
           timeout: 120_000,

@@ -26,7 +26,7 @@ Do not publicly post exploit details for issues that could affect users.
 
 - The desktop app uses Electron with context isolation, sandboxed renderers, sender validation, and allowlisted local files.
 - OpenAI API keys are kept out of renderer windows and use the operating-system credential store when Electron encryption is available.
-- ChatGPT authentication is managed by Codex CLI; PuruPet does not receive the ChatGPT token.
+- ChatGPT authentication is managed by Codex CLI; CharaDock does not receive the ChatGPT token.
 - Conversation mode starts Codex read-only. Work mode grants workspace-write only to the folder explicitly selected by the user.
 - Codex Realtime sends microphone audio to OpenAI through Codex app-server when active. OpenAI transcription also uploads the recorded clip when selected.
 - OBS helper APIs are intended for `127.0.0.1` / `localhost` use.

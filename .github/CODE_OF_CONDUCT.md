@@ -1,6 +1,6 @@
 # Code of Conduct
 
-PuruPet Desktop aims to be a welcoming project for creators and developers.
+CharaDock aims to be a welcoming project for creators and developers.
 
 ## Expected behavior
 

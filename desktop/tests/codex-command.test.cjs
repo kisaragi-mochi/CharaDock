@@ -49,12 +49,12 @@ test("Codex command caches the protected Windows Store binary", async () => {
     env: {},
     exists: (candidate) => candidate === appxPath,
     runCommand: async (name) => name === "powershell.exe" ? appxPath : "",
-    cacheDirectory: "C:\\Users\\test\\PuruPuru\\bin",
+    cacheDirectory: "C:\\Users\\test\\CharaDock\\bin",
     cacheBinary: (source, directory) => {
       copied = { source, directory };
       return `${directory}\\codex.exe`;
     },
   });
-  assert.equal(command, "C:\\Users\\test\\PuruPuru\\bin\\codex.exe");
-  assert.deepEqual(copied, { source: appxPath, directory: "C:\\Users\\test\\PuruPuru\\bin" });
+  assert.equal(command, "C:\\Users\\test\\CharaDock\\bin\\codex.exe");
+  assert.deepEqual(copied, { source: appxPath, directory: "C:\\Users\\test\\CharaDock\\bin" });
 });

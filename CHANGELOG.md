@@ -1,9 +1,10 @@
 # Changelog
 
-All notable changes to PuruPet Desktop will be documented here.
+All notable changes to CharaDock will be documented here.
 
 ## Unreleased
 
+- Adopt the CharaDock identity across the application, package metadata, documentation, landing pages, release workflows, and internal service/storage identifiers; add the new format-neutral CharaDock icon.
 - Route typed messages through the active GPT-Live session so its selected Live voice produces the reply, while keeping Realtime sessions record-button-only.
 - Preserve every GPT-Live conversation turn when transcript events arrive consecutively or out of order, and let idle Live sessions speak character-click reactions without adding those reactions to conversation history.
 - Move character voice controls into the Character page, clearly show whether Live or standard TTS is active, and disable the unused voice path.

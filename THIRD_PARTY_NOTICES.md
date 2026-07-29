@@ -11,7 +11,7 @@ PuruPuru PNGTuber vendors the MediaPipe face-tracking runtime assets used by the
 - Source: https://github.com/rotejin/PuruPuruPNGTuber
 - License: Apache License 2.0
 
-PuruPet Desktop is an unofficial modified work. The upstream demo character
+CharaDock is an unofficial modified work. The upstream demo character
 images and favicon are intentionally excluded from the packaged desktop binary.
 Any upstream samples retained in the source tree for browser-editor compatibility
 remain governed by their separate asset terms in ASSET_LICENSE.md.
@@ -137,7 +137,7 @@ Inc.).
 - Source: https://github.com/ngc-shj/irodori-tts-webgpu
 - License: MIT License
 
-PuruPet includes a modified, environment-specific copy of the inference core.
+CharaDock includes a modified, environment-specific copy of the inference core.
 The MIT copyright and permission notice are retained in the vendored source.
 Irodori model files and reference audio are not bundled. The user may download
 only the required FP16 ONNX artifacts and tokenizer from the original model

@@ -1,4 +1,4 @@
-name: Windows package
+name: CharaDock Windows package
 
 on:
   workflow_dispatch:
@@ -61,7 +61,7 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: purupet-windows-${{ github.ref_name }}
+          name: charadock-windows-${{ github.ref_name }}
           path: |
             dist/*.exe
             dist/SHA256SUMS.txt
@@ -81,7 +81,7 @@ jobs:
       - name: Download Windows packages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: purupet-windows-${{ github.ref_name }}
+          name: charadock-windows-${{ github.ref_name }}
           path: release-assets
 
       - name: Create or update draft release
@@ -92,5 +92,5 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release-assets/* --draft --generate-notes --title "PuruPet Desktop $GITHUB_REF_NAME"
+            gh release create "$GITHUB_REF_NAME" release-assets/* --draft --generate-notes --title "CharaDock $GITHUB_REF_NAME"
           fi

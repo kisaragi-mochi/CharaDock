@@ -4,8 +4,8 @@ const fs = require("node:fs");
 const { EmbeddedSupertonicTts } = require("./supertonic-tts.cjs");
 
 async function run() {
-  const requestPath = String(process.env.PURUPET_SUPERTONIC_REQUEST || "");
-  const resultPath = String(process.env.PURUPET_SUPERTONIC_RESULT || "");
+  const requestPath = String(process.env.CHARADOCK_SUPERTONIC_REQUEST || "");
+  const resultPath = String(process.env.CHARADOCK_SUPERTONIC_RESULT || "");
   if (!requestPath || !resultPath) throw new Error("Supertonicワーカーの入出力先がありません。");
   const request = JSON.parse(fs.readFileSync(requestPath, "utf8"));
   // Electron's main-process V8 isolate rejects the external ArrayBuffers
@@ -17,7 +17,7 @@ async function run() {
 }
 
 run().catch((error) => {
-  const resultPath = String(process.env.PURUPET_SUPERTONIC_RESULT || "");
+  const resultPath = String(process.env.CHARADOCK_SUPERTONIC_RESULT || "");
   if (resultPath) {
     try { fs.writeFileSync(resultPath, JSON.stringify({ ok: false, error: String(error?.message || error) }), { mode: 0o600 }); } catch {}
   }

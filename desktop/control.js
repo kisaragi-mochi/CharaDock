@@ -34,7 +34,7 @@
   let speechAudioFrame = 0;
   let speechAudioSamples = null;
   let speechAudioGraphConnected = false;
-  const speechEnvelope = window.PuruPetAudioEnvelope.createAdaptiveSpeechEnvelope();
+  const speechEnvelope = window.CharaDockAudioEnvelope.createAdaptiveSpeechEnvelope();
   let speechTtsStreamId = "";
   let speechPlaybackToken = 0;
   let streamingMessage = null;
@@ -258,7 +258,7 @@
   }
 
   function showPage(name) {
-    sessionStorage.setItem("purupet.activePage", name);
+    sessionStorage.setItem("charadock.activePage", name);
     $$(".nav-tab").forEach((button) => {
       const active = button.dataset.page === name;
       button.classList.toggle("is-active", active);
@@ -1721,8 +1721,8 @@
       }
     });
     $("#mouseFollowToggle").addEventListener("change", () => {
-      sessionStorage.setItem("purupet.activePage", "character");
-      sessionStorage.setItem("purupet.characterScroll", String(document.scrollingElement?.scrollTop || 0));
+      sessionStorage.setItem("charadock.activePage", "character");
+      sessionStorage.setItem("charadock.characterScroll", String(document.scrollingElement?.scrollTop || 0));
       saveSettings().catch((error) => setStatus($("#characterProfileStatus"), error.message, true));
     });
     ["#openaiModelInput", "#transcriptionModelInput", "#codexChatModelInput", "#codexChatReasoningEffortSelect", "#codexWorkModelInput", "#codexWorkReasoningEffortSelect"]
@@ -1872,10 +1872,10 @@
     });
     bindEvents();
     syncUi();
-    const page = sessionStorage.getItem("purupet.activePage") || "chat";
+    const page = sessionStorage.getItem("charadock.activePage") || "chat";
     showPage(["chat", "character", "connection", "desktop"].includes(page) ? page : "chat");
     if (page === "character") requestAnimationFrame(() => {
-      document.scrollingElement.scrollTop = Number(sessionStorage.getItem("purupet.characterScroll")) || 0;
+      document.scrollingElement.scrollTop = Number(sessionStorage.getItem("charadock.characterScroll")) || 0;
     });
     refreshCodexAccount();
     refreshCodexModels();

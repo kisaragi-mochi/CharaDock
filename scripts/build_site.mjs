@@ -18,8 +18,9 @@ await mkdir(path.join(output, "assets", "characters"), { recursive: true });
 
 const assets = [
   ["app-icon.ico", "assets/favicon.ico"],
-  ["docs/images/purupet-hero.webp", "assets/purupet-hero.webp"],
-  ["docs/images/purupet-work-mode.png", "assets/purupet-work-mode.png"],
+  ["app-icon.png", "assets/app-icon.png"],
+  ["docs/images/charadock-hero.webp", "assets/charadock-hero.webp"],
+  ["docs/images/charadock-work-mode.png", "assets/charadock-work-mode.png"],
   ["docs/images/characters/amber-complete-v2.png", "assets/characters/amber.png"],
   ["docs/images/characters/bronze-complete-v2.png", "assets/characters/bronze.png"],
   ["docs/images/characters/towa-complete-v1.png", "assets/characters/towa.png"],

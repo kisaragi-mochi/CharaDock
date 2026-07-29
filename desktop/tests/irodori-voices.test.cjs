@@ -24,7 +24,7 @@ function emptyWave() {
 }
 
 test("Irodori imports, renames, selects, and removes app-owned voices", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-irodori-voices-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-irodori-voices-"));
   try {
     const library = new IrodoriVoiceLibrary(root);
     const first = library.importWave(emptyWave(), "Sample / Voice");

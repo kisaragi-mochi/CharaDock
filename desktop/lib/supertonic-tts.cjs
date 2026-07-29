@@ -108,7 +108,7 @@ class EmbeddedSupertonicTts {
           unicodeIndexer: file("unicode_indexer.bin"),
           voiceStyle: file("voice.bin"),
         },
-        numThreads: Math.max(1, Math.min(4, Number(process.env.PURUPET_TTS_THREADS) || 2)),
+        numThreads: Math.max(1, Math.min(4, Number(process.env.CHARADOCK_TTS_THREADS) || 2)),
         provider: "cpu",
         debug: false,
       },

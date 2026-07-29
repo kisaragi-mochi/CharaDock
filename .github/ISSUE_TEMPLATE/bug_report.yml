@@ -23,7 +23,7 @@ body:
       label: Steps to reproduce
       description: List the exact steps.
       placeholder: |
-        1. Start PuruPet Desktop
+        1. Start CharaDock
         2. Open the compact chat or settings
         3. Click ...
     validations:
@@ -66,8 +66,8 @@ body:
   - type: input
     id: browser
     attributes:
-      label: PuruPet / Codex / browser version
-      placeholder: PuruPet 0.1.0, Codex CLI 0.x, Chrome 126, etc.
+      label: CharaDock / Codex / browser version
+      placeholder: CharaDock 0.1.0, Codex CLI 0.x, Chrome 126, etc.
     validations:
       required: false
 

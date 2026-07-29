@@ -8,7 +8,7 @@ const test = require("node:test");
 const { EmbeddedSupertonicTts, REQUIRED_FILES, supertonicStatus, wavDataUrl } = require("../lib/supertonic-tts.cjs");
 
 function modelDirectory() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-supertonic-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-supertonic-"));
   for (const name of REQUIRED_FILES) fs.writeFileSync(path.join(directory, name), name);
   return directory;
 }

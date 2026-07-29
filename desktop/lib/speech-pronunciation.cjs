@@ -6,6 +6,7 @@
 const { cmuWordToKatakana } = require("./cmu-katakana.cjs");
 
 const WORD_PRONUNCIATIONS = Object.freeze(new Map([
+  ["charadock", "キャラドック"],
   ["style-bert-vits2", "スタイルバートビッツツー"],
   ["sherpa-onnx", "シェルパオニキス"],
   ["javascript", "ジャバスクリプト"],

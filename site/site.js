@@ -3,7 +3,7 @@ const header = document.querySelector(".site-header");
 const characterButtons = [...document.querySelectorAll("[data-character-choice]")];
 const copyButton = document.querySelector("#copyCommand");
 const languageLinks = [...document.querySelectorAll(".language-switch a[lang]")];
-const languagePreferenceKey = "purupet-site-language";
+const languagePreferenceKey = "charadock-site-language";
 
 try {
   const preferredLanguage = window.localStorage.getItem(languagePreferenceKey);

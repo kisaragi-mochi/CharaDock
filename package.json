@@ -1,7 +1,7 @@
 {
-  "name": "purupuru-desktop-mascot",
+  "name": "charadock",
   "version": "0.1.0",
-  "description": "Unofficial transparent desktop companion powered by PuruPuru PNGTuber, Codex app-server, and the OpenAI Responses API.",
+  "description": "CharaDock is a transparent Windows desktop companion powered by PuruPuru PNGTuber, Codex app-server, and the OpenAI Responses API.",
   "main": "desktop/main.cjs",
   "author": "ochisamu",
   "license": "Apache-2.0",
@@ -23,8 +23,8 @@
     "electron-builder": "26.15.3"
   },
   "build": {
-    "appId": "jp.ochisamu.purupet.desktop",
-    "productName": "PuruPet Desktop",
+    "appId": "jp.ochisamu.charadock.desktop",
+    "productName": "CharaDock",
     "copyright": "Copyright © 2026 ochisamu",
     "asar": true,
     "files": [

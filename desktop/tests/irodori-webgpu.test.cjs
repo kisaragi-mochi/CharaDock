@@ -8,7 +8,7 @@ const test = require("node:test");
 const { IRODORI_CHUNK_LENGTH, IRODORI_CHUNK_OVERFLOW, IRODORI_FIRST_CHUNK_LENGTH, MODEL_NAMES, irodoriModelStatus, resolveIrodoriModelDirectory, splitIrodoriText, validateIrodoriModelDirectory } = require("../lib/irodori-webgpu.cjs");
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "purupet-irodori-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-irodori-"));
   const models = path.join(root, "onnx_fp16");
   const tokenizer = path.join(root, "tokenizer", "llmjp_tok");
   fs.mkdirSync(models, { recursive: true });

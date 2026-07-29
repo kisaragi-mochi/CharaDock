@@ -1,4 +1,4 @@
-# PuruPet 作業モード設計
+# CharaDock 作業モード設計
 
 ## 目的
 

@@ -344,6 +344,6 @@ test("Codex client remembers an interrupt requested while a turn is starting", a
 });
 
 test("missing Codex CLI reports a friendly error instead of crashing", async () => {
-  const client = new CodexAppServerClient({ command: "purupuru-command-that-does-not-exist" });
+  const client = new CodexAppServerClient({ command: "charadock-command-that-does-not-exist" });
   await assert.rejects(client.ensureStarted(), /Codex CLIを起動できません.*PATH/);
 });

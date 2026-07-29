@@ -1,5 +1,5 @@
 [project]
-name = "purupet-desktop"
+name = "charadock"
 version = "0.1.0"
 description = "Unofficial Windows desktop companion derived from PuruPuru PNGTuber"
 readme = "README.md"
