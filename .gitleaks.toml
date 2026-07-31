@@ -5,3 +5,12 @@ useDefault = true
 description = "PuruPuru UI localStorage identifier; not an API credential"
 regexTarget = "secret"
 regexes = ['''^purupuru-section-v1$''']
+
+[[allowlists]]
+description = "Exact synthetic values used by persistence and diagnostic-redaction tests"
+regexTarget = "secret"
+regexes = [
+  '''^abcdef0123456789abcdef01$''',
+  '''^abcdef123456$''',
+  '''^sk-secret123456$''',
+]
