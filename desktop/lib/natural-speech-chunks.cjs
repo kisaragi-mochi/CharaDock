@@ -91,16 +91,38 @@ function findNaturalSpeechBoundary(value, maxLength, { minimumRatio = .45 } = {}
 function splitNaturalSpeechText(value, maxLength = 100, maxChunks = 10, { maxOverflow = 0 } = {}) {
   let remaining = String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength * maxChunks);
   const chunks = [];
+  const overflow = Math.max(0, Number(maxOverflow) || 0);
+  const minimumTail = Math.max(6, Math.floor(maxLength * .25));
   while (remaining && chunks.length < maxChunks) {
-    if (remaining.length <= maxLength + Math.max(0, maxOverflow)) {
+    if (remaining.length <= maxLength + overflow) {
       chunks.push(remaining);
       break;
     }
-    const splitAt = findNaturalSpeechBoundary(remaining, maxLength);
+    // Do not consume almost all of the text and leave a tiny, unnatural final
+    // utterance. Move the preceding break a little earlier when necessary.
+    const wouldLeave = remaining.length - maxLength;
+    const boundaryLimit = wouldLeave < minimumTail
+      ? Math.max(Math.floor(maxLength * .55), remaining.length - minimumTail)
+      : maxLength;
+    const splitAt = findNaturalSpeechBoundary(remaining, boundaryLimit, { minimumRatio: .4 });
     chunks.push(remaining.slice(0, splitAt).trim());
     remaining = remaining.slice(splitAt).trim();
   }
-  return chunks.filter(Boolean);
+  const filtered = chunks.filter(Boolean);
+  if (filtered.length < 2 || filtered.at(-1).length >= minimumTail) return filtered;
+
+  const tail = filtered.pop();
+  const previous = filtered.pop();
+  const needsWordSpace = /[A-Za-z0-9]$/u.test(previous) && /^[A-Za-z0-9]/u.test(tail);
+  const combined = `${previous}${needsWordSpace ? " " : ""}${tail}`;
+  if (combined.length <= maxLength + overflow) {
+    filtered.push(combined);
+    return filtered;
+  }
+  const limit = Math.min(maxLength + overflow, combined.length - minimumTail);
+  const splitAt = findNaturalSpeechBoundary(combined, limit, { minimumRatio: .4 });
+  filtered.push(combined.slice(0, splitAt).trim(), combined.slice(splitAt).trim());
+  return filtered.filter(Boolean);
 }
 
 module.exports = { findNaturalSpeechBoundary, splitNaturalSpeechText };

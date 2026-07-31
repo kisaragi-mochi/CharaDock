@@ -425,14 +425,15 @@ class CodexAppServerClient {
     return true;
   }
 
-  sendMessage(message, { onDelta, onEvent, localImagePath = "", localAudioPath = "", outputSchema = null, timeoutMs = 180_000 } = {}) {
+  sendMessage(message, { onDelta, onEvent, localImagePath = "", localImagePaths = [], localAudioPath = "", outputSchema = null, timeoutMs = 180_000 } = {}) {
     const run = async () => {
       this.turnStarting = true;
       this.interruptRequested = false;
       await this.ensureStarted();
       const threadId = await this.ensureThread();
       const input = [{ type: "text", text: String(message || "").trim() }];
-      if (localImagePath) input.push({ type: "localImage", path: String(this.pathMapper(localImagePath)), detail: "original" });
+      const images = [...new Set([localImagePath, ...(Array.isArray(localImagePaths) ? localImagePaths : [])].filter(Boolean).map(String))];
+      for (const imagePath of images.slice(0, 8)) input.push({ type: "localImage", path: String(this.pathMapper(imagePath)), detail: "original" });
       if (localAudioPath) input.push({ type: "localAudio", path: String(this.pathMapper(localAudioPath)) });
       const params = {
         threadId,

@@ -38,6 +38,7 @@
       "assets/towa-avatar/**/*",
       "assets/sage-avatar/**/*",
       "assets/reference-voices/**/*",
+      "assets/ui/**/*",
       "vendor/**/*",
       "desktop/**/*",
       ".agents/skills/**/*",

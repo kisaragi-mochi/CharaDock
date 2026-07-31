@@ -43,6 +43,7 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.language, "ja");
   assert.equal(state.onboardingComplete, false);
   assert.equal(state.positionLocked, false);
+  assert.equal(state.mascotPointerMode, "interactive");
   assert.equal(state.edgeSnap, true);
   assert.equal(state.preferredDisplayId, "");
   assert.equal(state.interactionMode, "chat");
@@ -76,6 +77,8 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.voiceActivationMode, "vad");
   assert.equal(state.vadSensitivity, "normal");
   assert.equal(state.voiceAutoSend, true);
+  assert.equal(state.voiceAutoSendCountdown, true);
+  assert.equal(state.voiceAutoSendDelayMs, 1500);
   assert.equal(state.codexChatModel, "");
   assert.equal(state.codexChatReasoningEffort, "");
   assert.equal(state.codexWorkModel, "");
@@ -94,6 +97,16 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   );
   assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].irodoriVoiceId, "builtin-kohaku");
   assert.equal(preferences.data.characterTtsProfiles["towa-avatar"].irodoriVoiceId, "builtin-hiro");
+});
+
+test("preferences migrate legacy click-through and clamp voice countdown delay", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({ clickThrough: true, voiceAutoSendDelayMs: 99_000 }));
+  const state = new Preferences(file).publicState();
+  assert.equal(state.mascotPointerMode, "click-through");
+  assert.equal(state.clickThrough, true);
+  assert.equal(state.voiceAutoSendDelayMs, 5000);
 });
 
 test("preferences persist only supported interface languages", () => {
@@ -212,6 +225,8 @@ test("preferences restore bounded per-character conversations and work history",
       characterId: "amber-avatar",
       characterName: "琥珀",
       workDirectoryName: "project",
+      workspaceKey: "abcdef0123456789abcdef01",
+      artifacts: [{ path: "dist/report.html", name: "report.html", kind: "file" }],
     }],
   }));
   const restored = new Preferences(file);
@@ -224,6 +239,8 @@ test("preferences restore bounded per-character conversations and work history",
   assert.equal(restored.data.workHistory[0].status, "interrupted");
   assert.equal(restored.data.workHistory[0].characterName, "コハク");
   assert.match(restored.data.workHistory[0].result, /アプリの終了/);
+  assert.equal(restored.data.workHistory[0].workspaceKey, "abcdef0123456789abcdef01");
+  assert.deepEqual(restored.data.workHistory[0].artifacts, [{ path: "dist/report.html", name: "report.html", kind: "file" }]);
   assert.equal(Object.prototype.hasOwnProperty.call(restored.publicState(), "conversationHistories"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(restored.publicState(), "characterMemories"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(restored.publicState(), "workHistory"), false);

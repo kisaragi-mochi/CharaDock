@@ -8,7 +8,7 @@ const test = require("node:test");
 const projectRoot = path.resolve(__dirname, "../..");
 const EXPECTED = Object.freeze({
   "hiro.wav": "23c8fd4deb6c7164048a42f46a26c168e012d3bb733ae39f9439618ca1f9c927",
-  "kohaku.wav": "e5fc3fdd29b9dac1238172d0254cfddf9df80c204085125a9dce646b669a2f56",
+  "kohaku.wav": "ab9c4a4d634d05fd37dd4d830a1703e0257b0e4fad8259f922b154e2350dd871",
 });
 
 test("bundled Irodori reference voices are stable PCM WAV assets included in packaging", () => {

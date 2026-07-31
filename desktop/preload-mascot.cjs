@@ -27,30 +27,39 @@ window.addEventListener("DOMContentLoaded", () => {
   permissionActions.innerHTML = `
     <button type="button" data-permission-action="approve">依頼を許可</button>
     <button type="button" data-permission-action="deny">やめる</button>`;
+  const artifactActions = document.createElement("div");
+  artifactActions.id = "desktopMascotArtifactActions";
+  artifactActions.hidden = true;
   const bubbleMore = document.createElement("button");
   bubbleMore.id = "desktopMascotBubbleMore";
   bubbleMore.type = "button";
   bubbleMore.hidden = true;
   bubbleMore.textContent = "全文";
   bubbleMore.setAttribute("aria-expanded", "false");
-  bubble.append(bubbleText, workActivity, permissionActions, bubbleMore);
+  bubble.append(bubbleText, workActivity, permissionActions, artifactActions, bubbleMore);
   document.body.appendChild(bubble);
 
   const dock = document.createElement("div");
   dock.id = "desktopMascotDock";
   dock.innerHTML = `
     <span id="desktopMascotHint" role="status"></span>
+    <div id="desktopMascotAutoSendCountdown" role="status" hidden>
+      <span id="desktopMascotAutoSendCountdownLabel"></span>
+      <button type="button" data-countdown-action="send">今すぐ送信</button>
+      <button type="button" data-countdown-action="cancel">取消</button>
+    </div>
     <form id="desktopMascotComposer">
       <button id="desktopMascotModeButton" type="button" aria-label="会話モードと作業モードを切り替える">会話</button>
       <button id="desktopMascotWorkTarget" type="button" aria-label="作業先フォルダーを変更する"></button>
-      <button id="desktopMascotWorkHistoryButton" type="button" aria-label="履歴を開く" aria-expanded="false">履歴</button>
-      <button id="desktopMascotMicButton" type="button" aria-label="音声入力" aria-pressed="false">●</button>
+      <button id="desktopMascotWorkOpenButton" type="button" aria-label="作業先フォルダーを開く" title="作業先フォルダーを開く"><span class="ui-symbol ui-symbol-folder-open" aria-hidden="true"></span></button>
+      <button id="desktopMascotWorkHistoryButton" type="button" aria-label="履歴を開く" aria-expanded="false" title="履歴を開く"><span class="ui-symbol ui-symbol-history" aria-hidden="true"></span></button>
+      <button id="desktopMascotMicButton" type="button" aria-label="音声入力" aria-pressed="false" title="音声入力"><span class="ui-symbol ui-symbol-microphone" aria-hidden="true"></span></button>
       <textarea id="desktopMascotInput" rows="1" maxlength="6000" aria-label="メッセージ" placeholder="短く話しかける…"></textarea>
-      <button id="desktopMascotSendButton" type="submit" aria-label="送信">↑</button>
-      <button id="desktopMascotStopButton" type="button" aria-label="応答を中断" hidden>■</button>
+      <button id="desktopMascotSendButton" type="submit" aria-label="送信" title="送信"><span class="ui-symbol ui-symbol-send" aria-hidden="true"></span></button>
+      <button id="desktopMascotStopButton" type="button" aria-label="応答を中断" title="応答を中断" hidden><span class="ui-symbol ui-symbol-stop" aria-hidden="true"></span></button>
     </form>
-    <button id="desktopMascotSettingsButton" type="button" aria-label="設定を開く">⚙</button>
-    <button id="desktopMascotChatButton" type="button" aria-label="会話入力を開く">✦</button>`;
+    <button id="desktopMascotSettingsButton" type="button" aria-label="設定を開く" title="設定を開く"><span class="ui-symbol ui-symbol-settings" aria-hidden="true"></span></button>
+    <button id="desktopMascotChatButton" type="button" aria-label="会話入力を開く" title="会話入力を開く"><span class="ui-symbol ui-symbol-chat" aria-hidden="true"></span></button>`;
   document.body.appendChild(dock);
   const workPanel = document.createElement("section");
   workPanel.id = "desktopMascotWorkPanel";
@@ -61,7 +70,7 @@ window.addEventListener("DOMContentLoaded", () => {
   workPanel.innerHTML = `
     <header>
       <div><strong id="desktopMascotHistoryTitle">履歴</strong><span id="desktopMascotWorkPanelSummary">会話と作業の記録</span></div>
-      <button id="desktopMascotWorkPanelClose" type="button" aria-label="作業履歴を閉じる">×</button>
+      <button id="desktopMascotWorkPanelClose" type="button" aria-label="作業履歴を閉じる" title="履歴を閉じる"><span class="ui-symbol ui-symbol-close" aria-hidden="true"></span></button>
     </header>
     <div id="desktopMascotWorkHistoryList"></div>`;
   document.body.appendChild(workPanel);
@@ -77,14 +86,22 @@ window.addEventListener("DOMContentLoaded", () => {
   const micButton = dock.querySelector("#desktopMascotMicButton");
   const modeButton = dock.querySelector("#desktopMascotModeButton");
   const workTarget = dock.querySelector("#desktopMascotWorkTarget");
+  const workOpenButton = dock.querySelector("#desktopMascotWorkOpenButton");
   const workHistoryButton = dock.querySelector("#desktopMascotWorkHistoryButton");
   const workHistoryList = workPanel.querySelector("#desktopMascotWorkHistoryList");
   const workPanelSummary = workPanel.querySelector("#desktopMascotWorkPanelSummary");
   const historyTitle = workPanel.querySelector("#desktopMascotHistoryTitle");
   const hint = dock.querySelector("#desktopMascotHint");
+  const autoSendCountdown = dock.querySelector("#desktopMascotAutoSendCountdown");
+  const autoSendCountdownLabel = dock.querySelector("#desktopMascotAutoSendCountdownLabel");
   let statusTimer;
+  let autoSendCountdownTimer;
+  let autoSendCountdownCommand = "";
+  let autoSendCountdownEndsAt = 0;
   let autoCloseTimer;
+  let temporaryInteractionHold = false;
   let sending = false;
+  let pendingFollowUpMessage = "";
   let speechRecognition;
   let appState;
   let realtimePeer = null;
@@ -119,6 +136,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let vadSilentSince = 0;
   let vadSpeechStartedAt = 0;
   let realtimeUnavailable = false;
+  let voiceInputTransitioning = false;
   let lastStreamPulseAt = 0;
   let workActivityTimer;
   let streamWorkMode = false;
@@ -178,6 +196,28 @@ window.addEventListener("DOMContentLoaded", () => {
     clearTimeout(workPanelCloseTimer);
     workPanelCloseTimer = setTimeout(() => setWorkPanelOpen(false), duration);
   };
+  const renderArtifactActions = (container, artifacts, runId) => {
+    container.replaceChildren();
+    const entries = Array.isArray(artifacts) ? artifacts : [];
+    container.hidden = !entries.length || !runId;
+    if (container.hidden) return;
+    for (const artifact of entries) {
+      const button = document.createElement("button");
+      button.type = "button";
+      const icon = document.createElement("span");
+      icon.className = `ui-symbol ${artifact.kind === "directory" ? "ui-symbol-folder" : "ui-symbol-document"}`;
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon, document.createTextNode(artifact.name || artifact.path));
+      button.title = artifact.path;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await ipcRenderer.invoke("mascotInline:openWorkArtifact", { runId, path: artifact.path }); }
+        catch (error) { setStatus(error.message, 5000); }
+        finally { button.disabled = false; }
+      });
+      container.appendChild(button);
+    }
+  };
   const renderWorkHistory = (payload = workHistoryState) => {
     historyTitle.textContent = "作業履歴";
     workHistoryState = payload && Array.isArray(payload.runs) ? payload : { activeWorkRunId: null, runs: [] };
@@ -233,6 +273,12 @@ window.addEventListener("DOMContentLoaded", () => {
         result.className = "desktop-mascot-work-result";
         result.textContent = run.result;
         item.appendChild(result);
+      }
+      if (Array.isArray(run.artifacts) && run.artifacts.length) {
+        const actions = document.createElement("div");
+        actions.className = "desktop-mascot-work-artifacts";
+        renderArtifactActions(actions, run.artifacts, run.id);
+        item.appendChild(actions);
       }
       if (["running", "stopping"].includes(run.status) && run.id === workHistoryState.activeWorkRunId) {
         const stop = document.createElement("button");
@@ -305,8 +351,10 @@ window.addEventListener("DOMContentLoaded", () => {
     modeButton.title = workMode ? "会話モードへ戻す" : "作業モードへ切り替える";
     workTarget.textContent = `作業先 · ${state.workDirectoryName || "未選択"}`;
     workTarget.title = workTarget.textContent;
+    workOpenButton.disabled = !state.hasWorkDirectory || sending;
     input.placeholder = workMode ? "このフォルダーでやること…" : "短く話しかける…";
     workHistoryButton.setAttribute("aria-label", workMode ? "作業履歴を開く" : "会話履歴を開く");
+    workHistoryButton.title = workMode ? "作業履歴を開く" : "会話履歴を開く";
     workPanel.querySelector("#desktopMascotWorkPanelClose").setAttribute("aria-label", workMode ? "作業履歴を閉じる" : "会話履歴を閉じる");
     if (workPanel.classList.contains("is-open")) {
       if (workMode) renderWorkHistory(workHistoryState);
@@ -329,7 +377,19 @@ window.addEventListener("DOMContentLoaded", () => {
     percent("--mascot-pet-height", ui.petHeight, 42);
   };
   const applyWindowSettings = (settings = {}) => {
-    document.body.classList.toggle("is-position-locked", Boolean(settings.positionLocked));
+    appState = {
+      ...appState,
+      positionLocked: settings.positionLocked ?? appState?.positionLocked,
+      mascotPointerMode: settings.mascotPointerMode || appState?.mascotPointerMode || "interactive",
+    };
+    document.body.classList.toggle("is-position-locked", Boolean(appState.positionLocked) || appState.mascotPointerMode === "click-through");
+    document.body.dataset.pointerMode = appState.mascotPointerMode;
+  };
+  const applyPointerState = (state = {}) => {
+    appState = { ...appState, mascotPointerMode: state.mode || appState?.mascotPointerMode || "interactive" };
+    document.body.dataset.pointerMode = appState.mascotPointerMode;
+    document.body.classList.toggle("is-position-locked", Boolean(appState.positionLocked) || appState.mascotPointerMode === "click-through");
+    document.body.classList.toggle("is-pointer-auto-hidden", Boolean(state.autoHidden));
   };
 
   const setStatus = (message, duration = 2600) => {
@@ -338,14 +398,54 @@ window.addEventListener("DOMContentLoaded", () => {
     dock.classList.toggle("is-status", Boolean(hint.textContent));
     statusTimer = setTimeout(() => dock.classList.remove("is-status"), duration);
   };
+  const clearAutoSendCountdown = () => {
+    clearTimeout(autoSendCountdownTimer);
+    autoSendCountdownTimer = null;
+    autoSendCountdownCommand = "";
+    autoSendCountdownEndsAt = 0;
+    autoSendCountdown.hidden = true;
+    dock.classList.remove("has-send-countdown");
+  };
+  const submitRecognizedText = (command) => {
+    if (sending || input.value.trim() !== command) return clearAutoSendCountdown();
+    clearAutoSendCountdown();
+    form.requestSubmit();
+  };
+  const beginAutoSendCountdown = (command) => {
+    clearAutoSendCountdown();
+    if (appState?.voiceAutoSend === false) return;
+    if (appState?.voiceAutoSendCountdown === false) {
+      autoSendCountdownCommand = command;
+      autoSendCountdownTimer = setTimeout(() => submitRecognizedText(command), 420);
+      return;
+    }
+    const delayMs = Math.min(5000, Math.max(600, Number(appState?.voiceAutoSendDelayMs) || 1500));
+    autoSendCountdownCommand = command;
+    autoSendCountdownEndsAt = performance.now() + delayMs;
+    autoSendCountdown.hidden = false;
+    dock.classList.add("has-send-countdown");
+    const tick = () => {
+      if (input.value.trim() !== command || sending) return clearAutoSendCountdown();
+      const remaining = Math.max(0, autoSendCountdownEndsAt - performance.now());
+      if (remaining <= 0) return submitRecognizedText(command);
+      autoSendCountdownLabel.textContent = `${(remaining / 1000).toFixed(1)}秒後に送信`;
+      autoSendCountdownTimer = setTimeout(tick, Math.min(100, remaining));
+    };
+    tick();
+  };
   const setSendingControls = (busy) => {
+    if (busy) clearAutoSendCountdown();
     sending = Boolean(busy);
-    sendButton.disabled = sending;
-    sendButton.hidden = sending;
+    sendButton.disabled = false;
+    sendButton.hidden = false;
+    sendButton.setAttribute("aria-label", sending ? "フォローアップを差し込む" : "送信");
+    sendButton.title = sending ? "フォローアップを差し込む" : "送信";
+    sendButton.classList.toggle("is-follow-up", sending);
     stopButton.hidden = !sending;
     stopButton.disabled = false;
     modeButton.disabled = sending;
     workTarget.disabled = sending;
+    workOpenButton.disabled = sending || !appState?.hasWorkDirectory;
   };
   const setWorkActivity = (message, { finish = false } = {}) => {
     clearTimeout(workActivityTimer);
@@ -353,9 +453,16 @@ window.addEventListener("DOMContentLoaded", () => {
     bubble.classList.toggle("is-working", Boolean(workActivity.textContent));
     if (finish) workActivityTimer = setTimeout(() => bubble.classList.remove("is-working"), 2200);
   };
-  const setOpen = (open, { focus = false } = {}) => {
+  const setOpen = (open, { focus = false, temporaryInteraction = false } = {}) => {
     clearTimeout(autoCloseTimer);
     dock.classList.toggle("is-open", Boolean(open));
+    if (open && temporaryInteraction && !temporaryInteractionHold) {
+      temporaryInteractionHold = true;
+      ipcRenderer.invoke("mascotInline:interactionHold", true).catch(() => {});
+    } else if (!open && temporaryInteractionHold) {
+      temporaryInteractionHold = false;
+      ipcRenderer.invoke("mascotInline:interactionHold", false).catch(() => {});
+    }
     if (open && focus) input.focus({ preventScroll: true });
   };
   const scheduleBubbleHide = (duration = bubbleHideDuration) => {
@@ -776,6 +883,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const speakSystemText = (text, language, expression, spokenText) => playStandaloneSpeech(text, "system", language, expression, spokenText);
   const showSpeech = (payload) => {
     clearPermission();
+    renderArtifactActions(artifactActions, [], "");
     clearTimeout(hideTimer);
     streamFullText = "";
     streamCurrentSpeechText = "";
@@ -799,8 +907,8 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   const chatButton = dock.querySelector("#desktopMascotChatButton");
-  chatButton.addEventListener("pointerenter", () => setOpen(true));
-  chatButton.addEventListener("click", () => setOpen(true, { focus: true }));
+  chatButton.addEventListener("pointerenter", () => setOpen(true, { temporaryInteraction: appState?.mascotPointerMode === "auto-hide" }));
+  chatButton.addEventListener("click", () => setOpen(true, { focus: true, temporaryInteraction: appState?.mascotPointerMode === "auto-hide" }));
   dock.addEventListener("pointerenter", () => clearTimeout(autoCloseTimer));
   dock.addEventListener("pointerleave", scheduleAutoClose);
   dock.querySelector("#desktopMascotSettingsButton").addEventListener("click", () => ipcRenderer.invoke("mascotInline:openControl"));
@@ -870,13 +978,21 @@ window.addEventListener("DOMContentLoaded", () => {
     if (event.key === "Escape") { event.preventDefault(); input.blur(); setOpen(false); }
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
   });
-  input.addEventListener("input", resizeInput);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const message = input.value.trim();
-    if (!message || sendButton.disabled) return;
-    input.value = "";
+  input.addEventListener("input", () => {
+    if (autoSendCountdownCommand && input.value.trim() !== autoSendCountdownCommand) clearAutoSendCountdown();
     resizeInput();
+  });
+  autoSendCountdown.addEventListener("click", (event) => {
+    const action = event.target.closest("button")?.dataset?.countdownAction;
+    if (action === "send" && autoSendCountdownCommand) submitRecognizedText(autoSendCountdownCommand);
+    if (action === "cancel") {
+      clearAutoSendCountdown();
+      input.focus({ preventScroll: true });
+      input.select();
+      setStatus("自動送信を取り消しました。内容を編集できます", 4200);
+    }
+  });
+  const sendMascotMessage = async (message) => {
     setSendingControls(true);
     const useActiveRealtime = Boolean(realtimePeer);
     setStatus(useActiveRealtime ? "Live音声で応答を生成…" : appState?.interactionMode === "work" ? "作業を開始…" : "考え中…", 30_000);
@@ -915,11 +1031,39 @@ window.addEventListener("DOMContentLoaded", () => {
     } finally {
       setSendingControls(false);
       input.focus();
+      const followUp = pendingFollowUpMessage;
+      pendingFollowUpMessage = "";
+      if (followUp) queueMicrotask(() => sendMascotMessage(followUp));
     }
+  };
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+    clearAutoSendCountdown();
+    input.value = "";
+    resizeInput();
+    if (sending) {
+      pendingFollowUpMessage = message;
+      stopTtsPlayback();
+      stopButton.disabled = true;
+      setStatus("差し込みを受け付けました。現在の応答を止めています…", 30_000);
+      try {
+        await ipcRenderer.invoke("mascotInline:interruptActive");
+      } catch (error) {
+        stopButton.disabled = false;
+        setStatus(error.message, 5000);
+      }
+      return;
+    }
+    await sendMascotMessage(message);
   });
 
   stopButton.addEventListener("click", async () => {
     if (!sending || stopButton.disabled) return;
+    pendingFollowUpMessage = "";
+    stopTtsPlayback();
     stopButton.disabled = true;
     setStatus("中断しています…", 30_000);
     try {
@@ -946,6 +1090,15 @@ window.addEventListener("DOMContentLoaded", () => {
       appState = await ipcRenderer.invoke("mascotInline:chooseWorkDirectory");
       applyInteractionMode(appState);
       setStatus(appState.workDirectoryName ? `作業先: ${appState.workDirectoryName}` : "作業先は変更されませんでした");
+      input.focus();
+    } catch (error) {
+      setStatus(error.message, 5000);
+    }
+  });
+  workOpenButton.addEventListener("click", async () => {
+    try {
+      await ipcRenderer.invoke("mascotInline:openWorkDirectory");
+      setStatus(`作業先を開きました: ${appState?.workDirectoryName || ""}`);
       input.focus();
     } catch (error) {
       setStatus(error.message, 5000);
@@ -1016,7 +1169,16 @@ window.addEventListener("DOMContentLoaded", () => {
   petZone.addEventListener("click", async (event) => {
     if (performance.now() < suppressPetClickUntil) return;
     showTouchSpark(event);
-    if (sending) return;
+    const responseSpeaking = ttsBusy || streamTtsDraining || thinkingFillerActive || Boolean(ttsAudio);
+    if (sending || responseSpeaking) {
+      if (responseSpeaking) {
+        stopTtsPlayback();
+        setStatus("読み上げを停止しました", 3200);
+      } else {
+        setStatus("回答中です。差し込む場合は入力欄から送信できます", 4200);
+      }
+      return;
+    }
     const zone = event.clientY < window.innerHeight * .5 ? "head" : "body";
     try {
       const result = await ipcRenderer.invoke("mascotInline:pet", { zone });
@@ -1084,8 +1246,8 @@ window.addEventListener("DOMContentLoaded", () => {
     micButton.classList.toggle("is-vad-waiting", phase === "waiting");
     micButton.classList.toggle("is-vad-speaking", phase === "speaking");
     micButton.classList.toggle("is-vad-processing", phase === "processing");
-    micButton.textContent = phase === "speaking" ? "◉" : phase === "processing" ? "…" : "●";
     micButton.setAttribute("aria-label", active ? "音声待機を停止" : "音声入力");
+    micButton.title = phase === "speaking" ? "音声を認識しています" : phase === "processing" ? "文字起こし中" : active ? "音声待機を停止" : "音声入力";
   };
 
   const cleanupVadMedia = () => {
@@ -1134,17 +1296,13 @@ window.addEventListener("DOMContentLoaded", () => {
       resizeInput();
       setOpen(true, { focus: true });
       setStatus(`認識: ${command}`, 5000);
-      if (appState?.voiceAutoSend !== false) {
-        setTimeout(() => {
-          if (!sending && input.value.trim() === command) form.requestSubmit();
-        }, 420);
-      }
+      beginAutoSendCountdown(command);
     } catch (error) {
       setStatus(error.message, 5000);
     } finally {
       vadProcessing = false;
       if (vadActive) {
-        vadResumeAt = performance.now() + 700;
+        vadResumeAt = performance.now() + Math.max(700, autoSendCountdownEndsAt ? autoSendCountdownEndsAt - performance.now() + 250 : 0);
         vadPreRoll = [];
         vadLoudSince = 0;
         vadSilentSince = 0;
@@ -1377,7 +1535,7 @@ window.addEventListener("DOMContentLoaded", () => {
     setStatus("Codex Realtimeへ接続中…", 30_000);
   };
 
-  micButton.addEventListener("click", async () => {
+  const toggleVoiceInput = async () => {
     if (vadActive || vadStream) {
       stopVadListening();
       setStatus("音声待機を終了しました");
@@ -1432,6 +1590,25 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     ensureFallbackRecognition();
+  };
+
+  micButton.addEventListener("click", async () => {
+    // Opening the microphone, loading VAD, and negotiating Realtime are all
+    // asynchronous. Keep their lifecycle serialized so a second click cannot
+    // create an orphaned recorder, AudioContext, or peer connection.
+    if (voiceInputTransitioning) return;
+    voiceInputTransitioning = true;
+    micButton.disabled = true;
+    micButton.classList.add("is-transitioning");
+    try {
+      await toggleVoiceInput();
+    } catch (error) {
+      setStatus(`音声入力: ${error.message}`, 5000);
+    } finally {
+      voiceInputTransitioning = false;
+      micButton.disabled = false;
+      micButton.classList.remove("is-transitioning");
+    }
   });
 
   ipcRenderer.on("mascot:speech", (_event, payload) => {
@@ -1448,6 +1625,7 @@ window.addEventListener("DOMContentLoaded", () => {
   ipcRenderer.on("mascot:stream", (_event, payload) => {
     if (payload?.phase === "start") {
       clearPermission();
+      renderArtifactActions(artifactActions, [], "");
       stopTtsPlayback();
       bubblePersistent = false;
       streamFullText = "考え中…";
@@ -1496,6 +1674,7 @@ window.addEventListener("DOMContentLoaded", () => {
       streamTtsFinished = true;
       bubblePersistent = !streamWorkMode;
       queueStreamSpeech(payload?.speechSegments);
+      renderArtifactActions(artifactActions, payload?.artifacts, payload?.workRunId);
       if (!streamTtsConfig.enabled || (!streamTtsDraining && !streamTtsQueue.length)) {
         streamCurrentSpeechText = "";
         if (!bubble.classList.contains("is-expanded")) bubbleText.textContent = streamFullText;
@@ -1554,10 +1733,11 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   ipcRenderer.on("mascot:toggleChat", (_event, payload) => setOpen(
     payload?.open ?? !dock.classList.contains("is-open"),
-    { focus: Boolean(payload?.focus) },
+    { focus: Boolean(payload?.focus), temporaryInteraction: Boolean(payload?.temporaryInteraction) },
   ));
   ipcRenderer.on("mascot:character", (_event, character) => applyCharacter(character));
   ipcRenderer.on("mascot:windowSettings", (_event, settings) => applyWindowSettings(settings));
+  ipcRenderer.on("mascot:pointerState", (_event, state) => applyPointerState(state));
   ipcRenderer.on("mascot:mode", (_event, state) => {
     appState = { ...appState, ...state };
     applyInterfaceLanguage(appState.language);
@@ -1574,6 +1754,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const previousMode = appState?.voiceActivationMode;
     const previousSensitivity = appState?.vadSensitivity;
     appState = { ...appState, ...payload };
+    if (appState.voiceAutoSend === false) clearAutoSendCountdown();
     if (vadActive && (previousProvider !== appState.speechInputProvider
       || previousMode !== appState.voiceActivationMode
       || previousSensitivity !== appState.vadSensitivity)) {
@@ -1606,6 +1787,7 @@ window.addEventListener("DOMContentLoaded", () => {
     applyInteractionMode(state);
     applyCharacter(state.characters?.find((character) => character.id === state.characterId));
     applyWindowSettings(state);
+    applyPointerState({ mode: state.mascotPointerMode, autoHidden: false });
     chatHistoryState = Array.isArray(state.conversationHistory) ? state.conversationHistory : [];
     ipcRenderer.invoke("mascotInline:getWorkHistory").then((payload) => {
       workHistoryState = payload;

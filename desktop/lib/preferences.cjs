@@ -26,6 +26,7 @@ const DEFAULTS = Object.freeze({
   codexWorkReasoningEffort: "",
   alwaysOnTop: true,
   clickThrough: false,
+  mascotPointerMode: "interactive",
   mouseFollow: true,
   launchAtLogin: false,
   ttsEnabled: true,
@@ -62,6 +63,8 @@ const DEFAULTS = Object.freeze({
   voiceActivationMode: "vad",
   vadSensitivity: "normal",
   voiceAutoSend: true,
+  voiceAutoSendCountdown: true,
+  voiceAutoSendDelayMs: 1500,
   onboardingComplete: false,
   positionLocked: false,
   edgeSnap: true,
@@ -119,6 +122,16 @@ function normalizeWorkHistory(value) {
       characterId: String(entry.characterId || "").slice(0, 120),
       characterName: String(entry.characterName || "").slice(0, 80),
       workDirectoryName: String(entry.workDirectoryName || "").slice(0, 260),
+      workspaceKey: /^[a-f0-9]{24}$/.test(String(entry.workspaceKey || "")) ? String(entry.workspaceKey) : "",
+      artifacts: (Array.isArray(entry.artifacts) ? entry.artifacts : []).slice(0, 12).flatMap((artifact) => {
+        const artifactPath = String(artifact?.path || "").replace(/\\/g, "/").slice(0, 1000);
+        if (!artifactPath || artifactPath === ".." || artifactPath.startsWith("../") || artifactPath.startsWith("/") || /^[A-Za-z]:/.test(artifactPath)) return [];
+        return [{
+          path: artifactPath,
+          name: String(artifact?.name || "").slice(0, 260),
+          kind: artifact?.kind === "directory" ? "directory" : "file",
+        }];
+      }),
     }];
   });
 }
@@ -195,6 +208,14 @@ class Preferences {
       if (!["ja", "en"].includes(this.data.language)) this.data.language = "ja";
       if (!["manual", "vad"].includes(this.data.voiceActivationMode)) this.data.voiceActivationMode = "vad";
       if (!["low", "normal", "high"].includes(this.data.vadSensitivity)) this.data.vadSensitivity = "normal";
+      if (!Object.prototype.hasOwnProperty.call(parsed, "mascotPointerMode")) {
+        this.data.mascotPointerMode = parsed.clickThrough === true ? "click-through" : "interactive";
+      } else if (!["interactive", "auto-hide", "click-through"].includes(this.data.mascotPointerMode)) {
+        this.data.mascotPointerMode = "interactive";
+      }
+      this.data.clickThrough = this.data.mascotPointerMode === "click-through";
+      if (typeof this.data.voiceAutoSendCountdown !== "boolean") this.data.voiceAutoSendCountdown = true;
+      this.data.voiceAutoSendDelayMs = Math.min(5000, Math.max(600, Math.round(Number(this.data.voiceAutoSendDelayMs) || 1500)));
       if (typeof this.data.englishPronunciationEnabled !== "boolean") this.data.englishPronunciationEnabled = true;
       if (typeof this.data.englishPronunciationDictionary !== "string") this.data.englishPronunciationDictionary = "";
       this.data.englishPronunciationDictionary = this.data.englishPronunciationDictionary.slice(0, 12_000);

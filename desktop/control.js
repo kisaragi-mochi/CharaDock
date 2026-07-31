@@ -41,6 +41,11 @@
   let speechPlaybackToken = 0;
   let streamingMessage = null;
   let renderedConversationCharacterId = "";
+  let chatBusy = false;
+  let pendingChatFollowUp = null;
+  let chatAttachments = [];
+  let chatHistoryView = "conversation";
+  let workHistoryState = { activeWorkRunId: null, runs: [] };
   let generatorFile = null;
   let generatorBusy = false;
   let codexAccount = null;
@@ -60,6 +65,7 @@
   let onboardingStep = 0;
   let onboardingWasOpen = false;
   let onboardingFocusReturn = null;
+  let lastDiagnostics = null;
   let motionPreviewTimer = 0;
   const motionFields = [
     "avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown",
@@ -69,6 +75,131 @@
   function setStatus(element, message, error = false) {
     element.textContent = String(message || "");
     element.classList.toggle("is-error", Boolean(error));
+  }
+
+  function bindFileDropZone(element, onFiles) {
+    let dragDepth = 0;
+    const containsFiles = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
+    element.addEventListener("dragenter", (event) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      element.classList.add("is-drag-over");
+    });
+    element.addEventListener("dragover", (event) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    });
+    element.addEventListener("dragleave", (event) => {
+      if (!containsFiles(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) element.classList.remove("is-drag-over");
+    });
+    element.addEventListener("drop", (event) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      element.classList.remove("is-drag-over");
+      onFiles([...(event.dataTransfer?.files || [])]);
+    });
+  }
+
+  function renderChatAttachments() {
+    const list = $("#chatAttachmentList");
+    list.replaceChildren();
+    list.hidden = !chatAttachments.length;
+    chatAttachments.forEach((attachment, index) => {
+      const chip = document.createElement("span");
+      chip.className = "chat-attachment-chip";
+      const icon = document.createElement("span");
+      icon.className = "ui-symbol ui-symbol-document";
+      icon.setAttribute("aria-hidden", "true");
+      const name = document.createElement("span");
+      name.textContent = attachment.name;
+      name.title = attachment.path;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.setAttribute("aria-label", localized(`${attachment.name}を外す`, `Remove ${attachment.name}`));
+      remove.innerHTML = '<span class="ui-symbol ui-symbol-close" aria-hidden="true"></span>';
+      remove.addEventListener("click", () => {
+        chatAttachments.splice(index, 1);
+        renderChatAttachments();
+      });
+      chip.append(icon, name, remove);
+      list.appendChild(chip);
+    });
+  }
+
+  function addChatAttachments(files) {
+    const additions = [];
+    for (const file of files) {
+      let filePath = "";
+      try { filePath = api.getPathForFile(file); } catch {}
+      if (!filePath) continue;
+      additions.push({ path: filePath, name: file.name || filePath.split(/[\\/]/).pop() || "file" });
+    }
+    const unique = new Map(chatAttachments.map((item) => [item.path.toLowerCase(), item]));
+    additions.forEach((item) => unique.set(item.path.toLowerCase(), item));
+    chatAttachments = [...unique.values()].slice(0, 8);
+    renderChatAttachments();
+    if (!additions.length) setStatus($("#chatStatus"), localized("ファイルの場所を取得できませんでした。", "Could not access the selected file path."), true);
+    else if (unique.size > 8) setStatus($("#chatStatus"), localized("添付は8ファイルまでです。", "You can attach up to 8 files."), true);
+    else setStatus($("#chatStatus"), localized(`${chatAttachments.length}件のファイルを添付しました。`, `${chatAttachments.length} file(s) attached.`));
+  }
+
+  async function importPuruPuruFile(file) {
+    if (!file) return;
+    if (!/\.purupuru$/i.test(file.name)) {
+      setStatus($("#purupuruImportStatus"), ".purupuruファイルを選択してください。", true);
+      return;
+    }
+    if (file.size > 80 * 1024 * 1024) {
+      setStatus($("#purupuruImportStatus"), ".purupuruは80MB以下にしてください。", true);
+      return;
+    }
+    const button = $("#purupuruImportButton");
+    button.disabled = true;
+    setStatus($("#purupuruImportStatus"), `${file.name} を確認しています…`);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      state = await api.importPuruPuruCharacter({ bytes, fileName: file.name });
+      syncUi();
+      setStatus($("#purupuruImportStatus"), `${currentCharacter().name}を追加しました。`);
+    } catch (error) {
+      setStatus($("#purupuruImportStatus"), error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function selectGeneratorFile(file) {
+    generatorFile = null;
+    $("#avatarImageDrop").classList.remove("has-image");
+    if (!file) {
+      updateGeneratorProgress({ phase: "idle", message: "画像を選択してください。" });
+      syncGeneratorUi();
+      return;
+    }
+    if (!/^image\/(?:png|jpeg|webp)$/i.test(file.type) && !/\.(?:png|jpe?g|webp)$/i.test(file.name)) {
+      updateGeneratorProgress({ phase: "error", message: "PNG・JPEG・WebP画像を選択してください。" });
+      syncGeneratorUi();
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      updateGeneratorProgress({ phase: "error", message: "画像は15MB以下にしてください。" });
+      syncGeneratorUi();
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      $("#avatarImagePreview").src = String(reader.result || "");
+      $("#avatarImageDrop").classList.add("has-image");
+    };
+    reader.readAsDataURL(file);
+    generatorFile = file;
+    updateGeneratorProgress({ phase: "ready", message: `${file.name} を使用します。` });
+    syncGeneratorUi();
   }
 
   function syncSherpaModelUi(model = {}) {
@@ -308,6 +439,124 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  function workStatusLabel(status) {
+    const labels = state?.language === "en"
+      ? { running: "Running", stopping: "Stopping", completed: "Completed", interrupted: "Stopped", failed: "Error" }
+      : { running: "作業中", stopping: "中断中", completed: "完了", interrupted: "中断", failed: "エラー" };
+    return labels[status] || status;
+  }
+
+  function formatHistoryTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    return date.toLocaleString(state?.language === "en" ? "en-US" : "ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function appendWorkArtifactActions(container, artifacts, runId) {
+    const entries = Array.isArray(artifacts) ? artifacts : [];
+    if (!entries.length || !runId) return;
+    const actions = document.createElement("div");
+    actions.className = "work-artifact-actions";
+    const label = document.createElement("span");
+    label.textContent = localized("成果物", "Outputs");
+    actions.appendChild(label);
+    for (const artifact of entries) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "work-artifact-button";
+      const icon = document.createElement("span");
+      icon.className = `ui-symbol ${artifact.kind === "directory" ? "ui-symbol-folder" : "ui-symbol-document"}`;
+      icon.setAttribute("aria-hidden", "true");
+      button.append(icon, document.createTextNode(artifact.name || artifact.path));
+      button.title = artifact.path;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await api.openWorkArtifact({ runId, path: artifact.path }); }
+        catch (error) { setStatus($("#chatStatus"), error.message, true); }
+        finally { button.disabled = false; }
+      });
+      actions.appendChild(button);
+    }
+    container.appendChild(actions);
+  }
+
+  function renderWorkHistory(payload = workHistoryState) {
+    workHistoryState = payload && Array.isArray(payload.runs) ? payload : { activeWorkRunId: null, runs: [] };
+    const log = $("#chatLog");
+    log.replaceChildren();
+    if (!workHistoryState.runs.length) {
+      const empty = document.createElement("article");
+      empty.className = "work-history-entry";
+      const title = document.createElement("h3");
+      title.textContent = localized("まだ作業履歴はありません", "No work history yet");
+      const text = document.createElement("p");
+      text.textContent = localized("作業モードで実行した依頼と結果がここに残ります。", "Work-mode requests and results will appear here.");
+      empty.append(title, text);
+      log.appendChild(empty);
+      return;
+    }
+    for (const run of workHistoryState.runs) {
+      const item = document.createElement("article");
+      item.className = `work-history-entry is-${run.status || "failed"}`;
+      const head = document.createElement("header");
+      head.className = "work-history-head";
+      const metaGroup = document.createElement("div");
+      const status = document.createElement("span");
+      status.className = "work-history-status";
+      status.textContent = workStatusLabel(run.status);
+      const meta = document.createElement("span");
+      meta.className = "work-history-meta";
+      meta.textContent = [formatHistoryTime(run.startedAt), run.workDirectoryName, run.characterName].filter(Boolean).join(" · ");
+      metaGroup.append(status, meta);
+      head.appendChild(metaGroup);
+      if (["running", "stopping"].includes(run.status) && run.id === workHistoryState.activeWorkRunId) {
+        const stop = document.createElement("button");
+        stop.type = "button";
+        stop.className = "button button-danger";
+        stop.textContent = run.status === "stopping" ? localized("中断中…", "Stopping…") : localized("中断", "Stop");
+        stop.disabled = run.status === "stopping";
+        stop.addEventListener("click", async () => {
+          stop.disabled = true;
+          try { await api.interruptChat(); } catch (error) { setStatus($("#chatStatus"), error.message, true); stop.disabled = false; }
+        });
+        head.appendChild(stop);
+      }
+      const title = document.createElement("h3");
+      title.textContent = String(run.request || "");
+      item.append(head, title);
+      const result = String(run.result || "").trim();
+      if (result) {
+        const text = document.createElement("p");
+        text.textContent = result;
+        item.appendChild(text);
+      }
+      appendWorkArtifactActions(item, run.artifacts, run.id);
+      if (Array.isArray(run.activities) && run.activities.length) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = localized("進捗を表示", "Show progress");
+        const list = document.createElement("ul");
+        for (const activity of run.activities) {
+          const row = document.createElement("li");
+          row.textContent = String(activity || "");
+          list.appendChild(row);
+        }
+        details.append(summary, list);
+        item.appendChild(details);
+      }
+      log.appendChild(item);
+    }
+    log.scrollTop = 0;
+  }
+
+  function setChatHistoryView(view) {
+    chatHistoryView = view === "work" ? "work" : "conversation";
+    $("#conversationHistoryTab").setAttribute("aria-selected", String(chatHistoryView === "conversation"));
+    $("#workHistoryTab").setAttribute("aria-selected", String(chatHistoryView === "work"));
+    if (chatHistoryView === "work") renderWorkHistory(workHistoryState);
+    else renderConversationHistory(state?.conversationHistory || []);
+  }
+
   function showOptimisticCharacterSelection(characterId, selector) {
     $$(selector).forEach((item) => {
       const selected = item.dataset.characterId === characterId;
@@ -436,7 +685,10 @@
       remove.className = "character-memory-remove";
       remove.dataset.memoryId = memory.id;
       remove.setAttribute("aria-label", `メモリ「${content.textContent}」を削除`);
-      remove.textContent = "×";
+      const icon = document.createElement("span");
+      icon.className = "ui-symbol ui-symbol-close";
+      icon.setAttribute("aria-hidden", "true");
+      remove.appendChild(icon);
       item.append(category, content, remove);
       list.appendChild(item);
     }
@@ -487,7 +739,7 @@
   }
 
   function setOnboardingStep(step) {
-    const nextStep = Math.max(0, Math.min(2, Number(step) || 0));
+    const nextStep = Math.max(0, Math.min(4, Number(step) || 0));
     const modal = $(".onboarding-window");
     modal.dataset.stepDirection = nextStep < onboardingStep ? "back" : "forward";
     onboardingStep = nextStep;
@@ -498,13 +750,135 @@
       else item.removeAttribute("aria-current");
     });
     $("#onboardingBackButton").disabled = onboardingStep === 0;
-    $("#onboardingStepLabel").textContent = `${onboardingStep + 1} / 3`;
-    $("#onboardingNextButton").textContent = onboardingStep === 2 ? "セットアップ完了" : "次へ";
+    $("#onboardingStepLabel").textContent = `${onboardingStep + 1} / 5`;
+    $("#onboardingNextButton").textContent = onboardingStep === 4 ? localized("会話を始める", "Start chatting") : localized("次へ", "Next");
     requestAnimationFrame(() => {
       const heading = $(`[data-onboarding-step="${onboardingStep}"] h2`);
       heading?.setAttribute("tabindex", "-1");
       heading?.focus({ preventScroll: true });
     });
+  }
+
+  function syncOnboardingReadiness() {
+    if (!state) return;
+    const codexSelected = state.backend === "codex";
+    $("#onboardingBackendSelect").value = codexSelected ? "codex" : "openai";
+    $("#onboardingLoginButton").hidden = !codexSelected;
+    $("#onboardingAccountState").textContent = codexSelected
+      ? codexAccount?.signedIn
+        ? localized(`ChatGPTログイン済み（${codexAccount.planType || "プラン不明"}）`, `Signed in to ChatGPT (${codexAccount.planType || "unknown plan"})`)
+        : localized("ChatGPTログインを確認してください。", "Check your ChatGPT sign-in.")
+      : state.hasApiKey
+        ? localized("OpenAI APIキーは設定済みです。", "An OpenAI API key is configured.")
+        : localized("AI接続画面でOpenAI APIキーを設定してください。", "Configure an OpenAI API key on the AI Connection page.");
+    const inputNames = {
+      realtime: "GPT-Live / Codex Voice",
+      "sherpa-onnx": "sherpa-onnx",
+      browser: localized("端末音声認識", "System speech recognition"),
+      openai: localized("OpenAI文字起こし", "OpenAI transcription"),
+    };
+    const ttsNames = {
+      system: localized("Windows標準", "Windows system voice"),
+      "style-bert-vits2": "Style-Bert-VITS2",
+      "piper-plus": "piper-plus",
+      "supertonic-3": "Supertonic 3",
+      kokoro: "Kokoro",
+      "irodori-webgpu": "Irodori TTS",
+    };
+    const inputProvider = state.speechInputProvider || "browser";
+    const ttsProvider = state.ttsProvider || "system";
+    const inputStatus = $("#onboardingSpeechInputStatus");
+    const ttsStatus = $("#onboardingTtsStatus");
+    let inputReady = true;
+    let inputMessage = localized("端末の音声認識を使用します。マイク権限を確認してください。", "Uses system speech recognition. Check microphone access.");
+    if (inputProvider === "realtime") {
+      inputReady = state.backend === "codex" && Boolean(codexAccount?.signedIn);
+      inputMessage = inputReady
+        ? localized("ChatGPT接続済み。録音ボタンを押している間だけLiveセッションを開始します。", "ChatGPT is connected. A Live session starts only while using the microphone button.")
+        : localized("CodexとChatGPTへの接続が必要です。", "Requires Codex and a ChatGPT sign-in.");
+    } else if (inputProvider === "sherpa-onnx") {
+      inputReady = Boolean(state.sherpaModel?.installed);
+      inputMessage = inputReady
+        ? localized("ローカル日本語モデルを利用できます。音声は端末内で処理されます。", "The local speech model is ready and audio stays on this device.")
+        : localized("音声ページから日本語モデルをダウンロードしてください。", "Download a Japanese model from the Voice page.");
+    } else if (inputProvider === "openai") {
+      inputReady = Boolean(state.hasApiKey);
+      inputMessage = inputReady
+        ? localized("OpenAI APIキーを利用して文字起こしします。", "Transcribes with your OpenAI API key.")
+        : localized("OpenAI APIキーの設定が必要です。", "An OpenAI API key is required.");
+    }
+    inputStatus.textContent = inputMessage;
+    inputStatus.classList.toggle("is-ready", inputReady);
+    inputStatus.classList.toggle("is-warning", !inputReady);
+
+    let ttsReady = true;
+    if (ttsProvider === "piper-plus") ttsReady = Boolean(state.piperPlus?.ready);
+    else if (ttsProvider === "supertonic-3") ttsReady = Boolean(state.supertonic?.ready);
+    else if (ttsProvider === "kokoro") ttsReady = Boolean(state.kokoro?.ready);
+    else if (ttsProvider === "irodori-webgpu") ttsReady = Boolean(state.irodori?.ready);
+    const remoteCheck = ttsProvider === "style-bert-vits2";
+    ttsStatus.textContent = !state.ttsEnabled
+      ? localized("読み上げはOFFです。文字だけで会話できます。", "Read-aloud is off. Text chat remains available.")
+      : remoteCheck
+        ? localized("ローカルAPIへの接続は「音声をテスト」で確認できます。", "Use Test voice to check the local API connection.")
+        : ttsReady
+          ? localized(`${ttsNames[ttsProvider]}を利用できます。`, `${ttsNames[ttsProvider]} is ready.`)
+          : localized("この音声のモデルが未導入です。音声ページからダウンロードするか、Windows標準へ変更してください。", "This voice model is not installed. Download it from Voice, or switch to the system voice.");
+    ttsStatus.classList.toggle("is-ready", !state.ttsEnabled || ttsReady);
+    ttsStatus.classList.toggle("is-warning", state.ttsEnabled && !ttsReady && !remoteCheck);
+
+    $("#onboardingSummaryConnection").textContent = state.backend === "codex"
+      ? codexAccount?.signedIn ? localized("ChatGPT接続済み", "ChatGPT connected") : localized("Codex · 要ログイン確認", "Codex · sign-in needed")
+      : state.hasApiKey ? localized("OpenAI API設定済み", "OpenAI API configured") : localized("OpenAI API · キー未設定", "OpenAI API · key missing");
+    $("#onboardingSummaryCharacter").textContent = currentCharacter()?.name || localized("未選択", "Not selected");
+    $("#onboardingSummaryInput").textContent = inputNames[inputProvider] || inputProvider;
+    $("#onboardingSummaryOutput").textContent = state.ttsEnabled ? (ttsNames[ttsProvider] || ttsProvider) : localized("読み上げOFF", "Read-aloud off");
+  }
+
+  function syncSupportSummary() {
+    if (!state) return;
+    const inputNames = {
+      realtime: "GPT-Live / Codex Voice",
+      "sherpa-onnx": "sherpa-onnx",
+      browser: localized("端末音声認識", "System speech recognition"),
+      openai: localized("OpenAI文字起こし", "OpenAI transcription"),
+    };
+    const ttsNames = {
+      system: localized("Windows標準", "Windows system voice"),
+      "style-bert-vits2": "Style-Bert-VITS2",
+      "piper-plus": "piper-plus",
+      "supertonic-3": "Supertonic 3",
+      kokoro: "Kokoro",
+      "irodori-webgpu": "Irodori TTS",
+    };
+    $("#supportBackendSummary").textContent = state.backend === "codex"
+      ? codexAccount?.signedIn ? localized("Codex · ChatGPT接続済み", "Codex · ChatGPT connected") : localized("Codex app-server", "Codex app-server")
+      : state.hasApiKey ? localized("OpenAI API設定済み", "OpenAI API configured") : localized("OpenAI API · キー未設定", "OpenAI API · key missing");
+    $("#supportInputSummary").textContent = inputNames[state.speechInputProvider] || state.speechInputProvider || localized("未選択", "Not selected");
+    $("#supportTtsSummary").textContent = state.ttsEnabled ? (ttsNames[state.ttsProvider] || state.ttsProvider) : localized("読み上げOFF", "Read-aloud off");
+  }
+
+  async function refreshSupportDiagnostics() {
+    const button = $("#refreshDiagnosticsButton");
+    button.disabled = true;
+    setStatus($("#supportStatus"), localized("端末情報を確認しています…", "Checking device information…"));
+    try {
+      lastDiagnostics = await api.getDiagnostics();
+      $("#supportAppVersion").textContent = `${lastDiagnostics.app?.name || "CharaDock"} ${lastDiagnostics.app?.version || ""}`.trim();
+      $("#supportPlatform").textContent = `${lastDiagnostics.runtime?.platform || ""} ${lastDiagnostics.runtime?.architecture || ""} · Electron ${lastDiagnostics.runtime?.electron || ""}`.trim();
+      const gpu = lastDiagnostics.hardware?.gpuDevices?.find((item) => item.active) || lastDiagnostics.hardware?.gpuDevices?.[0];
+      $("#supportGpu").textContent = gpu
+        ? `${gpu.driverVendor || "GPU"} · ${gpu.driverVersion || `${gpu.vendorId || "?"}:${gpu.deviceId || "?"}`}`
+        : localized("取得できませんでした", "Unavailable");
+      $("#supportGeneratedAt").textContent = lastDiagnostics.generatedAt
+        ? new Date(lastDiagnostics.generatedAt).toLocaleString(state.language === "en" ? "en-US" : "ja-JP")
+        : localized("未取得", "Not collected");
+      setStatus($("#supportStatus"), localized("診断情報を更新しました。共有前にZIPの内容を確認できます。", "Diagnostics updated. You can review the ZIP before sharing."));
+    } catch (error) {
+      setStatus($("#supportStatus"), error.message, true);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function syncOnboarding() {
@@ -517,13 +891,20 @@
     if (!open && onboardingWasOpen && onboardingFocusReturn?.focus) onboardingFocusReturn.focus({ preventScroll: true });
     onboardingWasOpen = open;
     $("#onboardingTtsToggle").checked = Boolean(state.ttsEnabled);
+    $("#onboardingBackendSelect").value = state.backend || "codex";
+    $("#onboardingSpeechInputProviderSelect").value = state.speechInputProvider || "browser";
+    $("#onboardingTtsProviderSelect").value = state.ttsProvider || "system";
     renderOnboardingCharacters();
+    syncOnboardingReadiness();
+    syncSupportSummary();
     if (opening) setOnboardingStep(onboardingStep);
   }
 
   async function finishOnboarding() {
     state = await api.completeOnboarding(true);
     syncUi();
+    showPage("chat");
+    requestAnimationFrame(() => $("#chatInput")?.focus({ preventScroll: true }));
   }
 
   function syncGeneratorUi() {
@@ -605,10 +986,18 @@
       const initialAvatar = $("#chatLog .message.is-assistant .message-avatar");
       if (initialAvatar) initialAvatar.textContent = [...sidebarCharacter.name][0];
     }
-    if (renderedConversationCharacterId !== state.characterId) {
+    if (renderedConversationCharacterId !== state.characterId && chatHistoryView === "conversation") {
       renderedConversationCharacterId = state.characterId;
       renderConversationHistory(state.conversationHistory);
     }
+    workHistoryState = state.workHistory && Array.isArray(state.workHistory.runs) ? state.workHistory : workHistoryState;
+    $("#interactionModeBadge").textContent = state.interactionMode === "work" ? localized("作業モード", "Work mode") : localized("会話モード", "Chat mode");
+    $("#chatWorkDirectoryName").textContent = state.workDirectoryName || localized("未選択", "Not selected");
+    $("#openChatWorkDirectoryButton").disabled = !state.hasWorkDirectory;
+    $("#chatComposerHint").textContent = state.interactionMode === "work"
+      ? localized("作業モード · 選択フォルダー内へ書き込みできます", "Work mode · Can write inside the selected folder")
+      : localized("設定画面では文字入力のみ", "Text input only in Settings");
+    if (chatHistoryView === "work") renderWorkHistory(workHistoryState);
     renderCharacters();
     syncCharacterEditor();
     syncGeneratorUi();
@@ -622,7 +1011,9 @@
     $("#codexWorkReasoningEffortSelect").value = state.codexWorkReasoningEffort || "";
     $("#languageSelect").value = state.language || "ja";
     $("#alwaysOnTopToggle").checked = Boolean(state.alwaysOnTop);
-    $("#clickThroughToggle").checked = Boolean(state.clickThrough);
+    const pointerMode = state.mascotPointerMode || (state.clickThrough ? "click-through" : "interactive");
+    const pointerModeInput = $(`input[name="mascotPointerMode"][value="${pointerMode}"]`);
+    if (pointerModeInput) pointerModeInput.checked = true;
     $("#mouseFollowToggle").checked = Boolean(state.mouseFollow);
     $("#launchAtLoginToggle").checked = Boolean(state.launchAtLogin);
     $("#ttsToggle").checked = Boolean(state.ttsEnabled);
@@ -661,6 +1052,13 @@
     $("#voiceActivationModeSelect").value = state.voiceActivationMode || "vad";
     $("#vadSensitivitySelect").value = state.vadSensitivity || "normal";
     $("#voiceAutoSendToggle").checked = state.voiceAutoSend !== false;
+    $("#voiceAutoSendCountdownToggle").checked = state.voiceAutoSendCountdown !== false;
+    const autoSendDelay = [1000, 1500, 2000, 3000, 5000].includes(Number(state.voiceAutoSendDelayMs)) ? Number(state.voiceAutoSendDelayMs) : 1500;
+    $("#voiceAutoSendDelaySelect").value = String(autoSendDelay);
+    const countdownSettings = $("#voiceAutoSendCountdownSettings");
+    countdownSettings.classList.toggle("is-disabled", !$("#voiceAutoSendToggle").checked);
+    $("#voiceAutoSendCountdownToggle").disabled = !$("#voiceAutoSendToggle").checked;
+    $("#voiceAutoSendDelaySelect").disabled = !$("#voiceAutoSendToggle").checked || !$("#voiceAutoSendCountdownToggle").checked;
     syncSherpaModelUi(state.sherpaModel);
     syncVoiceRoutingUi();
     $("#positionLockedToggle").checked = Boolean(state.positionLocked);
@@ -732,6 +1130,7 @@
     } finally {
       button.disabled = false;
       onboardingButton.disabled = Boolean(codexAccount?.signedIn);
+      syncOnboardingReadiness();
     }
   }
 
@@ -759,7 +1158,7 @@
       codexWorkModel: $("#codexWorkModelInput").value.trim(),
       codexWorkReasoningEffort: $("#codexWorkReasoningEffortSelect").value,
       alwaysOnTop: $("#alwaysOnTopToggle").checked,
-      clickThrough: $("#clickThroughToggle").checked,
+      mascotPointerMode: $('input[name="mascotPointerMode"]:checked')?.value || "interactive",
       mouseFollow: $("#mouseFollowToggle").checked,
       launchAtLogin: $("#launchAtLoginToggle").checked,
       ttsEnabled: $("#ttsToggle").checked,
@@ -788,6 +1187,8 @@
       voiceActivationMode: $("#voiceActivationModeSelect").value,
       vadSensitivity: $("#vadSensitivitySelect").value,
       voiceAutoSend: $("#voiceAutoSendToggle").checked,
+      voiceAutoSendCountdown: $("#voiceAutoSendCountdownToggle").checked,
+      voiceAutoSendDelayMs: Number($("#voiceAutoSendDelaySelect").value),
       positionLocked: $("#positionLockedToggle").checked,
       edgeSnap: $("#edgeSnapToggle").checked,
       preferredDisplayId: $("#displaySelect").value,
@@ -1272,18 +1673,34 @@
   }
 
   function setChatBusy(busy) {
-    $("#sendButton").disabled = Boolean(busy);
-    $("#sendButton").hidden = Boolean(busy);
-    $("#stopButton").hidden = !busy;
+    chatBusy = Boolean(busy);
+    $("#sendButton").disabled = false;
+    $("#sendButton").hidden = false;
+    $("#sendButton").firstChild.textContent = chatBusy ? localized("差し込む ", "Follow up ") : localized("送信 ", "Send ");
+    $("#stopButton").hidden = !chatBusy;
     $("#stopButton").disabled = false;
   }
 
   async function sendChat() {
     const input = $("#chatInput");
-    if ($("#sendButton").disabled) return;
-    const message = input.value.trim();
+    const attachments = chatAttachments.map((item) => ({ ...item }));
+    const message = input.value.trim() || (attachments.length ? localized("添付したファイルを確認してください。", "Please review the attached files.") : "");
     if (!message) return;
+    if (attachments.length && realtimePeerConnection && !realtimeStarting) {
+      setStatus($("#chatStatus"), localized("Live音声を停止してからファイルを送信してください。", "Stop Live voice before sending files."), true);
+      return;
+    }
     input.value = "";
+    chatAttachments = [];
+    renderChatAttachments();
+    if (chatBusy) {
+      pendingChatFollowUp = { message, attachments };
+      setStatus($("#chatStatus"), localized("差し込みを受け付けました。現在の応答を止めています…", "Follow-up queued. Stopping the current response…"));
+      $("#stopButton").disabled = true;
+      try { await api.interruptChat(); } catch (error) { setStatus($("#chatStatus"), error.message, true); $("#stopButton").disabled = false; }
+      return;
+    }
+    setChatHistoryView("conversation");
     if (realtimePeerConnection && !realtimeStarting) {
       appendMessage("user", message);
       realtimePendingTypedText = message;
@@ -1298,16 +1715,18 @@
       input.focus();
       return;
     }
-    appendMessage("user", message);
+    const attachmentLabel = attachments.length ? `\n${attachments.map((item) => `📎 ${item.name}`).join("\n")}` : "";
+    appendMessage("user", `${message}${attachmentLabel}`);
     const thinking = appendMessage("assistant", "考え中", true);
     streamingMessage = thinking;
     setChatBusy(true);
     setStatus($("#chatStatus"), "応答を待っています…");
     try {
-      const result = await api.sendChat(message);
+      const result = await api.sendChat({ message, attachmentPaths: attachments.map((item) => item.path) });
       const paragraph = thinking.querySelector("p");
       thinking.classList.remove("is-thinking");
       paragraph.textContent = result.displayText || result.text;
+      appendWorkArtifactActions(thinking, result.artifacts, result.workRunId);
       setStatus($("#chatStatus"), result.provider === "codex" ? "Codexから応答しました。" : "OpenAI APIから応答しました。");
     } catch (error) {
       thinking.classList.remove("is-thinking");
@@ -1318,6 +1737,14 @@
       setChatBusy(false);
       streamingMessage = null;
       input.focus();
+      const followUp = pendingChatFollowUp;
+      pendingChatFollowUp = null;
+      if (followUp) {
+        input.value = followUp.message;
+        chatAttachments = followUp.attachments;
+        renderChatAttachments();
+        queueMicrotask(() => sendChat());
+      }
     }
   }
 
@@ -1338,9 +1765,14 @@
     });
     api.onChatHistory?.((entries) => {
       state.conversationHistory = Array.isArray(entries) ? entries : [];
-      if (streamingMessage || realtimeAssistantActive) return;
+      if (streamingMessage || realtimeAssistantActive || chatHistoryView !== "conversation") return;
       renderedConversationCharacterId = state.characterId;
       renderConversationHistory(state.conversationHistory);
+    });
+    api.onWorkHistory?.((payload) => {
+      workHistoryState = payload && Array.isArray(payload.runs) ? payload : { activeWorkRunId: null, runs: [] };
+      if (state) state.workHistory = workHistoryState;
+      if (chatHistoryView === "work") renderWorkHistory(workHistoryState);
     });
     api.onCodexRealtime?.((message) => {
       handleCodexRealtimeEvent(message).catch((error) => {
@@ -1354,53 +1786,11 @@
       const input = event.currentTarget;
       const file = input.files?.[0] || null;
       input.value = "";
-      if (!file) return;
-      if (!/\.purupuru$/i.test(file.name)) {
-        setStatus($("#purupuruImportStatus"), ".purupuruファイルを選択してください。", true);
-        return;
-      }
-      if (file.size > 80 * 1024 * 1024) {
-        setStatus($("#purupuruImportStatus"), ".purupuruは80MB以下にしてください。", true);
-        return;
-      }
-      const button = $("#purupuruImportButton");
-      button.disabled = true;
-      setStatus($("#purupuruImportStatus"), `${file.name} を確認しています…`);
-      try {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        state = await api.importPuruPuruCharacter({ bytes, fileName: file.name });
-        syncUi();
-        setStatus($("#purupuruImportStatus"), `${currentCharacter().name}を追加しました。`);
-      } catch (error) {
-        setStatus($("#purupuruImportStatus"), error.message, true);
-      } finally {
-        button.disabled = false;
-      }
+      await importPuruPuruFile(file);
     });
-    $("#avatarImageInput").addEventListener("change", async (event) => {
-      const file = event.target.files?.[0] || null;
-      generatorFile = null;
-      $("#avatarImageDrop").classList.remove("has-image");
-      if (!file) {
-        updateGeneratorProgress({ phase: "idle", message: "画像を選択してください。" });
-        syncGeneratorUi();
-        return;
-      }
-      if (file.size > 15 * 1024 * 1024) {
-        updateGeneratorProgress({ phase: "error", message: "画像は15MB以下にしてください。" });
-        syncGeneratorUi();
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        $("#avatarImagePreview").src = String(reader.result || "");
-        $("#avatarImageDrop").classList.add("has-image");
-      };
-      reader.readAsDataURL(file);
-      generatorFile = file;
-      updateGeneratorProgress({ phase: "ready", message: `${file.name} を使用します。` });
-      syncGeneratorUi();
-    });
+    bindFileDropZone($("#purupuruImportDrop"), (files) => importPuruPuruFile(files[0]));
+    $("#avatarImageInput").addEventListener("change", (event) => selectGeneratorFile(event.target.files?.[0] || null));
+    bindFileDropZone($("#avatarImageDrop"), (files) => selectGeneratorFile(files[0]));
     $("#avatarRightsConfirm").addEventListener("change", syncGeneratorUi);
     $("#generateCharacterButton").addEventListener("click", async () => {
       if (!generatorFile || generatorBusy) return;
@@ -1431,7 +1821,10 @@
       }
     });
     $$(".nav-tab").forEach((button) => {
-      button.addEventListener("click", () => showPage(button.dataset.page));
+      button.addEventListener("click", () => {
+        showPage(button.dataset.page);
+        if (button.dataset.page === "support" && !lastDiagnostics) refreshSupportDiagnostics();
+      });
       button.addEventListener("keydown", (event) => {
         if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
@@ -1443,8 +1836,26 @@
       });
     });
     $("#chatForm").addEventListener("submit", (event) => { event.preventDefault(); sendChat(); });
+    $("#chatAttachmentButton").addEventListener("click", () => $("#chatAttachmentInput").click());
+    $("#chatAttachmentInput").addEventListener("change", (event) => {
+      addChatAttachments([...(event.currentTarget.files || [])]);
+      event.currentTarget.value = "";
+    });
+    bindFileDropZone($("#chatForm"), addChatAttachments);
+    $("#conversationHistoryTab").addEventListener("click", () => setChatHistoryView("conversation"));
+    $("#workHistoryTab").addEventListener("click", async () => {
+      workHistoryState = await api.getWorkHistory().catch(() => workHistoryState);
+      setChatHistoryView("work");
+    });
+    $("#openChatWorkDirectoryButton").addEventListener("click", async () => {
+      try { await api.openWorkDirectory(); } catch (error) { setStatus($("#chatStatus"), error.message, true); }
+    });
+    $("#chooseChatWorkDirectoryButton").addEventListener("click", async () => {
+      try { state = await api.chooseWorkDirectory(); syncUi(); } catch (error) { setStatus($("#chatStatus"), error.message, true); }
+    });
     $("#stopButton").addEventListener("click", async () => {
       const button = $("#stopButton");
+      pendingChatFollowUp = null;
       button.disabled = true;
       setStatus($("#chatStatus"), "中断しています…");
       try {
@@ -1473,6 +1884,7 @@
     }));
     $("#resetChatButton").addEventListener("click", async () => {
       await api.resetChat();
+      setChatHistoryView("conversation");
       $("#chatLog").replaceChildren();
       appendMessage("assistant", "新しい会話を始めよう。何を話す？");
     });
@@ -1556,8 +1968,9 @@
       if (input.checked && input.value !== "codex") await stopCodexRealtimeVoice({ quiet: true });
       await saveSettings();
     }));
-    ["#languageSelect", "#alwaysOnTopToggle", "#clickThroughToggle", "#launchAtLoginToggle", "#ttsToggle", "#englishPronunciationToggle", "#positionLockedToggle", "#edgeSnapToggle"]
+    ["#languageSelect", "#alwaysOnTopToggle", "#launchAtLoginToggle", "#ttsToggle", "#englishPronunciationToggle", "#positionLockedToggle", "#edgeSnapToggle"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
+    $$('input[name="mascotPointerMode"]').forEach((input) => input.addEventListener("change", saveSettings));
     $("#ttsProviderSelect").addEventListener("change", () => {
       $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
       $("#piperPlusSettings").hidden = $("#ttsProviderSelect").value !== "piper-plus";
@@ -1708,7 +2121,7 @@
     $("#sherpaModelSelect").addEventListener("change", () => {
       saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
     });
-    ["#voiceActivationModeSelect", "#vadSensitivitySelect", "#voiceAutoSendToggle"].forEach((selector) => $(selector).addEventListener("change", () => {
+    ["#voiceActivationModeSelect", "#vadSensitivitySelect", "#voiceAutoSendToggle", "#voiceAutoSendCountdownToggle", "#voiceAutoSendDelaySelect"].forEach((selector) => $(selector).addEventListener("change", () => {
       saveSettings().catch((error) => setStatus($("#connectionStatus"), error.message, true));
     }));
     $("#sherpaModelDownloadButton").addEventListener("click", async () => {
@@ -1814,9 +2227,21 @@
         $("#onboardingAccountState").textContent = error.message;
       }
     });
+    $("#onboardingBackendSelect").addEventListener("change", async () => {
+      const backend = $("#onboardingBackendSelect").value;
+      const radio = $(`input[name="backend"][value="${backend}"]`);
+      if (radio) radio.checked = true;
+      await saveSettings();
+      syncOnboardingReadiness();
+    });
+    $("#onboardingOpenConnectionButton").addEventListener("click", async () => {
+      state = await api.completeOnboarding(true);
+      syncOnboarding();
+      showPage("connection");
+    });
     $("#onboardingBackButton").addEventListener("click", () => setOnboardingStep(onboardingStep - 1));
     $("#onboardingNextButton").addEventListener("click", async () => {
-      if (onboardingStep < 2) setOnboardingStep(onboardingStep + 1);
+      if (onboardingStep < 4) setOnboardingStep(onboardingStep + 1);
       else await finishOnboarding();
     });
     $("#onboardingSkipButton").addEventListener("click", finishOnboarding);
@@ -1830,6 +2255,40 @@
       $("#ttsToggle").checked = $("#onboardingTtsToggle").checked;
       await saveSettings();
     });
+    $("#onboardingSpeechInputProviderSelect").addEventListener("change", async () => {
+      $("#speechInputProviderSelect").value = $("#onboardingSpeechInputProviderSelect").value;
+      await saveSettings();
+      syncOnboardingReadiness();
+    });
+    $("#onboardingTtsProviderSelect").addEventListener("change", async () => {
+      $("#ttsProviderSelect").value = $("#onboardingTtsProviderSelect").value;
+      await saveSettings();
+      syncOnboardingReadiness();
+    });
+    $("#onboardingMicrophoneTestButton").addEventListener("click", async () => {
+      const button = $("#onboardingMicrophoneTestButton");
+      button.disabled = true;
+      $("#onboardingSpeechInputStatus").textContent = localized("マイクの使用許可を確認しています…", "Checking microphone access…");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const label = stream.getAudioTracks()[0]?.label || localized("既定のマイク", "Default microphone");
+        stream.getTracks().forEach((track) => track.stop());
+        $("#onboardingSpeechInputStatus").textContent = localized(`マイクを利用できます · ${label}`, `Microphone is available · ${label}`);
+        $("#onboardingSpeechInputStatus").classList.add("is-ready");
+        $("#onboardingSpeechInputStatus").classList.remove("is-warning");
+      } catch (error) {
+        $("#onboardingSpeechInputStatus").textContent = localized(`マイクを利用できません: ${error.message}`, `Microphone is unavailable: ${error.message}`);
+        $("#onboardingSpeechInputStatus").classList.remove("is-ready");
+        $("#onboardingSpeechInputStatus").classList.add("is-warning");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $$(".onboarding-open-voice-settings").forEach((button) => button.addEventListener("click", async () => {
+      state = await api.completeOnboarding(true);
+      syncOnboarding();
+      showPage("voice");
+    }));
     $("#onboardingAudioTestButton").addEventListener("click", () => {
       if (!state.ttsEnabled) {
         $("#onboardingTtsToggle").checked = true;
@@ -1843,6 +2302,42 @@
       state = await api.completeOnboarding(false);
       onboardingStep = 0;
       syncOnboarding();
+    });
+    $("#refreshDiagnosticsButton").addEventListener("click", refreshSupportDiagnostics);
+    $("#copyDiagnosticsButton").addEventListener("click", async () => {
+      const button = $("#copyDiagnosticsButton");
+      button.disabled = true;
+      try {
+        await api.copyDiagnostics();
+        setStatus($("#supportStatus"), localized("診断情報をクリップボードへコピーしました。", "Diagnostics copied to the clipboard."));
+      } catch (error) {
+        setStatus($("#supportStatus"), error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $("#exportSupportBundleButton").addEventListener("click", async () => {
+      const button = $("#exportSupportBundleButton");
+      button.disabled = true;
+      setStatus($("#supportStatus"), localized("診断ZIPを準備しています…", "Preparing diagnostics ZIP…"));
+      try {
+        const result = await api.exportSupportBundle();
+        setStatus($("#supportStatus"), result.canceled
+          ? localized("保存をキャンセルしました。", "Save canceled.")
+          : localized(`${result.fileName} を保存しました。`, `Saved ${result.fileName}.`));
+      } catch (error) {
+        setStatus($("#supportStatus"), error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $("#openLogsButton").addEventListener("click", async () => {
+      try {
+        await api.openLogs();
+        setStatus($("#supportStatus"), localized("ログフォルダーを開きました。", "Opened the log folder."));
+      } catch (error) {
+        setStatus($("#supportStatus"), error.message, true);
+      }
     });
     $("#showMascotButton").addEventListener("click", () => api.controlMascotWindow("show"));
     $("#hideMascotButton").addEventListener("click", () => api.controlMascotWindow("hide"));
@@ -1875,6 +2370,7 @@
     if (!api) throw new Error("Electron bridge is unavailable");
     const characterVoiceCard = $("#characterVoiceCard");
     $("#characterVoiceMount").appendChild(characterVoiceCard);
+    $("#speechInputMount").appendChild($(".speech-input-settings"));
     state = await api.getState();
     api.onSherpaModelProgress((model) => {
       state.sherpaModel = model;
@@ -1895,7 +2391,8 @@
     bindEvents();
     syncUi();
     const page = sessionStorage.getItem("charadock.activePage") || "chat";
-    showPage(["chat", "character", "connection", "desktop"].includes(page) ? page : "chat");
+    showPage(["chat", "character", "voice", "connection", "desktop", "support"].includes(page) ? page : "chat");
+    if (page === "support") refreshSupportDiagnostics();
     if (page === "character") requestAnimationFrame(() => {
       document.scrollingElement.scrollTop = Number(sessionStorage.getItem("charadock.characterScroll")) || 0;
     });

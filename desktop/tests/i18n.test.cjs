@@ -13,6 +13,8 @@ test("interface translator supports exact and dynamic English labels", () => {
   assert.equal(translateText("キャラクター設定", "en"), "Character settings");
   assert.equal(translateText("コハクのプレビュー", "en"), "コハク preview");
   assert.equal(translateText("12件を保持", "en"), "12 saved");
+  assert.equal(translateText("会話と作業の履歴", "en"), "Chat and work history");
+  assert.equal(translateText("フォローアップを差し込む", "en"), "Insert a follow-up");
   assert.equal(translateText("キャラクター設定", "ja"), "キャラクター設定");
 });
 

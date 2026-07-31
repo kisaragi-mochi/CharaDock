@@ -22,3 +22,11 @@ test("sentence punctuation wins over phrase boundaries and chunks stay bounded",
   assert.ok(chunks.every((chunk) => chunk.length <= 28));
   assert.equal(chunks[0], "今日は晴れです。");
 });
+
+test("tiny trailing fragments are merged or rebalanced into a natural chunk", () => {
+  const text = "音声合成の待ち時間を短くしながら、文章の自然な区切りを保って最後まで滑らかに読み上げます。了解。";
+  const chunks = splitNaturalSpeechText(text, 40, 10, { maxOverflow: 4 });
+  assert.equal(chunks.join(""), text);
+  assert.ok(chunks.at(-1).length >= 10, `unexpected tiny tail: ${chunks.at(-1)}`);
+  assert.ok(chunks.every((chunk) => chunk.length <= 44));
+});

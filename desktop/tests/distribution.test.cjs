@@ -7,7 +7,7 @@ const test = require("node:test");
 const projectRoot = path.resolve(__dirname, "../..");
 const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
 
-test("desktop distribution contains only approved character and reference-voice assets", () => {
+test("desktop distribution contains only approved character, voice, and interface assets", () => {
   const files = packageJson.build.files;
   const assetEntries = files.filter((entry) => entry.startsWith("assets/"));
   assert.deepEqual(assetEntries.sort(), [
@@ -16,9 +16,25 @@ test("desktop distribution contains only approved character and reference-voice 
     "assets/reference-voices/**/*",
     "assets/sage-avatar/**/*",
     "assets/towa-avatar/**/*",
+    "assets/ui/**/*",
   ]);
   assert.equal(files.some((entry) => entry.includes("demo-avatar")), false);
   assert.equal(files.includes("favicon.ico"), false);
+});
+
+test("interface symbols use individually licensed SVG assets", () => {
+  const iconDirectory = path.join(projectRoot, "assets", "ui", "icons");
+  const icons = fs.readdirSync(iconDirectory).filter((file) => file.endsWith(".svg"));
+  assert.ok(icons.length >= 18);
+  for (const icon of icons) {
+    const svg = fs.readFileSync(path.join(iconDirectory, icon), "utf8");
+    assert.match(svg, /@license Lucide/);
+    assert.match(svg, /viewBox="0 0 24 24"/);
+  }
+  for (const cssFile of ["control.css", "mascot-overlay.css"]) {
+    const css = fs.readFileSync(path.join(projectRoot, "desktop", cssFile), "utf8");
+    assert.doesNotMatch(css, /charadock-symbols\.png/);
+  }
 });
 
 test("desktop distribution includes its license and modification records", () => {
@@ -44,12 +60,63 @@ test("voice input UI requires one explicit supported provider", () => {
   assert.doesNotMatch(main, /audio:sendCodex|mascotInline:chatAudio/);
 });
 
+test("desktop exposes three pointer modes and cancellable voice auto-send", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  const mascot = fs.readFileSync(path.join(projectRoot, "desktop", "preload-mascot.cjs"), "utf8");
+  for (const mode of ["interactive", "auto-hide", "click-through"]) {
+    assert.match(html, new RegExp(`name="mascotPointerMode" value="${mode}"`));
+  }
+  assert.match(html, /id="voiceAutoSendCountdownToggle"/);
+  assert.match(html, /id="voiceAutoSendDelaySelect"/);
+  assert.match(mascot, /data-countdown-action="send"/);
+  assert.match(mascot, /data-countdown-action="cancel"/);
+  assert.match(mascot, /mascotInline:interactionHold/);
+});
+
+test("setup can be rerun and support diagnostics stay separate from private content", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  const control = fs.readFileSync(path.join(projectRoot, "desktop", "control.js"), "utf8");
+  const preload = fs.readFileSync(path.join(projectRoot, "desktop", "preload-control.cjs"), "utf8");
+  const main = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8");
+  assert.equal((html.match(/data-onboarding-step="\d"/g) || []).length, 5);
+  for (const id of ["reopenOnboardingButton", "onboardingBackendSelect", "onboardingSpeechInputProviderSelect", "onboardingTtsProviderSelect", "exportSupportBundleButton"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(control, /completeOnboarding\(false\)/);
+  assert.match(preload, /support:getDiagnostics/);
+  assert.match(preload, /support:exportBundle/);
+  assert.match(main, /privacy:[\s\S]*excluded:[\s\S]*"API keys"/);
+  assert.doesNotMatch(main.match(/async function supportDiagnostics\(\)[\s\S]*?\n}\n/)?.[0] || "", /conversationHistory|characterMemories|workHistory/);
+});
+
 test("settings conversation stays text-only and character voice routing is explicit", () => {
   const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
   assert.doesNotMatch(html, /id="(?:micLipSyncButton|speechInputButton|speechInputMode|micMeter)"/);
   for (const id of ["characterVoiceMount", "voiceRoutingSummary", "realtimeVoiceSettings", "standardTtsSettings"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+});
+
+test("conversation and work surfaces expose history, folder access, interruption, and follow-up UX", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  const control = fs.readFileSync(path.join(projectRoot, "desktop", "control.js"), "utf8");
+  const controlPreload = fs.readFileSync(path.join(projectRoot, "desktop", "preload-control.cjs"), "utf8");
+  const mascot = fs.readFileSync(path.join(projectRoot, "desktop", "preload-mascot.cjs"), "utf8");
+  const main = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8");
+  for (const id of ["conversationHistoryTab", "workHistoryTab", "openChatWorkDirectoryButton", "chooseChatWorkDirectoryButton"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(controlPreload, /work:getHistory/);
+  assert.match(controlPreload, /work:openDirectory/);
+  assert.match(controlPreload, /work:openArtifact/);
+  assert.match(control, /pendingChatFollowUp = \{ message, attachments \}/);
+  assert.match(control, /bindFileDropZone\(\$\("#chatForm"\)/);
+  assert.match(control, /appendWorkArtifactActions/);
+  assert.match(mascot, /pendingFollowUpMessage = message/);
+  assert.match(mascot, /mascotInline:openWorkArtifact/);
+  assert.match(mascot, /responseSpeaking[\s\S]*stopTtsPlayback\(\)/);
+  assert.match(main, /mascotInline:openWorkDirectory/);
+  assert.match(main, /work:openDirectory/);
 });
 
 test("Codex memory tools proactively create and update character memories", () => {

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("mascotDesktop", {
   getState: () => ipcRenderer.invoke("app:getState"),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   setApiKey: (key) => ipcRenderer.invoke("settings:setApiKey", key),
   setCharacter: (id) => ipcRenderer.invoke("character:set", id),
@@ -19,6 +20,10 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   sendChat: (message) => ipcRenderer.invoke("chat:send", message),
   interruptChat: () => ipcRenderer.invoke("chat:interrupt"),
   resetChat: () => ipcRenderer.invoke("chat:reset"),
+  getWorkHistory: () => ipcRenderer.invoke("work:getHistory"),
+  chooseWorkDirectory: () => ipcRenderer.invoke("work:chooseDirectory"),
+  openWorkDirectory: () => ipcRenderer.invoke("work:openDirectory"),
+  openWorkArtifact: (payload) => ipcRenderer.invoke("work:openArtifact", payload),
   testBackend: (backend) => ipcRenderer.invoke("backend:test", backend),
   getCodexAccount: () => ipcRenderer.invoke("codex:account"),
   getCodexModels: () => ipcRenderer.invoke("codex:models"),
@@ -26,6 +31,10 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   startCodexLogin: () => ipcRenderer.invoke("codex:login"),
   logoutCodex: () => ipcRenderer.invoke("codex:logout"),
   completeOnboarding: (complete) => ipcRenderer.invoke("onboarding:complete", complete),
+  getDiagnostics: () => ipcRenderer.invoke("support:getDiagnostics"),
+  copyDiagnostics: () => ipcRenderer.invoke("support:copyDiagnostics"),
+  exportSupportBundle: () => ipcRenderer.invoke("support:exportBundle"),
+  openLogs: () => ipcRenderer.invoke("support:openLogs"),
   transcribe: (payload) => ipcRenderer.invoke("audio:transcribe", payload),
   transcribeSherpa: (payload) => ipcRenderer.invoke("audio:transcribeSherpa", payload),
   downloadSherpaModel: (modelId) => ipcRenderer.invoke("sherpa:modelDownload", modelId),
@@ -56,6 +65,11 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("chat:history", listener);
     return () => ipcRenderer.removeListener("chat:history", listener);
+  },
+  onWorkHistory: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("work:history", listener);
+    return () => ipcRenderer.removeListener("work:history", listener);
   },
   onCharacterGeneration: (callback) => {
     const listener = (_event, payload) => callback(payload);
