@@ -30,6 +30,25 @@ function windowsPathToWsl(value) {
   return `/mnt/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
 }
 
+function npmCodexBinaryCandidates(commandPath, arch = process.arch) {
+  const directory = path.win32.dirname(String(commandPath || ""));
+  const platformPackage = arch === "arm64" ? "codex-win32-arm64" : "codex-win32-x64";
+  const target = arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+  const relativeBinary = path.win32.join("vendor", target, "bin", "codex.exe");
+  return [
+    path.win32.join(directory, "node_modules", "@openai", "codex", "node_modules", "@openai", platformPackage, relativeBinary),
+    path.win32.join(directory, "node_modules", "@openai", platformPackage, relativeBinary),
+  ];
+}
+
+function resolveNpmCodexBinary(commandPath, { arch = process.arch, exists = fs.existsSync } = {}) {
+  return npmCodexBinaryCandidates(commandPath, arch).find((candidate) => exists(candidate)) || "";
+}
+
+function isWindowsExecutable(candidate) {
+  return path.win32.extname(String(candidate || "")).toLowerCase() === ".exe";
+}
+
 function resolveWslCodexCommand({
   platform = process.platform,
   env = process.env,
@@ -56,18 +75,29 @@ function resolveWslCodexCommand({
 
 async function resolveCodexCommand({
   platform = process.platform,
+  arch = process.arch,
   env = process.env,
   runCommand = run,
   exists = fs.existsSync,
   cacheDirectory = "",
   cacheBinary = cacheAppxBinary,
 } = {}) {
-  if (env.CODEX_CLI_PATH) return env.CODEX_CLI_PATH;
+  if (env.CODEX_CLI_PATH) {
+    if (platform !== "win32") return env.CODEX_CLI_PATH;
+    if (isWindowsExecutable(env.CODEX_CLI_PATH) && exists(env.CODEX_CLI_PATH)) return env.CODEX_CLI_PATH;
+    const explicitNpmBinary = resolveNpmCodexBinary(env.CODEX_CLI_PATH, { arch, exists });
+    if (explicitNpmBinary) return explicitNpmBinary;
+  }
   if (platform !== "win32") return "codex";
 
   const whereResult = await runCommand("where.exe", ["codex"]);
-  const whereCandidate = whereResult.split(/\r?\n/).find((candidate) => candidate && exists(candidate));
-  if (whereCandidate) return whereCandidate;
+  const whereCandidates = whereResult.split(/\r?\n/).map((candidate) => candidate.trim()).filter(Boolean);
+  for (const candidate of whereCandidates) {
+    if (!exists(candidate)) continue;
+    if (isWindowsExecutable(candidate)) return candidate;
+    const npmBinary = resolveNpmCodexBinary(candidate, { arch, exists });
+    if (npmBinary) return npmBinary;
+  }
 
   const localCandidates = [
     env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, "Programs", "Codex", "resources", "codex.exe"),
@@ -88,7 +118,18 @@ async function resolveCodexCommand({
   if (appxCandidate && exists(appxCandidate)) {
     return cacheDirectory ? cacheBinary(appxCandidate, cacheDirectory) : appxCandidate;
   }
-  return "codex";
+  // Do not return the bare command on Windows. npm installs both a POSIX `codex`
+  // shim and `codex.cmd`; spawning the former from Electron fails with ENOENT.
+  // An empty result also lets the UI distinguish "not installed" from a launch
+  // failure and show an actionable installation message.
+  return "";
 }
 
-module.exports = { cacheAppxBinary, resolveCodexCommand, resolveWslCodexCommand, windowsPathToWsl };
+module.exports = {
+  cacheAppxBinary,
+  npmCodexBinaryCandidates,
+  resolveCodexCommand,
+  resolveNpmCodexBinary,
+  resolveWslCodexCommand,
+  windowsPathToWsl,
+};

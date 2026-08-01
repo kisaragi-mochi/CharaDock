@@ -347,3 +347,11 @@ test("missing Codex CLI reports a friendly error instead of crashing", async () 
   const client = new CodexAppServerClient({ command: "charadock-command-that-does-not-exist" });
   await assert.rejects(client.ensureStarted(), /Codex CLIを起動できません.*PATH/);
 });
+
+test("an unavailable Codex installation shows install guidance", async () => {
+  const client = new CodexAppServerClient({ command: "" });
+  await assert.rejects(
+    client.ensureStarted(),
+    /Codex DesktopまたはCodex CLIをインストール.*npm install -g @openai\/codex/s,
+  );
+});

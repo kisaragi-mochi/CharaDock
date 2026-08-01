@@ -2,6 +2,12 @@
 const { spawn } = require("node:child_process");
 const readline = require("node:readline");
 
+const CODEX_INSTALL_REQUIRED_MESSAGE = [
+  "Codexが見つかりません。Codex DesktopまたはCodex CLIをインストールし、CharaDockを再起動してください。",
+  "Codex CLIは `npm install -g @openai/codex` でインストールできます。",
+  "Codex was not found. Install Codex Desktop or Codex CLI, then restart CharaDock.",
+].join("\n");
+
 const CODEX_MASCOT_INSTRUCTIONS = [
   "You are operating only as a friendly desktop character companion.",
   "Answer the user's conversation directly in natural Japanese, usually in one to four short sentences.",
@@ -127,6 +133,9 @@ class CodexAppServerClient {
   }
 
   async start() {
+    if (!String(this.command || "").trim()) {
+      throw new Error(CODEX_INSTALL_REQUIRED_MESSAGE);
+    }
     const child = spawn(this.command, [...this.commandArgs, ...appServerArgs(this.webSearchMode, this.sandbox)], {
       cwd: this.spawnCwd,
       env: process.env,
