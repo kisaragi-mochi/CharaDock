@@ -359,6 +359,7 @@
       "supertonic-3": "Supertonic 3",
       kokoro: "Kokoro",
       "irodori-webgpu": "Irodori TTS",
+      "sbv2-jp-extra": "Style-Bert-VITS2 JP-Extra",
     };
     $("#voiceRoutingBadge").textContent = live ? "LIVE" : "通常TTS";
     $("#voiceRoutingTitle").textContent = live
@@ -784,6 +785,7 @@
       "supertonic-3": "Supertonic 3",
       kokoro: "Kokoro",
       "irodori-webgpu": "Irodori TTS",
+      "sbv2-jp-extra": "Style-Bert-VITS2 JP-Extra",
     };
     const inputProvider = state.speechInputProvider || "browser";
     const ttsProvider = state.ttsProvider || "system";
@@ -816,6 +818,7 @@
     else if (ttsProvider === "supertonic-3") ttsReady = Boolean(state.supertonic?.ready);
     else if (ttsProvider === "kokoro") ttsReady = Boolean(state.kokoro?.ready);
     else if (ttsProvider === "irodori-webgpu") ttsReady = Boolean(state.irodori?.ready);
+    else if (ttsProvider === "sbv2-jp-extra") ttsReady = Boolean(state.sbv2?.ready);
     const remoteCheck = ttsProvider === "style-bert-vits2";
     ttsStatus.textContent = !state.ttsEnabled
       ? localized("読み上げはOFFです。文字だけで会話できます。", "Read-aloud is off. Text chat remains available.")
@@ -850,6 +853,7 @@
       "supertonic-3": "Supertonic 3",
       kokoro: "Kokoro",
       "irodori-webgpu": "Irodori TTS",
+      "sbv2-jp-extra": "Style-Bert-VITS2 JP-Extra",
     };
     $("#supportBackendSummary").textContent = state.backend === "codex"
       ? codexAccount?.signedIn ? localized("Codex · ChatGPT接続済み", "Codex · ChatGPT connected") : localized("Codex app-server", "Codex app-server")
@@ -947,6 +951,17 @@
   }
 
   function syncIrodoriUi(info = state?.irodori || {}) {
+    const version = $("#irodoriVersionSelect").value === "500m-v3" ? "500m-v3" : "v4-small";
+    const legacy = version === "500m-v3";
+    $("#irodoriV4Panel").hidden = legacy;
+    $("#irodoriV3Panel").hidden = !legacy;
+    $("#irodoriManualModelLabel").textContent = legacy ? "500M-v3 FP16モデル" : "V4 Small FP16モデル";
+    $("#irodoriManualModelHint").textContent = legacy
+      ? "irodori-tts-webgpuのルート、onnx_fp16フォルダー、または同じ配置の変換済み500M-v3モデルを選択できます。"
+      : "irodori-tts-webgpuのルート、v4-small-unifiedフォルダー、または同じ配置の変換済みV4モデルを選択できます。";
+    $("#irodoriReferenceHint").textContent = legacy
+      ? "音声ファイルを48kHz WAVへ変換してアプリ内へコピーします。500M-v3では最大60秒まで利用できます。"
+      : "音声ファイルを48kHz WAVへ変換してアプリ内へコピーします。v4では最大120秒まで利用できます。";
     $("#irodoriModelName").textContent = info.directoryName || "未選択";
     const select = $("#irodoriVoiceSelect");
     const voices = Array.isArray(info.voices) ? info.voices : [];
@@ -960,11 +975,51 @@
     $("#irodoriVoiceRemoveButton").disabled = !selectedVoice || selectedVoice.builtIn;
     const status = $("#irodoriStatus");
     if (info.webgpuAvailable === false) setStatus(status, "WebGPUを利用できません。GPUドライバーを確認してください。", true);
-    else if (!info.modelReady) setStatus(status, "FP16モデルは未導入です。後からフォルダーを選択できます。");
-    else if (!info.referenceReady) setStatus(status, "本人の許可がある参照音声を追加してください。");
-    else if (info.webgpuAvailable === true) setStatus(status, "Irodori TTSのWebGPU音声合成を利用できます。");
-    else setStatus(status, "モデルと参照音声を確認しました。初回生成時にWebGPUを確認します。");
+    else if (!info.modelReady) setStatus(status, `${legacy ? "Irodori TTS 500M-v3" : "Irodori TTS v4 Small"}のFP16モデルを導入または選択してください。`);
+    else if (info.referenceRequired && !info.referenceReady) setStatus(status, "本人の許可がある参照音声を追加してください。");
+    else if (info.webgpuAvailable === true) setStatus(status, `${legacy ? "Irodori TTS 500M-v3" : "Irodori TTS v4 Small"}のWebGPU音声合成を利用できます。`);
+    else setStatus(status, `${legacy ? "500M-v3" : "V4"}モデルと音声設定を確認しました。初回生成時にWebGPUを確認します。`);
+    $("#irodoriReferenceSettings").hidden = !legacy && $("#irodoriModeSelect").value === "design";
+    $("#irodoriEmotionStrengthSettings").classList.toggle("is-disabled", !$("#irodoriAutoEmotionToggle").checked);
+    $("#irodoriEmotionStrengthSelect").disabled = !$("#irodoriAutoEmotionToggle").checked;
     syncTtsSampleModelUi("irodori", info.sampleModel);
+    syncTtsSampleModelUi("irodoriV3", info.v3SampleModel);
+  }
+
+  function syncSbv2Ui(info = state?.sbv2 || {}) {
+    const models = Array.isArray(info.models) ? info.models : [];
+    const modelSelect = $("#sbv2ModelSelect");
+    modelSelect.replaceChildren();
+    if (!models.length) modelSelect.append(new Option(localized("未追加", "Not added"), ""));
+    for (const model of models) modelSelect.append(new Option(`${model.name}${model.ready ? "" : localized("（ファイルなし）", " (file missing)")}`, model.id));
+    modelSelect.value = info.modelId || "";
+    modelSelect.disabled = !models.length;
+    const model = models.find((item) => item.id === modelSelect.value);
+    $("#sbv2ModelRenameButton").disabled = !model;
+    $("#sbv2ModelRemoveButton").disabled = !model;
+    const styleSelect = $("#sbv2StyleSelect");
+    styleSelect.replaceChildren();
+    for (const speaker of model?.speakers || []) {
+      for (const style of speaker.styles || []) styleSelect.append(new Option(`${speaker.name} · ${style.name}`, `${speaker.localId}:${style.localId}`));
+    }
+    if (!styleSelect.options.length) styleSelect.append(new Option(localized("未選択", "Not selected"), "0:0"));
+    const selected = `${Number(info.speakerId) || 0}:${Number(info.styleId) || 0}`;
+    styleSelect.value = [...styleSelect.options].some((option) => option.value === selected) ? selected : styleSelect.options[0].value;
+    styleSelect.disabled = !model;
+    const progress = info.runtimeProgress;
+    const progressElement = $("#sbv2Progress");
+    if (progress && ["dictionary", "deberta"].includes(progress.phase) && Number(progress.total) > 0) {
+      progressElement.hidden = false;
+      progressElement.value = Math.min(100, Math.round((Number(progress.loaded) / Number(progress.total)) * 100));
+    } else progressElement.hidden = true;
+    const status = $("#sbv2Status");
+    if (!model) setStatus(status, localized("JP-ExtraのAIVMXモデルを追加してください。", "Add a JP-Extra AIVMX model."));
+    else if (!model.ready) setStatus(status, localized("保存したモデルファイルが見つかりません。再度追加してください。", "The saved model file is missing. Add it again."), true);
+    else if (progress?.phase === "dictionary") setStatus(status, localized("日本語辞書を初回ダウンロードしています…", "Downloading the Japanese dictionary for first use…"));
+    else if (progress?.phase === "deberta") setStatus(status, localized("日本語DeBERTaを初回ダウンロードしています…", "Downloading Japanese DeBERTa for first use…"));
+    else if (progress?.phase === "loading") setStatus(status, `${progress.device === "webgpu" ? "WebGPU" : "CPU"}${localized("へモデルを読み込んでいます…", " is loading the model…")}`);
+    else if (progress?.phase === "ready") setStatus(status, `${progress.device === "webgpu" ? "WebGPU" : "CPU"}${localized("でJP-Extraを利用できます。", " is ready for JP-Extra.")}`);
+    else setStatus(status, localized("JP-Extraモデルを利用できます。初回の音声生成では共通モデルを取得します。", "The JP-Extra model is ready. Shared assets will be downloaded on first synthesis."));
   }
 
   function updateGeneratorProgress(payload = {}) {
@@ -1024,6 +1079,11 @@
     $("#styleBertVits2ModelIdInput").value = Number(state.styleBertVits2ModelId) || 0;
     $("#styleBertVits2SpeedInput").value = Number(state.styleBertVits2Speed) || 1;
     $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
+    $("#sbv2StyleWeightInput").value = Number.isFinite(Number(state.sbv2StyleWeight)) ? Number(state.sbv2StyleWeight) : 1;
+    $("#sbv2SpeedInput").value = Number(state.sbv2Speed) || 1;
+    $("#sbv2DeviceSelect").value = state.sbv2Device || "auto";
+    $("#sbv2Settings").hidden = $("#ttsProviderSelect").value !== "sbv2-jp-extra";
+    syncSbv2Ui();
     $("#piperPlusSpeedInput").value = Number(state.piperPlusSpeed) || 1;
     $("#piperPlusSettings").hidden = $("#ttsProviderSelect").value !== "piper-plus";
     syncPiperPlusUi();
@@ -1038,6 +1098,12 @@
     $("#kokoroSettings").hidden = $("#ttsProviderSelect").value !== "kokoro";
     syncKokoroUi();
     $("#irodoriSpeedInput").value = Number(state.irodoriSpeed) || 1;
+    $("#irodoriVersionSelect").value = state.irodoriVersion === "500m-v3" ? "500m-v3" : "v4-small";
+    $("#irodoriModeSelect").value = state.irodoriMode || "reference";
+    $("#irodoriCaptionInput").value = state.irodoriCaption || "自然で明瞭な日本語。落ち着いた親しみやすい口調で話す。";
+    $("#irodoriAutoEmotionToggle").checked = state.irodoriAutoEmotion !== false;
+    $("#irodoriEmotionStrengthSelect").value = ["subtle", "natural", "expressive"].includes(state.irodoriEmotionStrength) ? state.irodoriEmotionStrength : "natural";
+    $("#irodoriCfgExecutionSelect").value = state.irodoriCfgExecution || "sequential";
     $("#irodoriSamplingModeSelect").value = state.irodoriSamplingMode || "sway";
     $("#irodoriStepsInput").value = Number(state.irodoriSteps) || 8;
     $("#irodoriSeedInput").value = Number(state.irodoriSeed) || 0;
@@ -1175,10 +1241,22 @@
       kokoroSpeed: Number($("#kokoroSpeedInput").value),
       kokoroDevice: $("#kokoroDeviceSelect").value,
       irodoriVoiceId: $("#irodoriVoiceSelect").value,
+      irodoriVersion: $("#irodoriVersionSelect").value,
+      irodoriMode: $("#irodoriModeSelect").value,
+      irodoriCaption: $("#irodoriCaptionInput").value,
+      irodoriAutoEmotion: $("#irodoriAutoEmotionToggle").checked,
+      irodoriEmotionStrength: $("#irodoriEmotionStrengthSelect").value,
+      irodoriCfgExecution: $("#irodoriCfgExecutionSelect").value,
       irodoriSpeed: Number($("#irodoriSpeedInput").value),
       irodoriSamplingMode: $("#irodoriSamplingModeSelect").value,
       irodoriSteps: Number($("#irodoriStepsInput").value),
       irodoriSeed: Number($("#irodoriSeedInput").value),
+      sbv2ModelId: $("#sbv2ModelSelect").value,
+      sbv2SpeakerId: Number($("#sbv2StyleSelect").value.split(":")[0]) || 0,
+      sbv2StyleId: Number($("#sbv2StyleSelect").value.split(":")[1]) || 0,
+      sbv2StyleWeight: Number($("#sbv2StyleWeightInput").value),
+      sbv2Speed: Number($("#sbv2SpeedInput").value),
+      sbv2Device: $("#sbv2DeviceSelect").value,
       englishPronunciationEnabled: $("#englishPronunciationToggle").checked,
       englishPronunciationDictionary: $("#englishPronunciationDictionaryInput").value,
       speechInputProvider: $("#speechInputProviderSelect").value,
@@ -1633,9 +1711,9 @@
     if (!state.ttsEnabled) return;
     stopSpeechPlayback();
     const token = speechPlaybackToken;
-    if (["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(state.ttsProvider)) {
+    if (["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro", "sbv2-jp-extra"].includes(state.ttsProvider)) {
       try {
-        const providerName = { "piper-plus": "piper-plus", "supertonic-3": "Supertonic 3", "irodori-webgpu": "Irodori TTS", kokoro: "Kokoro", "style-bert-vits2": "Style-Bert-VITS2" }[state.ttsProvider];
+        const providerName = { "piper-plus": "piper-plus", "supertonic-3": "Supertonic 3", "irodori-webgpu": "Irodori TTS", kokoro: "Kokoro", "style-bert-vits2": "Style-Bert-VITS2", "sbv2-jp-extra": "Style-Bert-VITS2 JP-Extra" }[state.ttsProvider];
         setStatus($("#ttsStatus"), `${providerName}で生成しています…`);
         const result = await api.synthesizeTts(text);
         const sources = result?.audioDataUrls || [];
@@ -1973,6 +2051,7 @@
     $$('input[name="mascotPointerMode"]').forEach((input) => input.addEventListener("change", saveSettings));
     $("#ttsProviderSelect").addEventListener("change", () => {
       $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";
+      $("#sbv2Settings").hidden = $("#ttsProviderSelect").value !== "sbv2-jp-extra";
       $("#piperPlusSettings").hidden = $("#ttsProviderSelect").value !== "piper-plus";
       $("#supertonicSettings").hidden = $("#ttsProviderSelect").value !== "supertonic-3";
       $("#kokoroSettings").hidden = $("#ttsProviderSelect").value !== "kokoro";
@@ -2051,6 +2130,21 @@
         setStatus($("#irodoriStatus"), error.message, true);
       }
     });
+    $("#irodoriModeSelect").addEventListener("change", () => {
+      $("#irodoriReferenceSettings").hidden = $("#irodoriVersionSelect").value !== "500m-v3" && $("#irodoriModeSelect").value === "design";
+      saveSettings().catch((error) => setStatus($("#irodoriStatus"), error.message, true));
+    });
+    $("#irodoriVersionSelect").addEventListener("change", async () => {
+      try {
+        await saveSettings();
+        syncIrodoriUi(state.irodori);
+      } catch (error) {
+        setStatus($("#irodoriStatus"), error.message, true);
+      }
+    });
+    $("#irodoriCfgExecutionSelect").addEventListener("change", () => {
+      saveSettings().catch((error) => setStatus($("#irodoriStatus"), error.message, true));
+    });
     $("#irodoriVoiceRenameButton").addEventListener("click", async () => {
       const voice = state.irodori?.voices?.find((item) => item.id === state.irodori.voiceId);
       if (!voice) return;
@@ -2076,11 +2170,46 @@
         setStatus($("#irodoriStatus"), error.message, true);
       }
     });
+    $("#sbv2ModelAddButton").addEventListener("click", async () => {
+      try {
+        setStatus($("#sbv2Status"), localized("AIVMXモデルを確認してアプリ内へコピーしています…", "Checking and copying the AIVMX model into the app…"));
+        state = await api.chooseSbv2Model();
+        syncUi();
+      } catch (error) {
+        setStatus($("#sbv2Status"), error.message, true);
+      }
+    });
+    $("#sbv2ModelRenameButton").addEventListener("click", async () => {
+      const model = state.sbv2?.models?.find((item) => item.id === state.sbv2.modelId);
+      if (!model) return;
+      const name = window.prompt(localized("JP-Extraモデルの名前", "JP-Extra model name"), model.name);
+      if (name == null || !name.trim()) return;
+      try {
+        state = await api.renameSbv2Model({ id: model.id, name });
+        syncUi();
+      } catch (error) {
+        setStatus($("#sbv2Status"), error.message, true);
+      }
+    });
+    $("#sbv2ModelRemoveButton").addEventListener("click", async () => {
+      const model = state.sbv2?.models?.find((item) => item.id === state.sbv2.modelId);
+      if (!model || !window.confirm(localized(
+        `JP-Extraモデル「${model.name}」をアプリ内から削除しますか？`,
+        `Delete the JP-Extra model “${model.name}” from the app?`,
+      ))) return;
+      try {
+        state = await api.removeSbv2Model(model.id);
+        syncUi();
+      } catch (error) {
+        setStatus($("#sbv2Status"), error.message, true);
+      }
+    });
     for (const { prefix, provider } of [
       { prefix: "piperPlus", provider: "piper-plus" },
       { prefix: "supertonic", provider: "supertonic-3" },
       { prefix: "kokoro", provider: "kokoro" },
       { prefix: "irodori", provider: "irodori-webgpu" },
+      { prefix: "irodoriV3", provider: "irodori-500m-v3" },
     ]) {
       $(`#${prefix}ModelDownloadButton`).addEventListener("click", async () => {
         try {
@@ -2088,11 +2217,16 @@
             "つくよみちゃんコーパスのクレジットと利用条件を確認し、同意してダウンロードしますか？",
             "Have you reviewed and accepted the Tsukuyomi-chan Corpus credits and terms, and do you want to download it?",
           ))) return;
-          const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", kokoro: "kokoro" }[provider];
+          if (["irodori-webgpu", "irodori-500m-v3"].includes(provider) && !window.confirm(localized(
+            "Irodori TTSの利用条件を守り、本人の明示的な同意がある音声だけを参照に使いますか？",
+            "Will you follow the Irodori TTS terms and only use reference voices with the speaker's explicit consent?",
+          ))) return;
+          const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", "irodori-500m-v3": "irodori", kokoro: "kokoro" }[provider];
+          const sampleKey = provider === "irodori-500m-v3" ? "v3SampleModel" : "sampleModel";
           syncTtsSampleModelUi(prefix, {
-            ...(state[stateKey]?.sampleModel || {}),
+            ...(state[stateKey]?.[sampleKey] || {}),
             downloading: true,
-            progress: { phase: "downloading", receivedBytes: 0, totalBytes: state[stateKey]?.sampleModel?.downloadBytes || 1 },
+            progress: { phase: "downloading", receivedBytes: 0, totalBytes: state[stateKey]?.[sampleKey]?.downloadBytes || 1 },
           });
           state = await api.downloadTtsModel(provider);
           syncUi();
@@ -2102,8 +2236,9 @@
         }
       });
       $(`#${prefix}ModelRemoveButton`).addEventListener("click", async () => {
-        const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", kokoro: "kokoro" }[provider];
-        const label = state[stateKey]?.sampleModel?.label || "ダウンロード済みモデル";
+        const stateKey = { "piper-plus": "piperPlus", "supertonic-3": "supertonic", "irodori-webgpu": "irodori", "irodori-500m-v3": "irodori", kokoro: "kokoro" }[provider];
+        const sampleKey = provider === "irodori-500m-v3" ? "v3SampleModel" : "sampleModel";
+        const label = state[stateKey]?.[sampleKey]?.label || "ダウンロード済みモデル";
         if (!window.confirm(localized(`${label}を端末から削除しますか？`, `Delete ${label} from this device?`))) return;
         try {
           state = await api.removeTtsModel(provider);
@@ -2140,8 +2275,9 @@
       state.sherpaModel = await api.removeSherpaModel($("#sherpaModelSelect").value);
       syncSherpaModelUi(state.sherpaModel);
     });
-    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#piperPlusSpeedInput", "#supertonicVoiceSelect", "#supertonicSpeedInput", "#supertonicStepsInput", "#kokoroVoiceSelect", "#kokoroSpeedInput", "#kokoroDeviceSelect", "#irodoriSpeedInput", "#irodoriSamplingModeSelect", "#irodoriStepsInput", "#irodoriSeedInput", "#englishPronunciationDictionaryInput"]
+    ["#styleBertVits2UrlInput", "#styleBertVits2ModelIdInput", "#styleBertVits2SpeedInput", "#sbv2ModelSelect", "#sbv2StyleSelect", "#sbv2StyleWeightInput", "#sbv2SpeedInput", "#sbv2DeviceSelect", "#piperPlusSpeedInput", "#supertonicVoiceSelect", "#supertonicSpeedInput", "#supertonicStepsInput", "#kokoroVoiceSelect", "#kokoroSpeedInput", "#kokoroDeviceSelect", "#irodoriSpeedInput", "#irodoriSamplingModeSelect", "#irodoriStepsInput", "#irodoriSeedInput", "#irodoriCaptionInput", "#irodoriAutoEmotionToggle", "#irodoriEmotionStrengthSelect", "#englishPronunciationDictionaryInput"]
       .forEach((selector) => $(selector).addEventListener("change", () => {
+        if (selector === "#irodoriAutoEmotionToggle") syncIrodoriUi();
         saveSettings().catch((error) => setStatus($("#ttsStatus"), error.message, true));
       }));
     $("#ttsTestButton").addEventListener("click", async () => {
@@ -2382,11 +2518,17 @@
         "supertonic-3": ["supertonic", "supertonic"],
         kokoro: ["kokoro", "kokoro"],
         "irodori-webgpu": ["irodori", "irodori"],
+        "irodori-500m-v3": ["irodori", "irodoriV3"],
       }[model?.provider];
       if (!mapping) return;
       state[mapping[0]] ||= {};
-      state[mapping[0]].sampleModel = model;
+      state[mapping[0]][model?.provider === "irodori-500m-v3" ? "v3SampleModel" : "sampleModel"] = model;
       syncTtsSampleModelUi(mapping[1], model);
+    });
+    api.onSbv2Progress((progress) => {
+      state.sbv2 ||= {};
+      state.sbv2.runtimeProgress = progress;
+      syncSbv2Ui(state.sbv2);
     });
     bindEvents();
     syncUi();

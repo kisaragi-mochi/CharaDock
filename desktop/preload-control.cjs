@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   selectIrodoriVoice: (id) => ipcRenderer.invoke("tts:irodoriSelectVoice", id),
   renameIrodoriVoice: (payload) => ipcRenderer.invoke("tts:irodoriRenameVoice", payload),
   removeIrodoriVoice: (id) => ipcRenderer.invoke("tts:irodoriRemoveVoice", id),
+  chooseSbv2Model: () => ipcRenderer.invoke("tts:sbv2ChooseModel"),
+  renameSbv2Model: (payload) => ipcRenderer.invoke("tts:sbv2RenameModel", payload),
+  removeSbv2Model: (id) => ipcRenderer.invoke("tts:sbv2RemoveModel", id),
   normalizeTtsText: (text) => ipcRenderer.invoke("tts:normalizeText", text),
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
   appendCodexRealtimeSpeech: (text) => ipcRenderer.invoke("audio:realtimeAppendSpeech", text),
@@ -95,5 +98,10 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("tts:modelProgress", listener);
     return () => ipcRenderer.removeListener("tts:modelProgress", listener);
+  },
+  onSbv2Progress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("tts:sbv2Progress", listener);
+    return () => ipcRenderer.removeListener("tts:sbv2Progress", listener);
   },
 });

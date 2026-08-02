@@ -224,6 +224,14 @@
     "Windows標準": "Windows system voice",
     "piper-plus（ローカル）": "piper-plus (local)",
     "Supertonic 3（ローカル）": "Supertonic 3 (local)",
+    "Style-Bert-VITS2（API）": "Style-Bert-VITS2 (API)",
+    "Style-Bert-VITS2 JP-Extra（WebGPU / CPU）": "Style-Bert-VITS2 JP-Extra (WebGPU / CPU)",
+    "音声モデル": "Voice model",
+    "AIVMXモデルを追加": "Add AIVMX model",
+    "話者・スタイル": "Speaker and style",
+    "スタイル強度（0–2）": "Style strength (0–2)",
+    "JP-Extraモデルを確認しています…": "Checking JP-Extra models…",
+    "AIVMXはアプリ内へコピーされます。初回生成時のみ日本語辞書と量子化DeBERTa（合計約250MB）を取得し、以後は端末内のキャッシュを使います。モデルごとの利用条件も確認してください。": "AIVMX files are copied into the app. The Japanese dictionary and quantized DeBERTa (about 250 MB total) are downloaded on first synthesis, then cached locally. Review each model's license terms.",
     "モデルID": "Model ID",
     "速度（0.5–2.0×）": "Speed (0.5–2.0×)",
     "サンプルモデルを確認しています…": "Checking sample model…",
@@ -259,6 +267,28 @@
     "Kokoroの準備状況を確認しています…": "Checking Kokoro status…",
     "日本語G2Pと音声生成は端末内で完結します。WebGPUで失敗した場合、「自動」ではCPUへ切り替わります。": "Japanese G2P and speech generation stay on this device. Auto mode falls back to CPU if WebGPU fails.",
     "FP16モデルをダウンロード": "Download FP16 model",
+    "Irodori TTS v4 Small · WebGPU": "Irodori TTS v4 Small · WebGPU",
+    "V4モデルを確認しています…": "Checking the V4 model…",
+    "V4モデルをダウンロード": "Download V4 model",
+    "約1.7GBのFP16モデルを初回だけ取得し、SHA-256を検証して端末へ保存します。": "Downloads the roughly 1.7 GB FP16 model once, verifies its SHA-256 digests, and stores it on this device.",
+    "V4 FP16モデル": "V4 FP16 model",
+    "フォルダーを選択": "Choose folder",
+    "irodori-tts-webgpuのルート、v4-small-unifiedフォルダー、または同じ配置の変換済みモデルを選択できます。": "Choose the irodori-tts-webgpu root, its v4-small-unified folder, or a converted model with the same layout.",
+    "話者モード": "Speaker mode",
+    "参照音声（Voice Clone）": "Reference voice (Voice Clone)",
+    "参照なし（Voice Design）": "No reference (Voice Design)",
+    "声・感情の指示（caption）": "Voice and emotion direction (caption)",
+    "基本の声・話し方（caption）": "Base voice and speaking style (caption)",
+    "会話内容に合わせて自動演技": "Automatically act to match the conversation",
+    "表情判定と同じ結果を発話ごとのcaptionへ反映します。追加のAI推論は行いません。": "Applies the same emotion used for the character expression to each spoken caption, without an additional AI request.",
+    "自動演技の強さ": "Automatic acting intensity",
+    "控えめ": "Subtle",
+    "自然（推奨）": "Natural (recommended)",
+    "豊か": "Expressive",
+    "落ち着いた親しみやすい声。自然な速さで明瞭に話す。": "A calm, friendly voice. Speak clearly at a natural pace.",
+    "CFG実行": "CFG execution",
+    "逐次（省VRAM・推奨）": "Sequential (lower VRAM, recommended)",
+    "一括（高速・高VRAM）": "Batched (faster, more VRAM)",
     "必要なFP16ファイルだけ取得します。WebGPU対応GPUと約1.3GBの保存容量を使います。": "Downloads only the required FP16 files. Requires a WebGPU-capable GPU and about 1.3 GB of storage.",
     "参照音声": "Reference voice",
     "未追加": "None added",
@@ -266,6 +296,7 @@
     "名前を変更": "Rename",
     "削除": "Delete",
     "WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。": "Converts WAV, MP3, M4A, AAC, OGG, FLAC, or WebM to 48 kHz WAV and copies it into the app, so the original can be deleted.",
+    "WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。v4は最大120秒まで利用します。": "Converts WAV, MP3, M4A, AAC, OGG, FLAC, or WebM to 48 kHz WAV and copies it into the app. V4 uses up to 120 seconds, and the original can be deleted.",
     "再生速度（0.5–2.0×）": "Playback speed (0.5–2.0×)",
     "生成方式": "Generation method",
     "高速（Sway）": "Fast (Sway)",
@@ -424,6 +455,9 @@
     ,"FP16モデルは未導入です。後からフォルダーを選択できます。": "The FP16 model is not installed. You can choose a folder later."
     ,"本人の許可がある参照音声を追加してください。": "Add a reference voice with the speaker's permission."
     ,"Irodori TTSのWebGPU音声合成を利用できます。": "Irodori TTS WebGPU speech synthesis is available."
+    ,"Irodori TTS v4 SmallのFP16モデルフォルダーを選択してください。": "Choose an Irodori TTS v4 Small FP16 model folder."
+    ,"Irodori TTS v4 SmallのWebGPU音声合成を利用できます。": "Irodori TTS v4 Small WebGPU speech synthesis is available."
+    ,"V4モデルと音声設定を確認しました。初回生成時にWebGPUを確認します。": "The V4 model and voice settings are ready. WebGPU will be checked on first generation."
     ,"モデルと参照音声を確認しました。初回生成時にWebGPUを確認します。": "Model and reference voice are ready. WebGPU will be checked on first generation."
     ,"自動（メインモニター）": "Auto (primary display)"
     ,"OpenAI Responses APIを使用します。": "Using OpenAI Responses API."

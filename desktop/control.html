@@ -320,13 +320,30 @@
               <fieldset id="standardTtsSettings" class="voice-mode-panel standard-tts-settings">
               <label class="switch-row"><span><strong>AIの返答を音声で読み上げる</strong><small>読み上げのON/OFFは全キャラクター共通です</small></span><input id="ttsToggle" type="checkbox" /><i></i></label>
               <div class="tts-settings">
-              <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2</option><option value="piper-plus">piper-plus（ローカル）</option><option value="supertonic-3">Supertonic 3（ローカル）</option><option value="kokoro">Kokoro（WebGPU / CPU）</option><option value="irodori-webgpu">Irodori TTS（WebGPU）</option></select></label>
+              <label>音声方式<select id="ttsProviderSelect"><option value="system">Windows標準</option><option value="style-bert-vits2">Style-Bert-VITS2（API）</option><option value="sbv2-jp-extra">Style-Bert-VITS2 JP-Extra（WebGPU / CPU）</option><option value="piper-plus">piper-plus（ローカル）</option><option value="supertonic-3">Supertonic 3（ローカル）</option><option value="kokoro">Kokoro（WebGPU / CPU）</option><option value="irodori-webgpu">Irodori TTS（WebGPU）</option></select></label>
               <div id="styleBertVits2Settings" class="tts-provider-settings" hidden>
                 <label>API URL<input id="styleBertVits2UrlInput" type="text" inputmode="url" autocomplete="off" placeholder="http://localhost:5000" /></label>
                 <div class="size-actions">
                   <label>モデルID<input id="styleBertVits2ModelIdInput" type="number" min="0" max="9999" step="1" /></label>
                   <label>速度（0.5–2.0×）<input id="styleBertVits2SpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
                 </div>
+              </div>
+              <div id="sbv2Settings" class="tts-provider-settings" hidden>
+                <label>音声モデル<select id="sbv2ModelSelect"><option value="">未追加</option></select></label>
+                <div class="voice-library-actions">
+                  <button id="sbv2ModelAddButton" class="button button-secondary" type="button">AIVMXモデルを追加</button>
+                  <button id="sbv2ModelRenameButton" class="button button-quiet" type="button">名前を変更</button>
+                  <button id="sbv2ModelRemoveButton" class="button button-quiet" type="button">削除</button>
+                </div>
+                <label>話者・スタイル<select id="sbv2StyleSelect"><option value="0:0">未選択</option></select></label>
+                <div class="size-actions">
+                  <label>スタイル強度（0–2）<input id="sbv2StyleWeightInput" type="number" min="0" max="2" step="0.05" /></label>
+                  <label>速度（0.5–2.0×）<input id="sbv2SpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                </div>
+                <label>処理方法<select id="sbv2DeviceSelect"><option value="auto">自動（WebGPU優先）</option><option value="webgpu">WebGPUのみ</option><option value="cpu">CPUのみ</option></select></label>
+                <p id="sbv2Status" class="hint">JP-Extraモデルを確認しています…</p>
+                <progress id="sbv2Progress" max="100" value="0" hidden></progress>
+                <p class="hint">AIVMXはアプリ内へコピーされます。初回生成時のみ日本語辞書と量子化DeBERTa（合計約250MB）を取得し、以後は端末内のキャッシュを使います。モデルごとの利用条件も確認してください。</p>
               </div>
               <div id="piperPlusSettings" class="tts-provider-settings" hidden>
                 <div class="local-model-download">
@@ -402,22 +419,66 @@
                 <p class="hint">日本語G2Pと音声生成は端末内で完結します。WebGPUで失敗した場合、「自動」ではCPUへ切り替わります。</p>
               </div>
               <div id="irodoriSettings" class="tts-provider-settings" hidden>
-                <div class="local-model-download">
-                  <p id="irodoriModelDownloadStatus" class="hint">サンプルモデルを確認しています…</p>
-                  <progress id="irodoriModelDownloadProgress" max="100" value="0" hidden></progress>
-                  <div class="size-actions">
-                    <button id="irodoriModelDownloadButton" class="button button-secondary" type="button">FP16モデルをダウンロード</button>
-                    <button id="irodoriModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                <label>モデル世代<select id="irodoriVersionSelect">
+                  <option value="v4-small">v4 Small（推奨・Voice Design対応）</option>
+                  <option value="500m-v3">500M-v3（従来版・Voice Clone）</option>
+                </select></label>
+                <div id="irodoriV4Panel">
+                  <p class="hint"><strong>Irodori TTS v4 Small · WebGPU</strong></p>
+                  <div class="local-model-download">
+                    <p id="irodoriModelDownloadStatus" class="hint">V4モデルを確認しています…</p>
+                    <progress id="irodoriModelDownloadProgress" max="100" value="0" hidden></progress>
+                    <div class="size-actions">
+                      <button id="irodoriModelDownloadButton" class="button button-secondary" type="button">V4モデルをダウンロード</button>
+                      <button id="irodoriModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                    </div>
+                    <p id="irodoriModelDownloadHint" class="hint">約1.7GBのFP16モデルを初回だけ取得し、SHA-256を検証して端末へ保存します。</p>
                   </div>
-                  <p id="irodoriModelDownloadHint" class="hint">必要なFP16ファイルだけ取得します。WebGPU対応GPUと約1.3GBの保存容量を使います。</p>
+                  <label>話者モード<select id="irodoriModeSelect">
+                    <option value="reference">参照音声（Voice Clone）</option>
+                    <option value="design">参照なし（Voice Design）</option>
+                  </select></label>
+                  <label>基本の声・話し方（caption）
+                    <textarea id="irodoriCaptionInput" rows="3" maxlength="1000" placeholder="落ち着いた親しみやすい声。自然な速さで明瞭に話す。"></textarea>
+                  </label>
+                  <label class="switch-row"><span><strong>会話内容に合わせて自動演技</strong><small>表情判定と同じ結果を発話ごとのcaptionへ反映します。追加のAI推論は行いません。</small></span><input id="irodoriAutoEmotionToggle" type="checkbox" /><i></i></label>
+                  <label id="irodoriEmotionStrengthSettings">自動演技の強さ<select id="irodoriEmotionStrengthSelect">
+                    <option value="subtle">控えめ</option>
+                    <option value="natural">自然（推奨）</option>
+                    <option value="expressive">豊か</option>
+                  </select></label>
+                  <label>CFG実行<select id="irodoriCfgExecutionSelect">
+                    <option value="sequential">逐次（省VRAM・推奨）</option>
+                    <option value="batched">一括（高速・高VRAM）</option>
+                  </select></label>
                 </div>
-                <label>参照音声<select id="irodoriVoiceSelect"><option value="">未追加</option></select></label>
-                <div class="voice-library-actions">
-                  <button id="irodoriReferenceButton" class="button button-secondary" type="button">音声を追加</button>
-                  <button id="irodoriVoiceRenameButton" class="button button-quiet" type="button">名前を変更</button>
-                  <button id="irodoriVoiceRemoveButton" class="button button-quiet" type="button">削除</button>
+                <div id="irodoriV3Panel" hidden>
+                  <p class="hint"><strong>Irodori TTS 500M-v3 · WebGPU（従来版）</strong></p>
+                  <div class="local-model-download">
+                    <p id="irodoriV3ModelDownloadStatus" class="hint">500M-v3モデルを確認しています…</p>
+                    <progress id="irodoriV3ModelDownloadProgress" max="100" value="0" hidden></progress>
+                    <div class="size-actions">
+                      <button id="irodoriV3ModelDownloadButton" class="button button-secondary" type="button">500M-v3モデルをダウンロード</button>
+                      <button id="irodoriV3ModelRemoveButton" class="button button-quiet" type="button" hidden>モデルを削除</button>
+                    </div>
+                    <p id="irodoriV3ModelDownloadHint" class="hint">従来の約500Mパラメータ版です。WebGPU用FP16一式として約1.2GBを使用し、参照音声が必要です。</p>
+                  </div>
+                  <p class="hint">キャプション・参照なしVoice Design・動的感情はv4 Small専用です。</p>
                 </div>
-                <p class="hint">WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。</p>
+                <details class="tts-advanced">
+                  <summary>手動モデルを使う</summary>
+                  <div class="piper-file-row"><span><strong id="irodoriManualModelLabel">FP16モデル</strong><small id="irodoriModelName">未選択</small></span><button id="irodoriModelButton" class="button button-quiet" type="button">フォルダーを選択</button></div>
+                  <p id="irodoriManualModelHint" class="hint">選択中のモデル世代と同じ配置の変換済みモデルを選択できます。</p>
+                </details>
+                <div id="irodoriReferenceSettings">
+                  <label>参照音声<select id="irodoriVoiceSelect"><option value="">未追加</option></select></label>
+                  <div class="voice-library-actions">
+                    <button id="irodoriReferenceButton" class="button button-secondary" type="button">音声を追加</button>
+                    <button id="irodoriVoiceRenameButton" class="button button-quiet" type="button">名前を変更</button>
+                    <button id="irodoriVoiceRemoveButton" class="button button-quiet" type="button">削除</button>
+                  </div>
+                  <p id="irodoriReferenceHint" class="hint">WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。v4は最大120秒まで利用します。</p>
+                </div>
                 <div class="size-actions">
                   <label>再生速度（0.5–2.0×）<input id="irodoriSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
                   <label>生成方式<select id="irodoriSamplingModeSelect"><option value="sway">高速（Sway）</option><option value="linear">互換（Linear）</option></select></label>
@@ -432,10 +493,6 @@
                   <small>Hiro: ochisamu本人の録音・許諾音声</small>
                   <small>Kohaku: <a href="https://amitaro.net/" target="_blank" rel="noreferrer">あみたろの声素材工房</a>の音声素材を使用しています。<a href="https://amitaro.net/voice/voice_rule/" target="_blank" rel="noreferrer">利用規約</a></small>
                 </div>
-                <details class="tts-advanced">
-                  <summary>手動モデルを使う</summary>
-                  <div class="piper-file-row"><span><strong>FP16モデル</strong><small id="irodoriModelName">未選択</small></span><button id="irodoriModelButton" class="button button-quiet" type="button">選択</button></div>
-                </details>
               </div>
               <label class="switch-row"><span><strong>英単語を日本語読みする</strong><small>ユーザー辞書とCMUdictの発音を読み上げ時だけ使用</small></span><input id="englishPronunciationToggle" type="checkbox" /><i></i></label>
               <details class="pronunciation-settings">
@@ -564,6 +621,7 @@
           <label>音声方式<select id="onboardingTtsProviderSelect">
             <option value="system">Windows標準</option>
             <option value="style-bert-vits2">Style-Bert-VITS2</option>
+            <option value="sbv2-jp-extra">Style-Bert-VITS2 JP-Extra（WebGPU / CPU）</option>
             <option value="piper-plus">piper-plus（ローカル）</option>
             <option value="supertonic-3">Supertonic 3（ローカル）</option>
             <option value="kokoro">Kokoro（WebGPU / CPU）</option>

@@ -1,6 +1,6 @@
 {
   "name": "charadock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CharaDock is a transparent Windows desktop companion powered by PuruPuru PNGTuber, Codex app-server, and the OpenAI Responses API.",
   "main": "desktop/main.cjs",
   "author": "ochisamu",
@@ -47,11 +47,15 @@
       "NOTICE",
       "MODIFICATIONS.md",
       "DISTRIBUTION_ASSET_LICENSE.md",
-      "THIRD_PARTY_NOTICES.md"
+      "THIRD_PARTY_NOTICES.md",
+      "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**/*"
     ],
     "asarUnpack": [
       "node_modules/sherpa-onnx-*/**/*",
       "node_modules/onnxruntime-web/dist/**/*",
+      "node_modules/onnxruntime-node/**/*",
       "node_modules/piper-plus/dist/**/*.wasm"
     ],
     "win": {
@@ -69,6 +73,7 @@
     }
   },
   "dependencies": {
+    "@hdae/sbv2-web": "npm:@jsr/hdae__sbv2-web@0.4.1",
     "@huggingface/tokenizers": "0.1.3",
     "budoux": "0.7.0",
     "cmu-pronouncing-dictionary": "3.0.0",
@@ -76,5 +81,8 @@
     "piper-plus": "0.6.0",
     "pngjs": "^7.0.0",
     "sherpa-onnx-node": "^1.13.4"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0"
   }
 }

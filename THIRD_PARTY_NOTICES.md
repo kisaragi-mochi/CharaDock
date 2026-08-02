@@ -156,16 +156,24 @@ Inc.).
 - Source: https://github.com/ngc-shj/irodori-tts-webgpu
 - License: MIT License
 
-CharaDock includes a modified, environment-specific copy of the inference core.
+CharaDock includes modified, environment-specific WebGPU inference cores for
+Irodori-TTS 500M-v3 and Irodori-TTS v4 Small.
 The MIT copyright and permission notice are retained in the vendored source.
-Irodori model files are not bundled. The user may download only the required
-FP16 ONNX artifacts and tokenizer from the original model repository; every
-file is pinned to one repository commit and verified against its SHA-256
-digest. Two reference WAV files are bundled as described below, and users may
-also select a consented reference WAV from local storage. Inference stays on
-the device. The upstream model/runtime notice
-identifies Irodori-TTS and Semantic-DACVAE weights as MIT and the llm-jp
-tokenizer as Apache-2.0. Voice cloning or impersonation without explicit
+Irodori model files are not bundled. Users may download the pinned v4 Small
+FP16 ONNX conversion from
+https://github.com/ochisamu/irodori-tts-v4-webgpu-models through the app; every
+asset is verified against its fixed byte size and SHA-256 digest before it is
+installed. The app also retains the pinned Irodori-TTS 500M-v3 FP16 ONNX set
+from https://huggingface.co/noguchis/irodori-tts-onnx for compatibility with
+existing CharaDock voices. Its runtime is derived from
+https://github.com/ngc-shj/irodori-tts-webgpu. A compatible local conversion
+folder can also be selected manually for either generation.
+Two reference WAV files are bundled as described below, and users may also
+select a consented reference WAV from local storage.
+Inference stays on the device. The v4 model is based on
+Aratako/Irodori-TTS-v4-Small, Aratako/Semantic-DACVAE-Japanese-32dim, and
+sbintuitions/modernbert-ja-310m. Their license notices must remain with any
+distributed model artifacts. Voice cloning or impersonation without explicit
 consent, deepfakes, and misleading speech are prohibited by the ethical-use
 notice carried from the model card.
 
@@ -193,6 +201,30 @@ and the upstream terms differ, the current upstream terms control.
 - Source: https://github.com/microsoft/onnxruntime
 - Runtime package: `onnxruntime-web` 1.27.0
 - License: MIT License
+
+### Style-Bert-VITS2 JP-Extra local runtime
+
+- Project: sbv2-web
+- Author: hdae and contributors
+- Source: https://github.com/hdae/sbv2-web
+- Runtime package: `@hdae/sbv2-web` 0.4.1
+- License: MIT License
+
+The optional local JP-Extra provider imports user-selected AIVMX models into
+the app user-data directory and runs inference with ONNX Runtime Node. Native
+WebGPU is preferred and CPU is available as a fallback. CharaDock does not
+bundle or redistribute an AIVMX voice model; each model remains subject to the
+license shown by its creator.
+
+Japanese text analysis uses `@hdae/yomi` 0.4.2 (MIT) and its pinned NAIST-JDIC
+derived dictionary (`hdae/yomi-dict`, BSD 3-Clause). The quantized Japanese
+DeBERTa assets are downloaded on first use from the revision pinned by
+`@hdae/sbv2-web`, verified by the runtime, and cached locally. Those model
+assets are a derivative of `ku-nlp/deberta-v2-large-japanese-char-wwm` and are
+provided under CC BY-SA 4.0. They are not bundled in CharaDock.
+
+The runtime also uses `@hdae/fetch-cache` 0.3.1 (MIT) and `onnxruntime-node`
+1.27.0 (MIT). Package license files remain included in the packaged app.
 
 ### Tokenizers.js
 

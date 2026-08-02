@@ -10,7 +10,7 @@ const IRODORI_FIRST_CHUNK_LENGTH = 40;
 const IRODORI_CHUNK_OVERFLOW = 4;
 const IRODORI_MAX_CHUNKS = 24;
 
-const MODEL_NAMES = Object.freeze([
+const V3_MODEL_NAMES = Object.freeze([
   "text_encoder",
   "speaker_encoder",
   "duration",
@@ -19,37 +19,88 @@ const MODEL_NAMES = Object.freeze([
   "dacvae_encoder",
 ]);
 
+const V4_MODEL_NAMES = Object.freeze([
+  "text_backbone",
+  "text_projector",
+  "caption_projector",
+  "speaker_encoder",
+  "duration",
+  "dit_v4",
+  "dacvae_decoder",
+  "dacvae_encoder",
+]);
+
+// Kept as the V4 alias for callers introduced with the V4 runtime.
+const MODEL_NAMES = V4_MODEL_NAMES;
+const IRODORI_VERSIONS = Object.freeze(["500m-v3", "v4-small"]);
+
 function isFile(filePath) {
   try { return fs.statSync(filePath).isFile(); } catch { return false; }
 }
 
-function hasModels(directory) {
-  return MODEL_NAMES.every((name) => isFile(path.join(directory, `${name}.onnx`)) && isFile(path.join(directory, `${name}.onnx.data`)));
+function hasModels(directory, modelNames = V4_MODEL_NAMES) {
+  return modelNames.every((name) => isFile(path.join(directory, `${name}.onnx`)) && isFile(path.join(directory, `${name}.onnx.data`)));
 }
 
-function resolveIrodoriModelDirectory(directory) {
+function v4CandidateLayouts(root) {
+  return [
+    { models: root, tokenizer: path.join(root, "tokenizer", "irodori_v4") },
+    { models: path.join(root, "models"), tokenizer: path.join(root, "tokenizer", "irodori_v4") },
+    { models: path.join(root, "onnx_fp16"), tokenizer: path.join(root, "tokenizer", "irodori_v4") },
+    {
+      models: path.join(root, "artifacts", "v4-small", "onnx_fp16"),
+      tokenizer: path.join(root, "phases", "v4-small-unified", "tokenizer", "irodori_v4"),
+    },
+  ];
+}
+
+function v3CandidateLayouts(root) {
+  return [
+    { models: root, tokenizer: path.join(root, "tokenizer", "llmjp_tok") },
+    { models: path.join(root, "onnx_fp16"), tokenizer: path.join(root, "tokenizer", "llmjp_tok") },
+    { models: path.join(root, "artifacts", "onnx_fp16"), tokenizer: path.join(root, "tokenizer", "llmjp_tok") },
+  ];
+}
+
+function normalizedVersion(value) {
+  return value === "500m-v3" ? "500m-v3" : "v4-small";
+}
+
+function resolveIrodoriModelDirectory(directory, requestedVersion = "v4-small") {
   const root = path.resolve(String(directory || "."));
-  if (hasModels(root)) return { root, models: root, tokenizer: path.join(root, "tokenizer", "llmjp_tok") };
-  const fp16 = path.join(root, "onnx_fp16");
-  if (hasModels(fp16)) return { root, models: fp16, tokenizer: path.join(root, "tokenizer", "llmjp_tok") };
-  const artifactsFp16 = path.join(root, "artifacts", "onnx_fp16");
-  if (hasModels(artifactsFp16)) return { root, models: artifactsFp16, tokenizer: path.join(root, "tokenizer", "llmjp_tok") };
-  return { root, models: fp16, tokenizer: path.join(root, "tokenizer", "llmjp_tok") };
+  const version = normalizedVersion(requestedVersion);
+  const modelNames = version === "500m-v3" ? V3_MODEL_NAMES : V4_MODEL_NAMES;
+  const layouts = version === "500m-v3" ? v3CandidateLayouts(root) : v4CandidateLayouts(root);
+  for (const candidate of layouts) {
+    if (hasModels(candidate.models, modelNames)) return { root, ...candidate, version, modelNames };
+  }
+  const fallback = layouts[version === "v4-small" ? 1 : 0] || layouts[0];
+  return {
+    root,
+    ...fallback,
+    version,
+    modelNames,
+  };
 }
 
-function irodoriModelStatus(directory, referenceAudioPath = "", webgpuAvailable = null) {
-  const resolved = directory ? resolveIrodoriModelDirectory(directory) : { root: "", models: "", tokenizer: "" };
+function irodoriModelStatus(directory, referenceAudioPath = "", webgpuAvailable = null, options = {}) {
+  const resolved = directory
+    ? resolveIrodoriModelDirectory(directory, options.version)
+    : { root: "", models: "", tokenizer: "", version: normalizedVersion(options.version), modelNames: normalizedVersion(options.version) === "500m-v3" ? V3_MODEL_NAMES : V4_MODEL_NAMES };
   const missingFiles = resolved.models
-    ? MODEL_NAMES.flatMap((name) => [`${name}.onnx`, `${name}.onnx.data`]).filter((name) => !isFile(path.join(resolved.models, name)))
-    : MODEL_NAMES.flatMap((name) => [`${name}.onnx`, `${name}.onnx.data`]);
+    ? resolved.modelNames.flatMap((name) => [`${name}.onnx`, `${name}.onnx.data`]).filter((name) => !isFile(path.join(resolved.models, name)))
+    : resolved.modelNames.flatMap((name) => [`${name}.onnx`, `${name}.onnx.data`]);
   const tokenizerReady = Boolean(resolved.tokenizer)
     && isFile(path.join(resolved.tokenizer, "tokenizer.json"))
     && isFile(path.join(resolved.tokenizer, "tokenizer_config.json"));
   const referenceReady = isFile(referenceAudioPath) && path.extname(referenceAudioPath).toLowerCase() === ".wav";
+  const referenceRequired = !(resolved.version === "v4-small" && options.mode === "design");
   return {
-    ready: Boolean(resolved.root) && missingFiles.length === 0 && tokenizerReady && referenceReady,
+    ready: Boolean(resolved.root) && missingFiles.length === 0 && tokenizerReady && (!referenceRequired || referenceReady),
     modelReady: Boolean(resolved.root) && missingFiles.length === 0 && tokenizerReady,
     referenceReady,
+    referenceRequired,
+    version: resolved.version,
     directoryName: resolved.root ? path.basename(resolved.root) : "",
     referenceName: referenceReady ? path.basename(referenceAudioPath) : "",
     missingFiles,
@@ -58,11 +109,12 @@ function irodoriModelStatus(directory, referenceAudioPath = "", webgpuAvailable 
   };
 }
 
-function validateIrodoriModelDirectory(directory) {
-  const resolved = resolveIrodoriModelDirectory(directory);
-  const status = irodoriModelStatus(resolved.root);
+function validateIrodoriModelDirectory(directory, version = "v4-small") {
+  const resolved = resolveIrodoriModelDirectory(directory, version);
+  const status = irodoriModelStatus(resolved.root, "", null, { version: resolved.version });
   if (!status.modelReady) {
-    const detail = !status.tokenizerReady ? "tokenizer/llmjp_tok/{tokenizer.json, tokenizer_config.json}" : status.missingFiles.slice(0, 3).join(", ");
+    const tokenizerName = resolved.version === "500m-v3" ? "tokenizer/llmjp_tok" : "tokenizer/irodori_v4";
+    const detail = !status.tokenizerReady ? `${tokenizerName}/{tokenizer.json, tokenizer_config.json}` : status.missingFiles.slice(0, 3).join(", ");
     throw new Error(`Irodori TTSのFP16モデル一式が揃っていません（不足: ${detail}）。`);
   }
   return resolved.root;
@@ -113,7 +165,10 @@ module.exports = {
   IRODORI_CHUNK_OVERFLOW,
   IRODORI_CHUNK_LENGTH,
   IRODORI_FIRST_CHUNK_LENGTH,
+  IRODORI_VERSIONS,
   MODEL_NAMES,
+  V3_MODEL_NAMES,
+  V4_MODEL_NAMES,
   irodoriModelStatus,
   resolveIrodoriModelDirectory,
   splitIrodoriText,

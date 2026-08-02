@@ -68,6 +68,12 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   assert.equal(state.irodoriSpeed, 1.1);
   assert.equal(state.irodoriVoiceId, "builtin-kohaku");
   assert.equal(state.irodoriSeed, 0);
+  assert.equal(state.irodoriVersion, "v4-small");
+  assert.equal(state.irodoriMode, "reference");
+  assert.match(state.irodoriCaption, /日本語/);
+  assert.equal(state.irodoriAutoEmotion, true);
+  assert.equal(state.irodoriEmotionStrength, "natural");
+  assert.equal(state.irodoriCfgExecution, "sequential");
   assert.equal(state.irodoriModelDirectory, undefined);
   assert.equal(state.irodoriReferenceAudioPath, undefined);
   assert.equal(state.kokoroVoice, "jf_alpha");
@@ -97,6 +103,31 @@ test("new installs enable onboarding and desktop positioning defaults", () => {
   );
   assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].irodoriVoiceId, "builtin-kohaku");
   assert.equal(preferences.data.characterTtsProfiles["towa-avatar"].irodoriVoiceId, "builtin-hiro");
+  for (const profile of Object.values(preferences.data.characterTtsProfiles)) {
+    assert.equal(profile.irodoriVersion, "500m-v3");
+  }
+});
+
+test("built-in Kohaku and Hiro profiles keep the legacy Irodori model unless explicitly changed", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-preferences-irodori-builtins-"));
+  const file = path.join(root, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({
+    irodoriVersion: "v4-small",
+    characterTtsProfiles: {
+      "amber-avatar": { provider: "irodori-webgpu", irodoriVoiceId: "builtin-kohaku" },
+      "towa-avatar": { provider: "irodori-webgpu", irodoriVoiceId: "builtin-hiro" },
+      "custom-avatar": { provider: "irodori-webgpu", irodoriVoiceId: "custom-voice" },
+      "sage-avatar": { provider: "irodori-webgpu", irodoriVoiceId: "builtin-hiro", irodoriVersion: "v4-small" },
+    },
+  }));
+
+  const profiles = new Preferences(file).data.characterTtsProfiles;
+
+  assert.equal(profiles["amber-avatar"].irodoriVersion, "500m-v3");
+  assert.equal(profiles["towa-avatar"].irodoriVersion, "500m-v3");
+  assert.equal(profiles["custom-avatar"].irodoriVersion, "v4-small");
+  assert.equal(profiles["sage-avatar"].irodoriVersion, "v4-small");
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test("preferences migrate legacy click-through and clamp voice countdown delay", () => {
@@ -132,6 +163,28 @@ test("preferences store a separate realtime voice for each character", () => {
   const preferences = new Preferences(file);
   assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].realtimeVoice, "ember");
   assert.equal(preferences.data.characterTtsProfiles["sage-avatar"].realtimeVoice, "sol");
+});
+
+test("preferences retain a character-scoped JP-Extra model and style without exposing the raw model catalog", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({
+    sbv2Models: [{
+      id: "sbv2-example-12345678",
+      fileName: "model.aivmx",
+      name: "Example",
+      modelArchitecture: "ignored",
+      speakers: [{ name: "Speaker", localId: 1, styles: [{ name: "Happy", localId: 4 }] }],
+    }],
+    characterTtsProfiles: {
+      "amber-avatar": { provider: "sbv2-jp-extra", sbv2ModelId: "sbv2-example-12345678", sbv2SpeakerId: 1, sbv2StyleId: 4, sbv2StyleWeight: 1.25 },
+    },
+  }));
+  const preferences = new Preferences(file);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].provider, "sbv2-jp-extra");
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].sbv2StyleId, 4);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].sbv2StyleWeight, 1.25);
+  assert.equal(Object.prototype.hasOwnProperty.call(preferences.publicState(), "sbv2Models"), false);
 });
 
 test("preferences promote the former generated Towa to the bundled character", () => {
@@ -249,11 +302,46 @@ test("preferences restore bounded per-character conversations and work history",
 test("preferences migrate the former Irodori default to Sway 8", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-preferences-"));
   const file = path.join(root, "preferences.json");
-  fs.writeFileSync(file, JSON.stringify({ irodoriSteps: 16 }));
+  fs.writeFileSync(file, JSON.stringify({
+    irodoriSteps: 16,
+    irodoriAutoEmotion: false,
+    irodoriEmotionStrength: "expressive",
+    characterTtsProfiles: {
+      "amber-avatar": { provider: "irodori-webgpu", irodoriAutoEmotion: false, irodoriEmotionStrength: "subtle" },
+    },
+  }));
   const preferences = new Preferences(file);
   const state = preferences.publicState();
   assert.equal(state.irodoriSamplingMode, "sway");
   assert.equal(state.irodoriSteps, 8);
+  assert.equal(state.irodoriAutoEmotion, false);
+  assert.equal(state.irodoriEmotionStrength, "expressive");
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].irodoriAutoEmotion, false);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].irodoriEmotionStrength, "subtle");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("preferences retain Irodori 500M-v3 globally and per character", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-preferences-irodori-v3-"));
+  const file = path.join(root, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({
+    irodoriVersion: "500m-v3",
+    irodoriModelDirectory: "C:/models/irodori-v3",
+    characterTtsProfiles: {
+      "amber-avatar": { provider: "irodori-webgpu", irodoriVersion: "500m-v3" },
+    },
+  }));
+  const preferences = new Preferences(file);
+  assert.equal(preferences.data.irodoriVersion, "500m-v3");
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].irodoriVersion, "500m-v3");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("preferences migrate a pre-version Irodori model folder to 500M-v3", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-preferences-irodori-legacy-"));
+  const file = path.join(root, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({ irodoriModelDirectory: "C:/models/irodori-v3" }));
+  assert.equal(new Preferences(file).data.irodoriVersion, "500m-v3");
   fs.rmSync(root, { recursive: true, force: true });
 });
 

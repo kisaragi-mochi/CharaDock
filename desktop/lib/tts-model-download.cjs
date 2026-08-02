@@ -4,9 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
-const IRODORI_COMMIT = "b75a9bbf2c10e12682d37e91e0efaf6d4e54bd29";
 const PIPER_MODEL_COMMIT = "36b59c825c36bd386b8960cf3f604382f52f2a87";
 const KOKORO_COMMIT = "1939ad2a8e416c0acfeecc08a694d14ef25f2231";
+const IRODORI_500M_V3_COMMIT = "b75a9bbf2c10e12682d37e91e0efaf6d4e54bd29";
+const IRODORI_V4_RELEASE = "v4-small-e4aaac4-webgpu-fp16-r2";
+const IRODORI_V4_RELEASE_BASE = `https://github.com/ochisamu/irodori-tts-v4-webgpu-models/releases/download/${IRODORI_V4_RELEASE}`;
 
 const TTS_MODELS = Object.freeze({
   "piper-plus": Object.freeze({
@@ -56,10 +58,74 @@ const TTS_MODELS = Object.freeze({
       sha256: "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427",
     }),
   }),
+  kokoro: Object.freeze({
+    id: "kokoro",
+    label: "Kokoro 82M · 日本語 WebGPU / CPU",
+    description: "WebGPU推奨FP32とCPU用q8、日本語5音声を含むKokoro ONNXモデルです。",
+    directoryName: "kokoro-82m-v1.0-onnx-ja-fp32-q8",
+    downloadBytes: 420_504_548,
+    sourceUrl: "https://github.com/hexgrad/kokoro",
+    licenseUrl: "https://huggingface.co/hexgrad/Kokoro-82M/blob/main/LICENSE",
+    files: Object.freeze([
+      ["onnx/model.onnx", 325_532_232, "8fbea51ea711f2af382e88c833d9e288c6dc82ce5e98421ea61c058ce21a34cb"],
+      ["onnx/model_quantized.onnx", 92_361_116, "fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478"],
+      ["voices/jf_alpha.bin", 522_240, "56b479360aad9f367aeb8cef908f9201cf48b4555e488c5f4590c9dfcd978bb6"],
+      ["voices/jf_gongitsune.bin", 522_240, "0f1181f3772d27b7c12aaf4bcd71e31b186c4146e330d074a3dc64ee392af396"],
+      ["voices/jf_nezumi.bin", 522_240, "13cb71eebb0b48739d444558322aa35a8c9a489b80e1e631f14d2e6aea93026b"],
+      ["voices/jf_tebukuro.bin", 522_240, "29c6c0561b4288d59639677bebe7533c919743d5ea68d0d2ae992644beea6696"],
+      ["voices/jm_kumo.bin", 522_240, "09e959d239724c734d65661f06f14cdabcddfd476bfaaad905a937099ae9e64f"],
+    ].map(([relativePath, bytes, sha256]) => Object.freeze({
+      name: path.basename(relativePath),
+      relativePath,
+      url: `https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/${KOKORO_COMMIT}/${relativePath}`,
+      bytes,
+      sha256,
+    }))),
+  }),
   "irodori-webgpu": Object.freeze({
     id: "irodori-webgpu",
-    label: "Irodori TTS · FP16 WebGPU",
-    description: "日本語ゼロショット音声合成モデル。GPUで処理し、利用には参照WAV音声が必要です。",
+    label: "Irodori TTS v4 Small · FP16 WebGPU",
+    description: "Voice Designと許諾済み参照音声によるVoice Cloneに対応する日本語WebGPUモデルです。",
+    directoryName: "irodori-tts-v4-small-webgpu-fp16-r2",
+    obsoleteDirectoryNames: Object.freeze([
+      "irodori-tts-v4-small-webgpu-fp16",
+      "irodori-tts-v4-small-webgpu-fp16-r1",
+    ]),
+    downloadBytes: 1_771_099_224,
+    sourceUrl: "https://github.com/ochisamu/irodori-tts-v4-webgpu-models",
+    licenseUrl: "https://github.com/ochisamu/irodori-tts-v4-webgpu-models/blob/main/LICENSES/Irodori-TTS-v4-Small-LICENSE",
+    files: Object.freeze([
+      ["models/caption_projector.onnx", 28_864, "afdaade137950c49c6d8cc7949e9f0426a931837a3d8cc2a87b3f1603ae6d19c"],
+      ["models/caption_projector.onnx.data", 3_473_408, "6158fa8fb816858ad030f77e3d0efc8b781da037c6c72403e4a6d1a2b3341387"],
+      ["models/dacvae_decoder.onnx", 854_956, "28ab7aabdb11f07816c34cb93cd1a7c293427bcc831a832969fccf0ee8f7aab0"],
+      ["models/dacvae_decoder.onnx.data", 166_184_768, "eb3ecfc543eb957e06e9165796014d5c17951bd933d30d76fd00a6eda3b21930"],
+      ["models/dacvae_encoder.onnx", 924_571, "2461ab41da0acf2af30faf3ebfddb80034b8235bf78ca72ca3fea15d7a30be43"],
+      ["models/dacvae_encoder.onnx.data", 54_697_984, "a963ab4f4be69451b04243e0b8ef9b53e3be5d615e09595e5eb83be5b9094489"],
+      ["models/dit_v4.onnx", 2_947_623, "2e631ba1cd63c8ea6d270a94bba70d26f1f4fa5ec4f81796e7bbde9688517918"],
+      ["models/dit_v4.onnx.data", 732_364_800, "2b62b71756aef1efb6d54788c2ad2da21f8f6748d3ae246532914369c865e81d"],
+      ["models/duration.onnx", 272_385, "94f086fae6d17afc2966b16f8c20846a33184af588b47fa7107c94fbdf2c228e"],
+      ["models/duration.onnx.data", 43_581_440, "7b9c9be211665540243cc6960dad6e4eff7cfc0f08a35e04997e01ca2339509e"],
+      ["models/speaker_encoder.onnx", 1_432_778, "69f07c07b1f6447e5e7f89d1c9a4fb179cf1dd9332f16ad8525cbb36e7deb924"],
+      ["models/speaker_encoder.onnx.data", 121_423_872, "8d7fa32a4cdc66ec0463fc4767bd5fd9762efcd8c9ec543558538dbc47745d1e"],
+      ["models/text_backbone.onnx", 3_409_326, "cd50ebf5cc03d24c74b14e0639e8bb7d49b5035a7281b31640fb7b5431d188dd"],
+      ["models/text_backbone.onnx.data", 629_276_672, "ef1d79eee37389e5cba365e3183f5d09150de056da93c30c83a484fc94559f08"],
+      ["models/text_projector.onnx", 28_837, "6e7ec0e2dab4928164d0fc41c9c98abc69ad980009c29e84bcb654fd4d325552"],
+      ["models/text_projector.onnx.data", 3_473_408, "83d7365c6f8d18a31c2cca91501bd93cde032d4171e2b35986d07f65f932b4ed"],
+      ["tokenizer/irodori_v4/tokenizer.json", 6_718_495, "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d"],
+      ["tokenizer/irodori_v4/tokenizer_config.json", 668, "d229a271c64de1a7939d20d3665498e873fa91d5ee2edf135d73ec752cb9c9d3"],
+      ["models/model-config.json", 4_369, "11876f5c11248a261a77b80f2504a4ced51f49691f50942f3a14305ef1cdf97a"],
+    ].map(([relativePath, bytes, sha256]) => Object.freeze({
+      name: path.basename(relativePath),
+      relativePath,
+      url: `${IRODORI_V4_RELEASE_BASE}/${path.basename(relativePath)}`,
+      bytes,
+      sha256,
+    }))),
+  }),
+  "irodori-500m-v3": Object.freeze({
+    id: "irodori-500m-v3",
+    label: "Irodori TTS 500M-v3 · FP16 WebGPU",
+    description: "従来の日本語ゼロショット音声合成モデル。参照音声を使うWebGPU版です。",
     directoryName: "irodori-tts-onnx-fp16",
     downloadBytes: 1_261_860_326,
     sourceUrl: "https://github.com/ngc-shj/irodori-tts-webgpu",
@@ -82,31 +148,7 @@ const TTS_MODELS = Object.freeze({
     ].map(([relativePath, bytes, sha256]) => Object.freeze({
       name: path.basename(relativePath),
       relativePath,
-      url: `https://huggingface.co/noguchis/irodori-tts-onnx/resolve/${IRODORI_COMMIT}/${relativePath}`,
-      bytes,
-      sha256,
-    }))),
-  }),
-  kokoro: Object.freeze({
-    id: "kokoro",
-    label: "Kokoro 82M · 日本語 WebGPU / CPU",
-    description: "WebGPU推奨FP32とCPU用q8、日本語5音声を含むKokoro ONNXモデルです。",
-    directoryName: "kokoro-82m-v1.0-onnx-ja-fp32-q8",
-    downloadBytes: 420_504_548,
-    sourceUrl: "https://github.com/hexgrad/kokoro",
-    licenseUrl: "https://huggingface.co/hexgrad/Kokoro-82M/blob/main/LICENSE",
-    files: Object.freeze([
-      ["onnx/model.onnx", 325_532_232, "8fbea51ea711f2af382e88c833d9e288c6dc82ce5e98421ea61c058ce21a34cb"],
-      ["onnx/model_quantized.onnx", 92_361_116, "fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478"],
-      ["voices/jf_alpha.bin", 522_240, "56b479360aad9f367aeb8cef908f9201cf48b4555e488c5f4590c9dfcd978bb6"],
-      ["voices/jf_gongitsune.bin", 522_240, "0f1181f3772d27b7c12aaf4bcd71e31b186c4146e330d074a3dc64ee392af396"],
-      ["voices/jf_nezumi.bin", 522_240, "13cb71eebb0b48739d444558322aa35a8c9a489b80e1e631f14d2e6aea93026b"],
-      ["voices/jf_tebukuro.bin", 522_240, "29c6c0561b4288d59639677bebe7533c919743d5ea68d0d2ae992644beea6696"],
-      ["voices/jm_kumo.bin", 522_240, "09e959d239724c734d65661f06f14cdabcddfd476bfaaad905a937099ae9e64f"],
-    ].map(([relativePath, bytes, sha256]) => Object.freeze({
-      name: path.basename(relativePath),
-      relativePath,
-      url: `https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/${KOKORO_COMMIT}/${relativePath}`,
+      url: `https://huggingface.co/noguchis/irodori-tts-onnx/resolve/${IRODORI_500M_V3_COMMIT}/${relativePath}`,
       bytes,
       sha256,
     }))),
@@ -205,7 +247,7 @@ class EmbeddedTtsModels {
   cleanupStaleDownloads() {
     try {
       for (const entry of fs.readdirSync(this.baseDirectory, { withFileTypes: true })) {
-        if (entry.isDirectory() && /^\.download-(piper-plus|supertonic-3|irodori-webgpu|kokoro)-\d+$/.test(entry.name)) {
+        if (entry.isDirectory() && /^\.download-(piper-plus|supertonic-3|irodori-webgpu|irodori-500m-v3|kokoro)-\d+$/.test(entry.name)) {
           fs.rmSync(path.join(this.baseDirectory, entry.name), { recursive: true, force: true });
         }
       }
@@ -236,6 +278,22 @@ class EmbeddedTtsModels {
     return { modelDirectory: directory };
   }
 
+  cleanupObsoleteVersions(model) {
+    const removed = [];
+    for (const directoryName of model?.obsoleteDirectoryNames || []) {
+      if (!directoryName || directoryName === model.directoryName || path.basename(directoryName) !== directoryName) continue;
+      const target = path.resolve(this.baseDirectory, directoryName);
+      if (path.dirname(target) !== this.baseDirectory || !fs.existsSync(target)) continue;
+      try {
+        fs.rmSync(target, { recursive: true, force: true });
+        removed.push(directoryName);
+      } catch (error) {
+        console.warn(`旧音声合成モデルを削除できませんでした (${directoryName}): ${error?.message || error}`);
+      }
+    }
+    return removed;
+  }
+
   status(provider) {
     const model = modelForId(provider);
     if (!model) throw new Error("対応していない音声合成モデルです。");
@@ -263,7 +321,10 @@ class EmbeddedTtsModels {
     const model = modelForId(provider);
     if (!model) throw new Error("対応していない音声合成モデルです。");
     if (!this.isSupported(model)) throw new Error(`${model.label}のサンプルはWindows版アプリでダウンロードできます。`);
-    if (this.isInstalled(model.id)) return this.status(model.id);
+    if (this.isInstalled(model.id)) {
+      this.cleanupObsoleteVersions(model);
+      return this.status(model.id);
+    }
     if (this.downloadPromise) {
       if (this.downloadingProvider !== model.id) throw new Error("別の音声合成モデルをダウンロード中です。");
       return this.downloadPromise;
@@ -325,6 +386,7 @@ class EmbeddedTtsModels {
       const destination = this.directoryFor(model);
       if (fs.existsSync(destination)) fs.rmSync(destination, { recursive: true, force: true });
       fs.renameSync(ready, destination);
+      this.cleanupObsoleteVersions(model);
       this.emitProgress(onProgress, model, "done", model.downloadBytes);
       return this.status(model.id);
     } finally {

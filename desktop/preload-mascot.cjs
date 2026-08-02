@@ -481,7 +481,7 @@ window.addEventListener("DOMContentLoaded", () => {
     permissionActions.dataset.permissionType = "";
     bubble.classList.remove("is-permission");
   };
-  const isGeneratedTtsProvider = (provider) => ["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(provider);
+  const isGeneratedTtsProvider = (provider) => ["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro", "sbv2-jp-extra"].includes(provider);
   const showPermission = (result) => {
     clearTimeout(hideTimer);
     stopTtsPlayback();

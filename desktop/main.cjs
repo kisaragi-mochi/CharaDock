@@ -74,10 +74,13 @@ const { EmbeddedSherpaVad } = require("./lib/sherpa-vad.cjs");
 const { supertonicStatus, validateSupertonicDirectory } = require("./lib/supertonic-tts.cjs");
 const { synthesizeSupertonicInWorker } = require("./lib/supertonic-worker-client.cjs");
 const { IRODORI_CHUNK_LENGTH, IRODORI_CHUNK_OVERFLOW, irodoriModelStatus, splitIrodoriText, validateIrodoriModelDirectory } = require("./lib/irodori-webgpu.cjs");
+const { dynamicIrodoriCaption, normalizeIrodoriEmotionStrength } = require("./lib/irodori-caption.cjs");
 const { IrodoriVoiceLibrary } = require("./lib/irodori-voices.cjs");
 const { KOKORO_VOICES, kokoroModelStatus, normalizeKokoroVoice } = require("./lib/kokoro-webgpu.cjs");
 const { EmbeddedTtsModels } = require("./lib/tts-model-download.cjs");
 const { ttsSetupGuidance } = require("./lib/tts-readiness.cjs");
+const { MAX_MODEL_BYTES: MAX_SBV2_MODEL_BYTES, Sbv2ModelLibrary } = require("./lib/sbv2-models.cjs");
+const { Sbv2WorkerClient } = require("./lib/sbv2-worker-client.cjs");
 const { DiagnosticLog, createSupportBundle, diagnosticsAsText, sanitizeDiagnosticValue } = require("./lib/support-diagnostics.cjs");
 const { validateAvatarOutput } = require("../.agents/skills/build-purupuru-avatar/scripts/validate-output.cjs");
 
@@ -178,6 +181,9 @@ let embeddedSherpaOnnx;
 let embeddedSherpaVad;
 let embeddedTtsModels;
 let irodoriVoiceLibrary;
+let sbv2ModelLibrary;
+let sbv2Worker;
+let sbv2RuntimeProgress = null;
 let irodoriWindow;
 let irodoriReadyPromise;
 let resolveIrodoriReady;
@@ -430,7 +436,7 @@ function activeCharacter() {
   return effectiveCharacter(preferences.data.characterId);
 }
 
-const TTS_PROVIDERS = new Set(["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"]);
+const TTS_PROVIDERS = new Set(["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro", "sbv2-jp-extra"]);
 
 function characterTtsSettings(characterId = preferences.data.characterId) {
   const stored = preferences.data.characterTtsProfiles?.[characterId] || {};
@@ -439,10 +445,36 @@ function characterTtsSettings(characterId = preferences.data.characterId) {
       : TTS_PROVIDERS.has(preferences.data.ttsProvider) ? preferences.data.ttsProvider : "system",
     realtimeVoice: normalizeRealtimeVoice(stored.realtimeVoice, normalizeRealtimeVoice(preferences.data.realtimeVoice)),
     irodoriVoiceId: String(stored.irodoriVoiceId || preferences.data.irodoriVoiceId || ""),
+    irodoriVersion: ["500m-v3", "v4-small"].includes(stored.irodoriVersion)
+      ? stored.irodoriVersion
+      : ["500m-v3", "v4-small"].includes(preferences.data.irodoriVersion) ? preferences.data.irodoriVersion : "v4-small",
+    irodoriMode: ["reference", "design"].includes(stored.irodoriMode) ? stored.irodoriMode
+      : ["reference", "design"].includes(preferences.data.irodoriMode) ? preferences.data.irodoriMode : "reference",
+    irodoriCaption: String(stored.irodoriCaption || preferences.data.irodoriCaption || "自然で明瞭な日本語。落ち着いた親しみやすい口調で話す。").slice(0, 1000),
+    irodoriAutoEmotion: typeof stored.irodoriAutoEmotion === "boolean"
+      ? stored.irodoriAutoEmotion : preferences.data.irodoriAutoEmotion !== false,
+    irodoriEmotionStrength: normalizeIrodoriEmotionStrength(stored.irodoriEmotionStrength || preferences.data.irodoriEmotionStrength),
     supertonicVoice: /^[FM][1-5]$/.test(String(stored.supertonicVoice || ""))
       ? String(stored.supertonicVoice) : preferences.data.supertonicVoice || "F1",
     kokoroVoice: normalizeKokoroVoice(stored.kokoroVoice || preferences.data.kokoroVoice),
+    sbv2ModelId: String(stored.sbv2ModelId || preferences.data.sbv2ModelId || ""),
+    sbv2SpeakerId: Math.max(0, Math.min(255, Math.round(Number(stored.sbv2SpeakerId ?? preferences.data.sbv2SpeakerId) || 0))),
+    sbv2StyleId: Math.max(0, Math.min(255, Math.round(Number(stored.sbv2StyleId ?? preferences.data.sbv2StyleId) || 0))),
+    sbv2StyleWeight: Number.isFinite(Number(stored.sbv2StyleWeight ?? preferences.data.sbv2StyleWeight))
+      ? Math.max(0, Math.min(2, Number(stored.sbv2StyleWeight ?? preferences.data.sbv2StyleWeight))) : 1,
   };
+}
+
+function activeSbv2Model(characterId = preferences.data.characterId) {
+  const settings = characterTtsSettings(characterId);
+  return sbv2ModelLibrary?.selectedModel(preferences.data.sbv2Models, settings.sbv2ModelId) || null;
+}
+
+function validSbv2VoiceSelection(model, speakerId, styleId) {
+  const speakers = Array.isArray(model?.speakers) ? model.speakers : [];
+  const speaker = speakers.find((item) => item.localId === Number(speakerId)) || speakers[0] || null;
+  const style = speaker?.styles?.find((item) => item.localId === Number(styleId)) || speaker?.styles?.[0] || null;
+  return { speakerId: speaker?.localId ?? 0, styleId: style?.localId ?? 0 };
 }
 
 function activeIrodoriVoice(characterId = preferences.data.characterId) {
@@ -453,6 +485,20 @@ function activeIrodoriVoice(characterId = preferences.data.characterId) {
 function activeIrodoriVoicePath(characterId = preferences.data.characterId) {
   const voice = activeIrodoriVoice(characterId);
   return voice ? irodoriVoiceLibrary.voicePath(voice) : "";
+}
+
+function activeIrodoriModelDirectory(characterId = preferences.data.characterId) {
+  return characterTtsSettings(characterId).irodoriVersion === "v4-small"
+    ? preferences.data.irodoriV4ModelDirectory
+    : preferences.data.irodoriModelDirectory;
+}
+
+function activeIrodoriStatus(webgpuAvailable = irodoriWebGpuAvailable, characterId = preferences.data.characterId) {
+  const settings = characterTtsSettings(characterId);
+  return irodoriModelStatus(activeIrodoriModelDirectory(characterId), activeIrodoriVoicePath(characterId), webgpuAvailable, {
+    version: settings.irodoriVersion,
+    mode: settings.irodoriMode,
+  });
 }
 
 
@@ -804,6 +850,8 @@ function publicAppState() {
   const characterTts = characterTtsSettings();
   const irodoriVoice = activeIrodoriVoice();
   const irodoriVoicePath = irodoriVoice ? irodoriVoiceLibrary.voicePath(irodoriVoice) : "";
+  const sbv2Model = activeSbv2Model();
+  const sbv2Selection = validSbv2VoiceSelection(sbv2Model, characterTts.sbv2SpeakerId, characterTts.sbv2StyleId);
   return {
     ...preferences.publicState(),
     ttsProvider: characterTts.provider,
@@ -811,11 +859,23 @@ function publicAppState() {
     supertonicVoice: characterTts.supertonicVoice,
     kokoroVoice: characterTts.kokoroVoice,
     irodoriVoiceId: irodoriVoice?.id || "",
+    irodoriVersion: characterTts.irodoriVersion,
+    irodoriMode: characterTts.irodoriMode,
+    irodoriCaption: characterTts.irodoriCaption,
+    irodoriAutoEmotion: characterTts.irodoriAutoEmotion,
+    irodoriEmotionStrength: characterTts.irodoriEmotionStrength,
+    sbv2ModelId: sbv2Model?.id || "",
+    sbv2SpeakerId: sbv2Selection.speakerId,
+    sbv2StyleId: sbv2Selection.styleId,
+    sbv2StyleWeight: characterTts.sbv2StyleWeight,
     characterTts: {
       characterId: preferences.data.characterId,
       characterName: activeCharacter().name,
       ...characterTts,
       irodoriVoiceId: irodoriVoice?.id || "",
+      sbv2ModelId: sbv2Model?.id || "",
+      sbv2SpeakerId: sbv2Selection.speakerId,
+      sbv2StyleId: sbv2Selection.styleId,
     },
     interactionMode: preferences.data.interactionMode === "work" ? "work" : "chat",
     conversationHistory: conversationHistory.map((entry) => ({ ...entry })),
@@ -850,16 +910,28 @@ function publicAppState() {
       sampleModel: embeddedTtsModels?.status("supertonic-3") || null,
     },
     irodori: {
-      ...irodoriModelStatus(preferences.data.irodoriModelDirectory, irodoriVoicePath, irodoriWebGpuAvailable),
+      ...activeIrodoriStatus(irodoriWebGpuAvailable),
       voices: irodoriVoiceLibrary?.publicVoices(preferences.data.irodoriVoices, irodoriVoice?.id || "") || [],
       voiceId: irodoriVoice?.id || "",
       sampleModel: embeddedTtsModels?.status("irodori-webgpu") || null,
+      v3SampleModel: embeddedTtsModels?.status("irodori-500m-v3") || null,
     },
     kokoro: {
       ...kokoroModelStatus(preferences.data.kokoroModelDirectory, kokoroWebGpuAvailable),
       voices: KOKORO_VOICES,
       voice: characterTts.kokoroVoice,
       sampleModel: embeddedTtsModels?.status("kokoro") || null,
+    },
+    sbv2: {
+      models: sbv2ModelLibrary?.publicModels(preferences.data.sbv2Models, sbv2Model?.id || "") || [],
+      modelId: sbv2Model?.id || "",
+      speakerId: sbv2Selection.speakerId,
+      styleId: sbv2Selection.styleId,
+      styleWeight: characterTts.sbv2StyleWeight,
+      speed: preferences.data.sbv2Speed,
+      device: preferences.data.sbv2Device,
+      ready: Boolean(sbv2Model && sbv2ModelLibrary?.isReady(sbv2Model)),
+      runtimeProgress: sbv2RuntimeProgress,
     },
     generationInProgress,
     codexAvailable: Boolean(codexCommand),
@@ -953,6 +1025,7 @@ async function supportDiagnostics() {
       supertonic3: { ready: Boolean(state.supertonic?.ready), sampleInstalled: Boolean(state.supertonic?.sampleModel?.installed) },
       irodori: { ready: Boolean(state.irodori?.ready), webgpu: state.irodori?.webgpuAvailable, sampleInstalled: Boolean(state.irodori?.sampleModel?.installed) },
       kokoro: { ready: Boolean(state.kokoro?.ready), webgpu: state.kokoro?.webgpuAvailable, sampleInstalled: Boolean(state.kokoro?.sampleModel?.installed) },
+      sbv2JpExtra: { ready: Boolean(state.sbv2?.ready), configuredDevice: state.sbv2?.device, modelCount: state.sbv2?.models?.length || 0 },
     },
     displays: (state.displays || []).map((display) => ({ label: display.label, primary: display.primary })),
   };
@@ -1849,11 +1922,12 @@ async function runSmokeTest() {
   const controlInterruptReady = await controlWindow.webContents.executeJavaScript("Boolean(document.querySelector('#stopButton'))");
   if (!String(controlTitle).includes("CharaDock") || !mascotCanvas || !controlInterruptReady) throw new Error("renderer smoke check failed");
   const ttsDownloadUiReady = await controlWindow.webContents.executeJavaScript(`[
-    'piperPlusModelDownloadButton', 'supertonicModelDownloadButton', 'kokoroModelDownloadButton', 'irodoriModelDownloadButton',
-    'piperPlusModelDownloadProgress', 'supertonicModelDownloadProgress', 'kokoroModelDownloadProgress', 'irodoriModelDownloadProgress'
+    'piperPlusModelDownloadButton', 'supertonicModelDownloadButton', 'kokoroModelDownloadButton', 'irodoriModelDownloadButton', 'irodoriV3ModelDownloadButton',
+    'piperPlusModelDownloadProgress', 'supertonicModelDownloadProgress', 'kokoroModelDownloadProgress', 'irodoriModelDownloadProgress', 'irodoriV3ModelDownloadProgress',
+    'irodoriVersionSelect'
   ].every((id) => Boolean(document.getElementById(id)))`);
   if (!ttsDownloadUiReady) throw new Error("TTS model download controls check failed");
-  for (const provider of ["piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"]) {
+  for (const provider of ["piper-plus", "supertonic-3", "kokoro", "irodori-webgpu", "irodori-500m-v3"]) {
     const model = embeddedTtsModels.status(provider);
     const expectedSupported = provider !== "piper-plus" || process.platform === "win32";
     if (!model.label || !model.downloadBytes || model.supported !== expectedSupported) throw new Error(`TTS model manifest check failed: ${provider}`);
@@ -2274,6 +2348,11 @@ async function runSmokeTest() {
       document.querySelector('#kokoroDeviceSelect') &&
       document.querySelector('#irodoriModelButton') &&
       document.querySelector('#irodoriReferenceButton') &&
+      document.querySelector('#irodoriModeSelect') &&
+      document.querySelector('#irodoriCaptionInput') &&
+      document.querySelector('#irodoriAutoEmotionToggle') &&
+      document.querySelector('#irodoriEmotionStrengthSelect') &&
+      document.querySelector('#irodoriCfgExecutionSelect') &&
       document.querySelector('#englishPronunciationToggle') &&
       document.querySelector('#englishPronunciationDictionaryInput') &&
       document.querySelectorAll('input[name="mascotPointerMode"]').length === 3 &&
@@ -2676,11 +2755,23 @@ async function synthesizeIrodoriSegment(text) {
     }, 600_000);
     pendingIrodoriRequests.set(requestId, { resolve, reject, timer });
   });
+  const characterTts = characterTtsSettings();
+  const caption = characterTts.irodoriVersion === "v4-small"
+    ? dynamicIrodoriCaption(characterTts.irodoriCaption, text, {
+      enabled: characterTts.irodoriAutoEmotion,
+      strength: characterTts.irodoriEmotionStrength,
+    })
+    : { caption: "", emotion: "neutral" };
   window.webContents.send("irodori:synthesize", {
     requestId,
     text,
-    modelDirectory: preferences.data.irodoriModelDirectory,
+    modelDirectory: activeIrodoriModelDirectory(),
     referenceAudioPath: activeIrodoriVoicePath(),
+    version: characterTts.irodoriVersion,
+    mode: characterTts.irodoriMode,
+    caption: caption.caption,
+    emotion: caption.emotion,
+    cfgExecution: preferences.data.irodoriCfgExecution,
     numSteps: preferences.data.irodoriSteps,
     tScheduleMode: preferences.data.irodoriSamplingMode,
     seed: preferences.data.irodoriSeed,
@@ -2734,9 +2825,9 @@ function cancelIrodoriTtsStream(streamId, ownerId) {
 }
 
 async function synthesizeIrodoriTts(text, ownerId = 0) {
-  const status = irodoriModelStatus(preferences.data.irodoriModelDirectory, activeIrodoriVoicePath(), irodoriWebGpuAvailable);
+  const status = activeIrodoriStatus();
   if (!status.modelReady) throw new Error("Irodori TTSのFP16モデルフォルダーを選択してください。");
-  if (!status.referenceReady) throw new Error("Irodori TTSの参照音声を追加してください。");
+  if (status.referenceRequired && !status.referenceReady) throw new Error("Irodori TTSの参照音声を追加してください。");
   const chunks = splitIrodoriText(text);
   if (!chunks.length) return { audioDataUrls: [], playbackRate: preferences.data.irodoriSpeed };
   const firstAudio = await synthesizeIrodoriSegment(chunks[0]);
@@ -2752,13 +2843,17 @@ function scheduleIrodoriPrewarm(delayMs = 3000) {
   clearTimeout(irodoriPrewarmTimer);
   if (!preferences?.data.ttsEnabled || characterTtsSettings().provider !== "irodori-webgpu") return;
   const referenceAudioPath = activeIrodoriVoicePath();
-  if (!irodoriModelStatus(preferences.data.irodoriModelDirectory, referenceAudioPath).ready) return;
+  if (!activeIrodoriStatus(null).ready) return;
   irodoriPrewarmTimer = setTimeout(async () => {
     try {
       const window = await ensureIrodoriWindow();
       window.webContents.send("irodori:prewarm", {
-        modelDirectory: preferences.data.irodoriModelDirectory,
+        modelDirectory: activeIrodoriModelDirectory(),
         referenceAudioPath,
+        version: characterTtsSettings().irodoriVersion,
+        mode: characterTtsSettings().irodoriMode,
+        caption: characterTtsSettings().irodoriCaption,
+        cfgExecution: preferences.data.irodoriCfgExecution,
         numSteps: preferences.data.irodoriSteps,
         tScheduleMode: preferences.data.irodoriSamplingMode,
         seed: preferences.data.irodoriSeed,
@@ -2779,7 +2874,11 @@ async function convertIrodoriReference(sourcePath) {
     }, 120_000);
     pendingIrodoriConversions.set(requestId, { resolve, reject, timer });
   });
-  window.webContents.send("irodori:convertReference", { requestId, sourcePath });
+  window.webContents.send("irodori:convertReference", {
+    requestId,
+    sourcePath,
+    version: characterTtsSettings().irodoriVersion,
+  });
   return result;
 }
 
@@ -2858,9 +2957,37 @@ async function synthesizeKokoroTts(text) {
   return { audioDataUrls };
 }
 
+async function synthesizeSbv2Tts(text) {
+  const characterTts = characterTtsSettings();
+  const model = activeSbv2Model();
+  if (!model || !sbv2ModelLibrary.isReady(model)) {
+    throw new Error(mainText(
+      "Style-Bert-VITS2 JP-ExtraのAIVMXモデルを追加してください。",
+      "Add a Style-Bert-VITS2 JP-Extra AIVMX model first.",
+    ));
+  }
+  const selection = validSbv2VoiceSelection(model, characterTts.sbv2SpeakerId, characterTts.sbv2StyleId);
+  const audioDataUrls = [];
+  let actualDevice = "";
+  for (const sentence of splitTtsText(String(text || ""))) {
+    const result = await sbv2Worker.synthesize({
+      text: sentence,
+      modelPath: sbv2ModelLibrary.modelPath(model),
+      speakerId: selection.speakerId,
+      styleId: selection.styleId,
+      styleWeight: characterTts.sbv2StyleWeight,
+      speed: preferences.data.sbv2Speed,
+      device: preferences.data.sbv2Device,
+    });
+    if (result.audioDataUrl) audioDataUrls.push(result.audioDataUrl);
+    actualDevice = result.device || actualDevice;
+  }
+  return { audioDataUrls, device: actualDevice };
+}
+
 function synthesizeConfiguredTts(text, ownerId = 0) {
   const characterTts = characterTtsSettings();
-  if (!preferences.data.ttsEnabled || !["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(characterTts.provider)) {
+  if (!preferences.data.ttsEnabled || !["style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro", "sbv2-jp-extra"].includes(characterTts.provider)) {
     return Promise.resolve({ audioDataUrls: [] });
   }
   const spokenText = configuredSpeechText(text);
@@ -2870,9 +2997,11 @@ function synthesizeConfiguredTts(text, ownerId = 0) {
     : characterTts.provider === "supertonic-3"
       ? supertonicStatus(preferences.data.supertonicModelDirectory)
       : characterTts.provider === "irodori-webgpu"
-        ? irodoriModelStatus(preferences.data.irodoriModelDirectory, activeIrodoriVoicePath(), irodoriWebGpuAvailable)
+        ? activeIrodoriStatus()
         : characterTts.provider === "kokoro"
           ? kokoroModelStatus(preferences.data.kokoroModelDirectory, kokoroWebGpuAvailable)
+          : characterTts.provider === "sbv2-jp-extra"
+            ? { ready: Boolean(activeSbv2Model()) }
           : null;
   const setupGuidance = setupStatus ? ttsSetupGuidance(characterTts.provider, setupStatus, interfaceLanguage()) : "";
   if (setupGuidance) return Promise.reject(new Error(setupGuidance));
@@ -2895,6 +3024,7 @@ function synthesizeConfiguredTts(text, ownerId = 0) {
   }
   if (characterTts.provider === "irodori-webgpu") return synthesizeIrodoriTts(spokenText, ownerId);
   if (characterTts.provider === "kokoro") return synthesizeKokoroTts(spokenText);
+  if (characterTts.provider === "sbv2-jp-extra") return synthesizeSbv2Tts(spokenText);
   return synthesizeStyleBertVits2({
     text: spokenText,
     url: preferences.data.styleBertVits2Url,
@@ -3491,7 +3621,7 @@ function registerIpc() {
     const previousDisplayId = String(preferences.data.preferredDisplayId || "");
     const requestedDisplayId = String(patch?.preferredDisplayId || "");
     const displayId = screen.getAllDisplays().some((display) => String(display.id) === requestedDisplayId) ? requestedDisplayId : "";
-    const ttsProvider = ["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
+    const ttsProvider = ["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro", "sbv2-jp-extra"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
     const styleBertVits2Url = String(patch?.styleBertVits2Url || preferences.data.styleBertVits2Url || "http://localhost:5000").trim().slice(0, 300);
     if (ttsProvider === "style-bert-vits2") styleBertVoiceEndpoint(styleBertVits2Url);
     const speechInputProvider = ["realtime", "sherpa-onnx", "browser", "openai"].includes(patch?.speechInputProvider)
@@ -3511,14 +3641,34 @@ function registerIpc() {
     const requestedIrodoriVoiceId = String(patch?.irodoriVoiceId || "");
     const irodoriVoiceId = preferences.data.irodoriVoices.some((voice) => voice.id === requestedIrodoriVoiceId)
       ? requestedIrodoriVoiceId : activeIrodoriVoice(activeCharacterId)?.id || "";
+    const irodoriVersion = ["500m-v3", "v4-small"].includes(patch?.irodoriVersion)
+      ? patch.irodoriVersion : characterTtsSettings(activeCharacterId).irodoriVersion;
+    const irodoriMode = ["reference", "design"].includes(patch?.irodoriMode) ? patch.irodoriMode : "reference";
+    const irodoriCaption = String(patch?.irodoriCaption || "自然で明瞭な日本語。落ち着いた親しみやすい口調で話す。").trim().slice(0, 1000);
+    const irodoriAutoEmotion = patch?.irodoriAutoEmotion !== false;
+    const irodoriEmotionStrength = normalizeIrodoriEmotionStrength(patch?.irodoriEmotionStrength);
     const kokoroVoice = normalizeKokoroVoice(patch?.kokoroVoice || characterTtsSettings(activeCharacterId).kokoroVoice);
     const realtimeVoice = normalizeRealtimeVoice(patch?.realtimeVoice || characterTtsSettings(activeCharacterId).realtimeVoice);
+    const requestedSbv2ModelId = String(patch?.sbv2ModelId || "");
+    const sbv2Model = sbv2ModelLibrary.selectedModel(preferences.data.sbv2Models, requestedSbv2ModelId || characterTtsSettings(activeCharacterId).sbv2ModelId);
+    const sbv2Selection = validSbv2VoiceSelection(sbv2Model, patch?.sbv2SpeakerId, patch?.sbv2StyleId);
+    const sbv2StyleWeight = Number.isFinite(Number(patch?.sbv2StyleWeight))
+      ? Math.max(0, Math.min(2, Number(patch.sbv2StyleWeight))) : 1;
     const characterTtsProfiles = updatedCharacterTtsProfiles(activeCharacterId, {
       provider: ttsProvider,
       realtimeVoice,
       supertonicVoice,
       irodoriVoiceId,
+      irodoriVersion,
+      irodoriMode,
+      irodoriCaption,
+      irodoriAutoEmotion,
+      irodoriEmotionStrength,
       kokoroVoice,
+      sbv2ModelId: sbv2Model?.id || "",
+      sbv2SpeakerId: sbv2Selection.speakerId,
+      sbv2StyleId: sbv2Selection.styleId,
+      sbv2StyleWeight,
     });
     const allowed = {
       language: ["ja", "en"].includes(patch?.language) ? patch.language : interfaceLanguage(),
@@ -3547,13 +3697,25 @@ function registerIpc() {
       supertonicSpeed: Math.min(2, Math.max(.5, Number(patch?.supertonicSpeed) || 1)),
       supertonicSteps: Math.min(20, Math.max(2, Math.round(Number(patch?.supertonicSteps) || 8))),
       irodoriVoiceId,
+      irodoriVersion,
+      irodoriMode,
+      irodoriCaption,
+      irodoriAutoEmotion,
+      irodoriEmotionStrength,
       irodoriSpeed: Math.min(2, Math.max(.5, Number(patch?.irodoriSpeed) || 1)),
       irodoriSteps: Math.min(40, Math.max(4, Math.round(Number(patch?.irodoriSteps) || 8))),
       irodoriSamplingMode: ["linear", "sway"].includes(patch?.irodoriSamplingMode) ? patch.irodoriSamplingMode : "sway",
       irodoriSeed: Math.min(2147483647, Math.max(0, Math.round(Number(patch?.irodoriSeed) || 0))),
+      irodoriCfgExecution: ["sequential", "batched"].includes(patch?.irodoriCfgExecution) ? patch.irodoriCfgExecution : "sequential",
       kokoroVoice,
       kokoroSpeed: Math.min(2, Math.max(.5, Number(patch?.kokoroSpeed) || 1)),
       kokoroDevice: ["auto", "webgpu", "wasm"].includes(patch?.kokoroDevice) ? patch.kokoroDevice : "auto",
+      sbv2ModelId: sbv2Model?.id || "",
+      sbv2SpeakerId: sbv2Selection.speakerId,
+      sbv2StyleId: sbv2Selection.styleId,
+      sbv2StyleWeight,
+      sbv2Speed: Math.min(2, Math.max(.5, Number(patch?.sbv2Speed) || 1)),
+      sbv2Device: ["auto", "webgpu", "cpu"].includes(patch?.sbv2Device) ? patch.sbv2Device : "auto",
       englishPronunciationEnabled: patch?.englishPronunciationEnabled !== false,
       englishPronunciationDictionary: String(patch?.englishPronunciationDictionary || "").slice(0, 12_000),
       speechInputProvider,
@@ -3649,6 +3811,10 @@ function registerIpc() {
     } else if (normalizedProvider === "supertonic-3") {
       preferences.patch({ supertonicModelDirectory: status.modelDirectory });
     } else if (normalizedProvider === "irodori-webgpu") {
+      preferences.patch({ irodoriV4ModelDirectory: status.modelDirectory });
+      destroyIrodoriWindow();
+      scheduleIrodoriPrewarm();
+    } else if (normalizedProvider === "irodori-500m-v3") {
       preferences.patch({ irodoriModelDirectory: status.modelDirectory });
       destroyIrodoriWindow();
       scheduleIrodoriPrewarm();
@@ -3657,12 +3823,15 @@ function registerIpc() {
       destroyKokoroWindow();
     }
     const result = publicAppState();
-    controlWindow?.webContents.send("tts:modelProgress", result[{
+    const progressState = result[{
       "piper-plus": "piperPlus",
       "supertonic-3": "supertonic",
       "irodori-webgpu": "irodori",
+      "irodori-500m-v3": "irodori",
       kokoro: "kokoro",
-    }[normalizedProvider]]?.sampleModel);
+    }[normalizedProvider]];
+    controlWindow?.webContents.send("tts:modelProgress", normalizedProvider === "irodori-500m-v3"
+      ? progressState?.v3SampleModel : progressState?.sampleModel);
     broadcastAppState();
     return result;
   });
@@ -3679,6 +3848,9 @@ function registerIpc() {
     } else if (normalizedProvider === "supertonic-3") {
       if (preferences.data.supertonicModelDirectory === managedPaths.modelDirectory) preferences.patch({ supertonicModelDirectory: "" });
     } else if (normalizedProvider === "irodori-webgpu") {
+      if (preferences.data.irodoriV4ModelDirectory === managedPaths.modelDirectory) preferences.patch({ irodoriV4ModelDirectory: "" });
+      destroyIrodoriWindow();
+    } else if (normalizedProvider === "irodori-500m-v3") {
       if (preferences.data.irodoriModelDirectory === managedPaths.modelDirectory) preferences.patch({ irodoriModelDirectory: "" });
       destroyIrodoriWindow();
     } else if (normalizedProvider === "kokoro") {
@@ -3726,13 +3898,17 @@ function registerIpc() {
   });
   ipcMain.handle("tts:irodoriChooseModel", async (event) => {
     assertTrustedSender(event);
+    const version = characterTtsSettings().irodoriVersion;
+    const versionLabel = version === "500m-v3" ? "Irodori TTS 500M-v3" : "Irodori TTS v4 Small";
     const result = await dialog.showOpenDialog(controlWindow, {
-      title: mainText("Irodori TTSのモデルフォルダーを選択", "Choose the Irodori TTS model folder"),
+      title: mainText(`${versionLabel}のモデルフォルダーを選択`, `Choose the ${versionLabel} model folder`),
       properties: ["openDirectory"],
     });
     if (result.canceled || !result.filePaths[0]) return publicAppState();
-    const modelDirectory = validateIrodoriModelDirectory(result.filePaths[0]);
-    preferences.patch({ irodoriModelDirectory: modelDirectory });
+    const modelDirectory = validateIrodoriModelDirectory(result.filePaths[0], version);
+    preferences.patch(version === "500m-v3"
+      ? { irodoriModelDirectory: modelDirectory }
+      : { irodoriV4ModelDirectory: modelDirectory });
     destroyIrodoriWindow();
     scheduleIrodoriPrewarm();
     return publicAppState();
@@ -3798,6 +3974,58 @@ function registerIpc() {
       },
     ]));
     preferences.patch({ irodoriVoices: voices, irodoriVoiceId: fallback, characterTtsProfiles: profiles });
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:sbv2ChooseModel", async (event) => {
+    assertTrustedSender(event);
+    const result = await dialog.showOpenDialog(controlWindow, {
+      title: mainText("Style-Bert-VITS2 JP-ExtraのAIVMXモデルを追加", "Add a Style-Bert-VITS2 JP-Extra AIVMX model"),
+      properties: ["openFile"],
+      filters: [{ name: "AIVMX", extensions: ["aivmx"] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return publicAppState();
+    const sourcePath = path.resolve(result.filePaths[0]);
+    const sourceStat = fs.statSync(sourcePath);
+    if (!sourceStat.isFile() || path.extname(sourcePath).toLowerCase() !== ".aivmx" || sourceStat.size <= 0 || sourceStat.size > MAX_SBV2_MODEL_BYTES) {
+      throw new Error(mainText("2GB以内のAIVMXモデルを選択してください。", "Choose an AIVMX model no larger than 2 GB."));
+    }
+    const manifest = await sbv2Worker.inspect(sourcePath);
+    const imported = await sbv2ModelLibrary.importAivmx(sourcePath, manifest, preferences.data.sbv2Models);
+    const selection = validSbv2VoiceSelection(imported.record, 0, 0);
+    preferences.patch({
+      sbv2Models: imported.models,
+      sbv2ModelId: imported.record.id,
+      sbv2SpeakerId: selection.speakerId,
+      sbv2StyleId: selection.styleId,
+      characterTtsProfiles: updatedCharacterTtsProfiles(preferences.data.characterId, {
+        sbv2ModelId: imported.record.id,
+        sbv2SpeakerId: selection.speakerId,
+        sbv2StyleId: selection.styleId,
+      }),
+    });
+    sbv2Worker.release().catch(() => {});
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:sbv2RenameModel", (event, payload = {}) => {
+    assertTrustedSender(event);
+    const models = sbv2ModelLibrary.rename(preferences.data.sbv2Models, String(payload.id || ""), payload.name);
+    preferences.patch({ sbv2Models: models });
+    broadcastAppState();
+    return publicAppState();
+  });
+  ipcMain.handle("tts:sbv2RemoveModel", (event, modelId) => {
+    assertTrustedSender(event);
+    const id = String(modelId || "");
+    const models = sbv2ModelLibrary.remove(preferences.data.sbv2Models, id);
+    const fallback = sbv2ModelLibrary.selectedModel(models, "")?.id || "";
+    const profiles = Object.fromEntries(Object.entries(preferences.data.characterTtsProfiles || {}).map(([characterId, profile]) => [
+      characterId,
+      profile.sbv2ModelId === id ? { ...profile, sbv2ModelId: fallback, sbv2SpeakerId: 0, sbv2StyleId: 0 } : profile,
+    ]));
+    preferences.patch({ sbv2Models: models, sbv2ModelId: fallback, sbv2SpeakerId: 0, sbv2StyleId: 0, characterTtsProfiles: profiles });
+    sbv2Worker.release().catch(() => {});
     broadcastAppState();
     return publicAppState();
   });
@@ -5269,6 +5497,14 @@ async function boot() {
   });
   embeddedSherpaVad = new EmbeddedSherpaVad(path.join(app.getPath("userData"), "sherpa-onnx-models"));
   embeddedTtsModels = new EmbeddedTtsModels(path.join(app.getPath("userData"), "tts-models"));
+  sbv2ModelLibrary = new Sbv2ModelLibrary(path.join(app.getPath("userData"), "sbv2-models"));
+  sbv2Worker = new Sbv2WorkerClient({
+    cacheDirectory: path.join(app.getPath("userData"), "sbv2-cache"),
+    onProgress: (progress) => {
+      sbv2RuntimeProgress = progress;
+      controlWindow?.webContents.send("tts:sbv2Progress", progress);
+    },
+  });
   cleanupStaleTemporaryInputs();
   if (process.argv.includes("--smoke-test")) preferences.patch({ onboardingComplete: false });
   localServer = new MascotStaticServer(projectRoot);
@@ -5350,6 +5586,7 @@ app.on("before-quit", () => {
   if (browserWindow && !browserWindow.isDestroyed()) browserWindow.destroy();
   destroyIrodoriWindow();
   destroyKokoroWindow();
+  sbv2Worker?.stop();
   localServer?.stop();
 });
 
