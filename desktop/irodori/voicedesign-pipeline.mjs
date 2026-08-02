@@ -179,6 +179,13 @@ export function findTrailingUtteranceCutoff(audio, sampleRate, {
   return audio.length;
 }
 
+export function shouldTrimTrailingUtterance(textValue) {
+  const normalized = normalizeText(textValue).trim();
+  if (!normalized || /[、，,；;：:…（）()［］\[\]「」『』]/u.test(normalized)) return false;
+  const spokenCharacters = [...normalized.replace(/[\s。．.!！?？"'“”‘’]/gu, "")].length;
+  return spokenCharacters > 0 && spokenCharacters <= 12;
+}
+
 function fadeAudioTail(audio, sampleRate, fadeMs = 30) {
   const result = Float32Array.from(audio);
   const fadeSamples = Math.min(result.length, Math.max(1, Math.round(sampleRate * fadeMs / 1000)));
@@ -670,7 +677,7 @@ export class IrodoriVoiceDesignTTS {
     const maxSamples = trimmedSequenceLength * VOICEDESIGN_CONFIG.hopLength;
     let audio = decoded.length > maxSamples ? decoded.slice(0, maxSamples) : decoded;
     let trailingUtteranceTrimmed = false;
-    if (options.trimTrailingUtterance === true) {
+    if (options.trimTrailingUtterance === true && shouldTrimTrailingUtterance(textValue)) {
       const cutoff = findTrailingUtteranceCutoff(audio, VOICEDESIGN_CONFIG.sampleRate, {
         windowMs: options.utteranceWindowMs ?? 40,
         minSilenceMs: options.utteranceSilenceMs ?? 480,

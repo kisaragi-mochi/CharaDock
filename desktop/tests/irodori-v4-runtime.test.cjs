@@ -76,7 +76,7 @@ test("Irodori v4 runtime trims at the first official-style near-zero latent wind
 });
 
 test("Irodori v4 removes an unrelated utterance after a long silent gap", async () => {
-  const { findTrailingUtteranceCutoff } = await import(pathToFileURL(path.join(__dirname, "..", "irodori", "voicedesign-pipeline.mjs")).href);
+  const { findTrailingUtteranceCutoff, shouldTrimTrailingUtterance } = await import(pathToFileURL(path.join(__dirname, "..", "irodori", "voicedesign-pipeline.mjs")).href);
   const sampleRate = 1000;
   const repeated = new Float32Array(3000);
   repeated.fill(0.5, 400, 1000);
@@ -90,4 +90,10 @@ test("Irodori v4 removes an unrelated utterance after a long silent gap", async 
   const trailingSilence = new Float32Array(3000);
   trailingSilence.fill(0.5, 400, 1000);
   assert.equal(findTrailingUtteranceCutoff(trailingSilence, sampleRate), trailingSilence.length);
+
+  assert.equal(shouldTrimTrailingUtterance("音声テストです。"), true);
+  assert.equal(shouldTrimTrailingUtterance("これからよろしくね。"), true);
+  assert.equal(shouldTrimTrailingUtterance("最高33℃、最低27℃。"), false);
+  assert.equal(shouldTrimTrailingUtterance("午後に少し雨が降る見込みです。"), false);
+  assert.equal(shouldTrimTrailingUtterance("折りたたみ傘と熱中症対策があると安心だよ。"), false);
 });
