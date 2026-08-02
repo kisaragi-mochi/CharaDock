@@ -183,7 +183,7 @@ export function shouldTrimTrailingUtterance(textValue) {
   const normalized = normalizeText(textValue).trim();
   if (!normalized || /[、，,；;：:…（）()［］\[\]「」『』]/u.test(normalized)) return false;
   const spokenCharacters = [...normalized.replace(/[\s。．.!！?？"'“”‘’]/gu, "")].length;
-  return spokenCharacters > 0 && spokenCharacters <= 12;
+  return spokenCharacters > 0;
 }
 
 function fadeAudioTail(audio, sampleRate, fadeMs = 30) {

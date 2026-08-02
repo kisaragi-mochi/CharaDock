@@ -94,6 +94,6 @@ test("Irodori v4 removes an unrelated utterance after a long silent gap", async 
   assert.equal(shouldTrimTrailingUtterance("音声テストです。"), true);
   assert.equal(shouldTrimTrailingUtterance("これからよろしくね。"), true);
   assert.equal(shouldTrimTrailingUtterance("最高33℃、最低27℃。"), false);
-  assert.equal(shouldTrimTrailingUtterance("午後に少し雨が降る見込みです。"), false);
-  assert.equal(shouldTrimTrailingUtterance("折りたたみ傘と熱中症対策があると安心だよ。"), false);
+  assert.equal(shouldTrimTrailingUtterance("午後に少し雨が降る見込みです。"), true);
+  assert.equal(shouldTrimTrailingUtterance("折りたたみ傘と熱中症対策があると安心だよ。"), true);
 });
