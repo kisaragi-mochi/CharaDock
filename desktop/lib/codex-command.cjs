@@ -34,11 +34,15 @@ function npmCodexBinaryCandidates(commandPath, arch = process.arch) {
   const directory = path.win32.dirname(String(commandPath || ""));
   const platformPackage = arch === "arm64" ? "codex-win32-arm64" : "codex-win32-x64";
   const target = arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
-  const relativeBinary = path.win32.join("vendor", target, "bin", "codex.exe");
-  return [
-    path.win32.join(directory, "node_modules", "@openai", "codex", "node_modules", "@openai", platformPackage, relativeBinary),
-    path.win32.join(directory, "node_modules", "@openai", platformPackage, relativeBinary),
+  const packageRoots = [
+    path.win32.join(directory, "node_modules", "@openai", "codex", "node_modules", "@openai", platformPackage),
+    path.win32.join(directory, "node_modules", "@openai", platformPackage),
   ];
+  const relativeBinaries = [
+    path.win32.join("vendor", target, "bin", "codex.exe"),
+    path.win32.join("vendor", target, "codex", "codex.exe"),
+  ];
+  return packageRoots.flatMap((root) => relativeBinaries.map((relative) => path.win32.join(root, relative)));
 }
 
 function resolveNpmCodexBinary(commandPath, { arch = process.arch, exists = fs.existsSync } = {}) {
@@ -117,6 +121,15 @@ async function resolveCodexCommand({
     if (npmBinary) return npmBinary;
   }
 
+  const npmShims = env.APPDATA
+    ? ["codex.cmd", "codex.ps1", "codex"].map((name) => path.win32.join(env.APPDATA, "npm", name))
+    : [];
+  for (const candidate of npmShims) {
+    if (!exists(candidate)) continue;
+    const npmBinary = resolveNpmCodexBinary(candidate, { arch, exists });
+    if (npmBinary) return npmBinary;
+  }
+
   const localCandidates = [
     env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, "Programs", "Codex", "resources", "codex.exe"),
     env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, "Codex", "resources", "codex.exe"),
@@ -134,7 +147,12 @@ async function resolveCodexCommand({
   ].join(" ");
   const appxCandidate = await runCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
   if (appxCandidate && exists(appxCandidate)) {
-    return cacheDirectory ? cacheBinary(appxCandidate, cacheDirectory) : appxCandidate;
+    if (!cacheDirectory) return appxCandidate;
+    try {
+      return cacheBinary(appxCandidate, cacheDirectory);
+    } catch {
+      return "";
+    }
   }
   // Do not return the bare command on Windows. npm installs both a POSIX `codex`
   // shim and `codex.cmd`; spawning the former from Electron fails with ENOENT.

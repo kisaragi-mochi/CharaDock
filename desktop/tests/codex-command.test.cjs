@@ -130,6 +130,32 @@ test("Codex command supports the npm ARM64 package layout", async () => {
   assert.equal(command, native);
 });
 
+test("Codex command supports the current nested npm binary layout", async () => {
+  const shim = "C:\\Users\\test\\AppData\\Roaming\\npm\\codex.cmd";
+  const native = npmCodexBinaryCandidates(shim, "x64").find((candidate) => candidate.endsWith("\\codex\\codex.exe"));
+  const command = await resolveCodexCommand({
+    platform: "win32",
+    arch: "x64",
+    env: { CODEX_CLI_PATH: shim },
+    exists: (candidate) => candidate === shim || candidate === native,
+  });
+  assert.equal(command, native);
+});
+
+test("Codex command finds a user npm installation when PATH omits it", async () => {
+  const appData = "C:\\Users\\test\\AppData\\Roaming";
+  const shim = `${appData}\\npm\\codex.cmd`;
+  const native = npmCodexBinaryCandidates(shim, "x64").find((candidate) => candidate.endsWith("\\codex\\codex.exe"));
+  const command = await resolveCodexCommand({
+    platform: "win32",
+    arch: "x64",
+    env: { APPDATA: appData },
+    exists: (candidate) => candidate === shim || candidate === native,
+    runCommand: async () => "",
+  });
+  assert.equal(command, native);
+});
+
 test("Codex command discovers the Windows Store Codex app binary", async () => {
   const appxPath = "C:\\Program Files\\WindowsApps\\OpenAI.Codex_1\\app\\resources\\codex.exe";
   const calls = [];
@@ -162,6 +188,19 @@ test("Codex command caches the protected Windows Store binary", async () => {
   });
   assert.equal(command, "C:\\Users\\test\\CharaDock\\bin\\codex.exe");
   assert.deepEqual(copied, { source: appxPath, directory: "C:\\Users\\test\\CharaDock\\bin" });
+});
+
+test("Codex command remains available when the protected Store binary cannot be cached", async () => {
+  const appxPath = "C:\\Program Files\\WindowsApps\\OpenAI.Codex_1\\app\\resources\\codex.exe";
+  const command = await resolveCodexCommand({
+    platform: "win32",
+    env: {},
+    exists: (candidate) => candidate === appxPath,
+    runCommand: async (name) => name === "powershell.exe" ? appxPath : "",
+    cacheDirectory: "C:\\Users\\test\\CharaDock\\bin",
+    cacheBinary: () => { throw new Error("access denied"); },
+  });
+  assert.equal(command, "");
 });
 
 test("Codex command reports an unavailable Windows installation", async () => {
