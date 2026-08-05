@@ -49,6 +49,19 @@ function isWindowsExecutable(candidate) {
   return path.win32.extname(String(candidate || "")).toLowerCase() === ".exe";
 }
 
+function macCodexCandidates(env = process.env) {
+  const home = String(env.HOME || "");
+  return [
+    "/Applications/Codex.app/Contents/Resources/codex",
+    home && path.posix.join(home, "Applications", "Codex.app", "Contents", "Resources", "codex"),
+    "/opt/homebrew/bin/codex",
+    "/usr/local/bin/codex",
+    home && path.posix.join(home, ".local", "bin", "codex"),
+    home && path.posix.join(home, ".npm-global", "bin", "codex"),
+    home && path.posix.join(home, "Library", "pnpm", "codex"),
+  ].filter(Boolean);
+}
+
 function resolveWslCodexCommand({
   platform = process.platform,
   env = process.env,
@@ -83,10 +96,15 @@ async function resolveCodexCommand({
   cacheBinary = cacheAppxBinary,
 } = {}) {
   if (env.CODEX_CLI_PATH) {
-    if (platform !== "win32") return env.CODEX_CLI_PATH;
+    if (platform !== "win32" && exists(env.CODEX_CLI_PATH)) return env.CODEX_CLI_PATH;
     if (isWindowsExecutable(env.CODEX_CLI_PATH) && exists(env.CODEX_CLI_PATH)) return env.CODEX_CLI_PATH;
     const explicitNpmBinary = resolveNpmCodexBinary(env.CODEX_CLI_PATH, { arch, exists });
     if (explicitNpmBinary) return explicitNpmBinary;
+  }
+  if (platform === "darwin") {
+    const pathCandidate = String(await runCommand("/usr/bin/which", ["codex"]) || "").split(/\r?\n/)[0].trim();
+    if (pathCandidate && exists(pathCandidate)) return pathCandidate;
+    return macCodexCandidates(env).find((candidate) => exists(candidate)) || "";
   }
   if (platform !== "win32") return "codex";
 
@@ -127,6 +145,7 @@ async function resolveCodexCommand({
 
 module.exports = {
   cacheAppxBinary,
+  macCodexCandidates,
   npmCodexBinaryCandidates,
   resolveCodexCommand,
   resolveNpmCodexBinary,

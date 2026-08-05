@@ -3,11 +3,45 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  macCodexCandidates,
   npmCodexBinaryCandidates,
   resolveCodexCommand,
   resolveWslCodexCommand,
   windowsPathToWsl,
 } = require("../lib/codex-command.cjs");
+
+test("macOS packaged apps discover Codex Desktop outside the Finder PATH", async () => {
+  const desktop = "/Applications/Codex.app/Contents/Resources/codex";
+  const command = await resolveCodexCommand({
+    platform: "darwin",
+    env: { HOME: "/Users/test", PATH: "/usr/bin:/bin" },
+    exists: (candidate) => candidate === desktop,
+    runCommand: async () => "",
+  });
+  assert.equal(command, desktop);
+  assert.equal(macCodexCandidates({ HOME: "/Users/test" }).includes("/opt/homebrew/bin/codex"), true);
+});
+
+test("macOS packaged apps discover an npm or Homebrew Codex CLI", async () => {
+  const homebrew = "/opt/homebrew/bin/codex";
+  const command = await resolveCodexCommand({
+    platform: "darwin",
+    env: { HOME: "/Users/test" },
+    exists: (candidate) => candidate === homebrew,
+    runCommand: async () => "",
+  });
+  assert.equal(command, homebrew);
+});
+
+test("macOS reports an unavailable Codex installation instead of spawning a missing bare command", async () => {
+  const command = await resolveCodexCommand({
+    platform: "darwin",
+    env: { HOME: "/Users/test" },
+    exists: () => false,
+    runCommand: async () => "",
+  });
+  assert.equal(command, "");
+});
 
 test("Windows work folders and the bundled WSL Codex binary map to Linux paths", () => {
   assert.equal(windowsPathToWsl("C:\\Users\\test\\Downloads\\project"), "/mnt/c/Users/test/Downloads/project");
