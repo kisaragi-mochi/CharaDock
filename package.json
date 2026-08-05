@@ -17,7 +17,7 @@
     "dist": "electron-builder --dir",
     "dist:win": "electron-builder --win --dir",
     "dist:win:installer": "electron-builder --win nsis portable",
-    "dist:mac:arm64": "electron-builder --mac --arm64 dmg zip"
+    "dist:mac:arm64": "electron-builder --mac dmg zip --arm64"
   },
   "devDependencies": {
     "electron": "43.1.1",
