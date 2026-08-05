@@ -61,7 +61,7 @@ test("Beatrice integration packages only CharaDock's host helper", () => {
   }]);
   assert.deepEqual(packageJson.build.mac.target, ["dmg", "zip"]);
   assert.equal(packageJson.build.mac.icon, "app-icon.png");
-  assert.match(packageJson.scripts["dist:mac:arm64"], /--mac dmg zip --arm64/);
+  assert.match(packageJson.scripts["dist:mac:arm64"], /--mac dmg zip --arm64 --publish never/);
   assert.ok(packageJson.build.win.files.some((entry) => entry.includes("/darwin/")));
   assert.ok(packageJson.build.mac.files.some((entry) => entry.includes("/win32/")));
   assert.equal(packageJson.build.files.some((entry) => /onnxruntime-node\/bin\/napi-v6\/(?:darwin|linux|win32)/.test(entry)), false);
