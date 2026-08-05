@@ -67,6 +67,7 @@
   let onboardingWasOpen = false;
   let onboardingFocusReturn = null;
   let lastDiagnostics = null;
+  let dismissedUpdateVersion = "";
   let motionPreviewTimer = 0;
   const motionFields = [
     "avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown",
@@ -92,6 +93,7 @@
     { page: "desktop", target: "#mascotWindowCard", ja: "ウィンドウの位置とサイズ", en: "Window position and size", detailJa: "モニター、表示、位置を調整", detailEn: "Adjust display, visibility, and position", keywords: "monitor display size position モニター" },
     { page: "desktop", target: ".shortcut-card", ja: "キーボードショートカット", en: "Keyboard shortcuts", detailJa: "すばやく表示と操作を切り替える", detailEn: "Quickly toggle display and interaction", keywords: "keyboard hotkey ctrl key" },
     { page: "support", target: "#reopenOnboardingButton", ja: "初回セットアップ", en: "Initial setup", detailJa: "セットアップをもう一度行う", detailEn: "Run guided setup again", keywords: "onboarding wizard reset setup", popular: true },
+    { page: "support", target: ".support-update-card", ja: "アプリのアップデート", en: "App updates", detailJa: "最新版とプレリリースを確認", detailEn: "Check stable and prerelease versions", keywords: "update release version beta 最新 バージョン", popular: true },
     { page: "support", target: ".support-diagnostics-card", ja: "診断とログ", en: "Diagnostics and logs", detailJa: "不具合調査用の情報をまとめる", detailEn: "Collect troubleshooting information", keywords: "support log zip gpu error サポート" },
   ]);
   let settingsSearchMatches = [];
@@ -1150,6 +1152,63 @@
     $("#supportTtsSummary").textContent = state.ttsEnabled ? (ttsNames[state.ttsProvider] || state.ttsProvider) : localized("読み上げOFF", "Read-aloud off");
   }
 
+  function readableReleaseNotes(value) {
+    return String(value || "")
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
+      .replace(/^#{1,6}\s*/gm, "")
+      .replace(/^[-*]\s+/gm, "• ")
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+      .slice(0, 700);
+  }
+
+  function syncUpdateUi() {
+    if (!state) return;
+    const update = state.appUpdate || { status: "idle", currentVersion: "", channel: state.updateChannel || "stable" };
+    const statusLabels = {
+      idle: localized("未確認", "Not checked"),
+      checking: localized("確認中", "Checking"),
+      current: localized("最新版", "Up to date"),
+      available: localized("更新あり", "Update available"),
+      error: localized("確認失敗", "Check failed"),
+    };
+    const badge = $("#updateStatusBadge");
+    badge.textContent = statusLabels[update.status] || statusLabels.idle;
+    badge.classList.toggle("is-current", update.status === "current");
+    badge.classList.toggle("is-available", update.status === "available");
+    badge.classList.toggle("is-error", update.status === "error");
+    $("#updateCurrentVersion").textContent = update.currentVersion ? `v${update.currentVersion}` : "—";
+    $("#updateLatestVersion").textContent = update.latestVersion ? `v${update.latestVersion}` : "—";
+    $("#updateChecksToggle").checked = state.updateChecksEnabled !== false;
+    $("#updateChannelSelect").value = state.updateChannel === "beta" ? "beta" : "stable";
+    const checkButton = $("#checkUpdatesButton");
+    checkButton.disabled = update.status === "checking";
+    checkButton.textContent = update.status === "checking" ? localized("確認しています…", "Checking…") : localized("今すぐ確認", "Check now");
+    const openButton = $("#openUpdateReleaseButton");
+    openButton.hidden = update.status !== "available";
+    const notes = readableReleaseNotes(update.releaseNotes);
+    $("#updateReleaseNotes").textContent = update.status === "available"
+      ? notes || localized(`${update.releaseName || `v${update.latestVersion}`}が公開されています。`, `${update.releaseName || `v${update.latestVersion}`} is available.`)
+      : update.status === "current"
+        ? localized("現在のCharaDockは最新版です。", "This CharaDock installation is up to date.")
+        : update.status === "error"
+          ? update.error || localized("最新版を確認できませんでした。", "Could not check for updates.")
+          : localized("「今すぐ確認」でGitHub Releasesを確認できます。", "Choose Check now to query GitHub Releases.");
+    $("#updatePackageHint").textContent = update.packageKind === "portable"
+      ? localized("ポータブル版では、新しいEXEをダウンロードして置き換えてください。設定とモデルはそのまま引き継がれます。", "For the portable edition, download the new EXE and replace the old one. Settings and models remain available.")
+      : update.packageKind === "installer"
+        ? localized("インストーラー版では、リリース画面から新しいSetupを実行すると現在の設定を保ったまま更新できます。", "For the installed edition, run the new Setup from the release page to update while keeping current settings.")
+        : localized("開発版では更新の有無だけを確認します。", "Development builds only check whether a release is available.");
+    const banner = $("#updateBanner");
+    const showBanner = update.status === "available" && update.latestVersion !== dismissedUpdateVersion;
+    banner.hidden = !showBanner;
+    if (showBanner) {
+      $("#updateBannerTitle").textContent = localized("新しいバージョンがあります", "A new version is available");
+      $("#updateBannerDetail").textContent = `CharaDock v${update.latestVersion}`;
+    }
+  }
+
   async function refreshSupportDiagnostics() {
     const button = $("#refreshDiagnosticsButton");
     button.disabled = true;
@@ -1431,6 +1490,7 @@
       : state.backend === "codex" ? "アカウント確認中" : state.hasApiKey ? "APIキー設定済み" : "APIキー未設定";
     $("#connectionPill").classList.toggle("is-error", state.backend === "openai" && !state.hasApiKey);
     setStatus($("#chatStatus"), state.backend === "codex" ? "Codex app-serverを使用します。" : "OpenAI Responses APIを使用します。");
+    syncUpdateUi();
     syncOnboarding();
   }
 
@@ -1566,6 +1626,8 @@
       voiceAutoSend: $("#voiceAutoSendToggle").checked,
       voiceAutoSendCountdown: $("#voiceAutoSendCountdownToggle").checked,
       voiceAutoSendDelayMs: Number($("#voiceAutoSendDelaySelect").value),
+      updateChecksEnabled: $("#updateChecksToggle").checked,
+      updateChannel: $("#updateChannelSelect").value,
       positionLocked: $("#positionLockedToggle").checked,
       edgeSnap: $("#edgeSnapToggle").checked,
       preferredDisplayId: $("#displaySelect").value,
@@ -2156,6 +2218,10 @@
       state = nextState;
       syncUi();
     });
+    api.onUpdateStatus?.((update) => {
+      state.appUpdate = update;
+      syncUpdateUi();
+    });
     api.onBeatriceSettingsChanged?.((payload) => {
       closeRealtimeAudio();
       const message = payload?.message || "Beatrice 2の設定変更を反映するためLive接続を終了しました。";
@@ -2409,6 +2475,32 @@
     }));
     ["#languageSelect", "#alwaysOnTopToggle", "#launchAtLoginToggle", "#ttsToggle", "#englishPronunciationToggle", "#positionLockedToggle", "#edgeSnapToggle"]
       .forEach((selector) => $(selector).addEventListener("change", saveSettings));
+    ["#updateChecksToggle", "#updateChannelSelect"].forEach((selector) => $(selector).addEventListener("change", () => {
+      saveSettings().catch((error) => {
+        state.appUpdate = { ...(state.appUpdate || {}), status: "error", error: error.message };
+        syncUpdateUi();
+      });
+    }));
+    $("#checkUpdatesButton").addEventListener("click", async () => {
+      try {
+        state.appUpdate = { ...(state.appUpdate || {}), status: "checking" };
+        syncUpdateUi();
+        state.appUpdate = await api.checkForUpdates();
+      } catch (error) {
+        state.appUpdate = { ...(state.appUpdate || {}), status: "error", error: error.message };
+      }
+      syncUpdateUi();
+    });
+    const openUpdateRelease = () => api.openUpdateRelease().catch((error) => {
+      state.appUpdate = { ...(state.appUpdate || {}), status: "error", error: error.message };
+      syncUpdateUi();
+    });
+    $("#openUpdateReleaseButton").addEventListener("click", openUpdateRelease);
+    $("#updateBannerOpenButton").addEventListener("click", openUpdateRelease);
+    $("#updateBannerDismissButton").addEventListener("click", () => {
+      dismissedUpdateVersion = state.appUpdate?.latestVersion || "";
+      syncUpdateUi();
+    });
     $$('input[name="mascotPointerMode"]').forEach((input) => input.addEventListener("change", saveSettings));
     $("#ttsProviderSelect").addEventListener("change", () => {
       $("#styleBertVits2Settings").hidden = $("#ttsProviderSelect").value !== "style-bert-vits2";

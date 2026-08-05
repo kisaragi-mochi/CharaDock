@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   startCodexLogin: () => ipcRenderer.invoke("codex:login"),
   logoutCodex: () => ipcRenderer.invoke("codex:logout"),
   completeOnboarding: (complete) => ipcRenderer.invoke("onboarding:complete", complete),
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
+  openUpdateRelease: () => ipcRenderer.invoke("updates:openRelease"),
   getDiagnostics: () => ipcRenderer.invoke("support:getDiagnostics"),
   copyDiagnostics: () => ipcRenderer.invoke("support:copyDiagnostics"),
   exportSupportBundle: () => ipcRenderer.invoke("support:exportBundle"),
@@ -91,6 +93,11 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("app:stateChanged", listener);
     return () => ipcRenderer.removeListener("app:stateChanged", listener);
+  },
+  onUpdateStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("updates:status", listener);
+    return () => ipcRenderer.removeListener("updates:status", listener);
   },
   onCodexRealtime: (callback) => {
     const listener = (_event, payload) => callback(payload);

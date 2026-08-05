@@ -130,6 +130,20 @@ test("setup can be rerun and support diagnostics stay separate from private cont
   assert.doesNotMatch(main.match(/async function supportDiagnostics\(\)[\s\S]*?\n}\n/)?.[0] || "", /conversationHistory|characterMemories|workHistory/);
 });
 
+test("app updates use the trusted GitHub release flow without automatic execution", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  const preload = fs.readFileSync(path.join(projectRoot, "desktop", "preload-control.cjs"), "utf8");
+  const main = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8");
+  for (const id of ["updateBanner", "updateChecksToggle", "updateChannelSelect", "checkUpdatesButton", "openUpdateReleaseButton"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(preload, /updates:check/);
+  assert.match(preload, /updates:openRelease/);
+  assert.match(main, /checkForAppUpdate/);
+  assert.match(main, /shell\.openExternal\(url/);
+  assert.doesNotMatch(main, /autoUpdater|quitAndInstall/);
+});
+
 test("settings conversation stays text-only and character voice routing is explicit", () => {
   const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
   assert.doesNotMatch(html, /id="(?:micLipSyncButton|speechInputButton|speechInputMode|micMeter)"/);

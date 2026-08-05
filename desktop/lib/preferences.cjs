@@ -84,6 +84,9 @@ const DEFAULTS = Object.freeze({
   voiceAutoSend: true,
   voiceAutoSendCountdown: true,
   voiceAutoSendDelayMs: 1500,
+  updateChecksEnabled: true,
+  updateChannel: "stable",
+  updateLastCheckedAt: "",
   onboardingComplete: false,
   positionLocked: false,
   edgeSnap: true,
@@ -235,6 +238,9 @@ class Preferences {
       this.data.clickThrough = this.data.mascotPointerMode === "click-through";
       if (typeof this.data.voiceAutoSendCountdown !== "boolean") this.data.voiceAutoSendCountdown = true;
       this.data.voiceAutoSendDelayMs = Math.min(5000, Math.max(600, Math.round(Number(this.data.voiceAutoSendDelayMs) || 1500)));
+      if (typeof this.data.updateChecksEnabled !== "boolean") this.data.updateChecksEnabled = true;
+      if (!["stable", "beta"].includes(this.data.updateChannel)) this.data.updateChannel = "stable";
+      this.data.updateLastCheckedAt = typeof this.data.updateLastCheckedAt === "string" ? this.data.updateLastCheckedAt.slice(0, 40) : "";
       if (typeof this.data.englishPronunciationEnabled !== "boolean") this.data.englishPronunciationEnabled = true;
       if (typeof this.data.englishPronunciationDictionary !== "string") this.data.englishPronunciationDictionary = "";
       this.data.englishPronunciationDictionary = this.data.englishPronunciationDictionary.slice(0, 12_000);

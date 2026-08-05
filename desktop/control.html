@@ -41,6 +41,12 @@
     </aside>
 
     <main class="main-panel">
+      <aside id="updateBanner" class="update-banner" aria-live="polite" hidden>
+        <span class="ui-symbol ui-symbol-sparkle" aria-hidden="true"></span>
+        <div><strong id="updateBannerTitle">新しいバージョンがあります</strong><small id="updateBannerDetail"></small></div>
+        <button id="updateBannerOpenButton" class="button button-primary" type="button">更新内容を見る</button>
+        <button id="updateBannerDismissButton" class="update-banner-dismiss" type="button" aria-label="閉じる"><span class="ui-symbol ui-symbol-close" aria-hidden="true"></span></button>
+      </aside>
       <section class="page is-active" data-page-panel="chat">
         <header class="page-header">
           <div><p class="eyebrow">会話</p><h1>キャラクターと話す</h1></div>
@@ -617,6 +623,24 @@
         <header class="page-header"><div><p class="eyebrow">サポート</p><h1>セットアップと診断</h1></div></header>
         <p class="page-lead">初期設定を見直したり、不具合調査に必要な端末情報を安全にまとめたりできます。</p>
         <div class="support-grid">
+          <section class="card settings-card support-update-card">
+            <header><div><h2>アプリのアップデート</h2><p>GitHub Releasesで最新版を確認します。更新は公式リリース画面を開いて行います。</p></div><span id="updateStatusBadge" class="update-status-badge">未確認</span></header>
+            <div class="update-version-row">
+              <div><small>現在</small><strong id="updateCurrentVersion">—</strong></div>
+              <span aria-hidden="true">→</span>
+              <div><small>最新</small><strong id="updateLatestVersion">—</strong></div>
+            </div>
+            <p id="updateReleaseNotes" class="update-release-notes">「今すぐ確認」でGitHub Releasesを確認できます。</p>
+            <div class="update-preferences">
+              <label class="switch-row"><span><strong>起動時に自動確認</strong><small>バックグラウンドで確認し、更新がある場合だけお知らせします</small></span><input id="updateChecksToggle" type="checkbox" checked /><i></i></label>
+              <label>更新チャンネル<select id="updateChannelSelect"><option value="stable">Stable</option><option value="beta">Beta（プレリリースを含む）</option></select></label>
+            </div>
+            <div class="support-actions">
+              <button id="checkUpdatesButton" class="button button-secondary" type="button">今すぐ確認</button>
+              <button id="openUpdateReleaseButton" class="button button-primary" type="button" hidden>更新内容を見る <span class="ui-symbol ui-symbol-external" aria-hidden="true"></span></button>
+            </div>
+            <small id="updatePackageHint" class="update-package-hint"></small>
+          </section>
           <section class="card settings-card support-setup-card">
             <header><div><h2>初回セットアップ</h2><p>現在の設定を保ったまま、AI接続・キャラクター・マイク・読み上げを順番に確認します。</p></div></header>
             <div class="support-readiness-list">

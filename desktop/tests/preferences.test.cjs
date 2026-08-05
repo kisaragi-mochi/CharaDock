@@ -259,6 +259,22 @@ test("preferences persist and sanitize English pronunciation settings", () => {
   assert.equal(sanitized.englishPronunciationDictionary, "");
 });
 
+test("preferences keep safe app update settings", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  fs.writeFileSync(file, JSON.stringify({ updateChecksEnabled: false, updateChannel: "beta", updateLastCheckedAt: "2026-08-06T01:02:03.000Z" }));
+  const preferences = new Preferences(file).publicState();
+  assert.equal(preferences.updateChecksEnabled, false);
+  assert.equal(preferences.updateChannel, "beta");
+  assert.equal(preferences.updateLastCheckedAt, "2026-08-06T01:02:03.000Z");
+
+  fs.writeFileSync(file, JSON.stringify({ updateChecksEnabled: "yes", updateChannel: "nightly", updateLastCheckedAt: { unsafe: true } }));
+  const sanitized = new Preferences(file).publicState();
+  assert.equal(sanitized.updateChecksEnabled, true);
+  assert.equal(sanitized.updateChannel, "stable");
+  assert.equal(sanitized.updateLastCheckedAt, "");
+});
+
 test("preferences migrate the former Codex model to chat and work", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");

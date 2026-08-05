@@ -92,6 +92,7 @@ const { ttsSetupGuidance } = require("./lib/tts-readiness.cjs");
 const { MAX_MODEL_BYTES: MAX_SBV2_MODEL_BYTES, Sbv2ModelLibrary } = require("./lib/sbv2-models.cjs");
 const { Sbv2WorkerClient } = require("./lib/sbv2-worker-client.cjs");
 const { DiagnosticLog, createSupportBundle, diagnosticsAsText, sanitizeDiagnosticValue } = require("./lib/support-diagnostics.cjs");
+const { RELEASES_PAGE_URL, checkForAppUpdate } = require("./lib/app-update.cjs");
 const { validateAvatarOutput } = require("../.agents/skills/build-purupuru-avatar/scripts/validate-output.cjs");
 
 // Local TTS often completes several seconds after the click that requested it,
@@ -213,6 +214,9 @@ const pendingKokoroRequests = new Map();
 let controlWindow;
 let mascotWindow;
 let tray;
+let appUpdateStatus = null;
+let appUpdateCheckPromise = null;
+let appUpdateCheckTimer = null;
 let cursorTimer;
 let quitting = false;
 let saveBoundsTimer;
@@ -372,6 +376,76 @@ function interfaceLanguage() {
 
 function mainText(japanese, english) {
   return interfaceLanguage() === "en" ? english : japanese;
+}
+
+function appPackageKind() {
+  if (!app.isPackaged) return "development";
+  return process.env.PORTABLE_EXECUTABLE_FILE ? "portable" : "installer";
+}
+
+function publicAppUpdateStatus() {
+  const status = appUpdateStatus || {};
+  return {
+    status: ["idle", "checking", "current", "available", "error"].includes(status.status) ? status.status : "idle",
+    currentVersion: app.getVersion(),
+    latestVersion: String(status.latestVersion || status.version || "").slice(0, 80),
+    releaseName: String(status.releaseName || status.name || "").slice(0, 160),
+    releaseNotes: String(status.releaseNotes || status.notes || "").slice(0, 4000),
+    releaseUrl: String(status.releaseUrl || RELEASES_PAGE_URL).slice(0, 500),
+    publishedAt: String(status.publishedAt || "").slice(0, 40),
+    checkedAt: String(status.checkedAt || preferences?.data?.updateLastCheckedAt || "").slice(0, 40),
+    error: String(status.error || "").slice(0, 300),
+    channel: preferences?.data?.updateChannel === "beta" ? "beta" : "stable",
+    checksEnabled: preferences?.data?.updateChecksEnabled !== false,
+    packageKind: appPackageKind(),
+  };
+}
+
+function publishAppUpdateStatus() {
+  const status = publicAppUpdateStatus();
+  controlWindow?.webContents.send("updates:status", status);
+  return status;
+}
+
+async function checkAppUpdate({ manual = false } = {}) {
+  if (!manual && preferences.data.updateChecksEnabled === false) return publishAppUpdateStatus();
+  if (appUpdateCheckPromise) return appUpdateCheckPromise;
+  appUpdateStatus = { status: "checking", checkedAt: preferences.data.updateLastCheckedAt };
+  publishAppUpdateStatus();
+  appUpdateCheckPromise = (async () => {
+    try {
+      const result = await checkForAppUpdate({
+        currentVersion: app.getVersion(),
+        channel: preferences.data.updateChannel,
+        signal: AbortSignal.timeout(10_000),
+      });
+      appUpdateStatus = {
+        ...result,
+        latestVersion: result.version,
+        releaseName: result.name,
+        releaseNotes: result.notes,
+      };
+      preferences.patch({ updateLastCheckedAt: result.checkedAt });
+      diagnosticLog?.write("info", "update-check-completed", { status: result.status, latestVersion: result.version, channel: result.channel });
+    } catch (error) {
+      diagnosticLog?.write("warn", "update-check-failed", error?.message || String(error));
+      appUpdateStatus = {
+        status: "error",
+        checkedAt: new Date().toISOString(),
+        error: mainText("最新版を確認できませんでした。時間をおいて再試行してください。", "Could not check for updates. Try again later."),
+      };
+    } finally {
+      appUpdateCheckPromise = null;
+    }
+    return publishAppUpdateStatus();
+  })();
+  return appUpdateCheckPromise;
+}
+
+function scheduleAppUpdateCheck() {
+  clearTimeout(appUpdateCheckTimer);
+  if (preferences.data.updateChecksEnabled === false || process.argv.includes("--smoke-test")) return;
+  appUpdateCheckTimer = setTimeout(() => checkAppUpdate().catch(() => {}), 2500);
 }
 
 function workModeInstructions() {
@@ -915,6 +989,7 @@ function publicAppState() {
   const sbv2Selection = validSbv2VoiceSelection(sbv2Model, characterTts.sbv2SpeakerId, characterTts.sbv2StyleId);
   return {
     ...preferences.publicState(),
+    appUpdate: publicAppUpdateStatus(),
     ttsProvider: characterTts.provider,
     realtimeVoice: characterTts.realtimeVoice,
     realtimeVoiceConversion: characterTts.realtimeVoiceConversion,
@@ -3877,6 +3952,8 @@ function registerIpc() {
     const previousMouseFollow = Boolean(preferences.data.mouseFollow);
     const previousPointerMode = normalizeMascotPointerMode(preferences.data.mascotPointerMode);
     const previousDisplayId = String(preferences.data.preferredDisplayId || "");
+    const previousUpdateChecksEnabled = preferences.data.updateChecksEnabled !== false;
+    const previousUpdateChannel = preferences.data.updateChannel === "beta" ? "beta" : "stable";
     const requestedDisplayId = String(patch?.preferredDisplayId || "");
     const displayId = screen.getAllDisplays().some((display) => String(display.id) === requestedDisplayId) ? requestedDisplayId : "";
     const ttsProvider = ["system", "style-bert-vits2", "piper-plus", "supertonic-3", "irodori-webgpu", "kokoro", "sbv2-jp-extra"].includes(patch?.ttsProvider) ? patch.ttsProvider : "system";
@@ -4007,11 +4084,16 @@ function registerIpc() {
       voiceAutoSend: patch?.voiceAutoSend !== false,
       voiceAutoSendCountdown: patch?.voiceAutoSendCountdown !== false,
       voiceAutoSendDelayMs: Math.min(5000, Math.max(600, Math.round(Number(patch?.voiceAutoSendDelayMs) || 1500))),
+      updateChecksEnabled: patch?.updateChecksEnabled !== false,
+      updateChannel: patch?.updateChannel === "beta" ? "beta" : "stable",
       positionLocked: Boolean(patch?.positionLocked),
       edgeSnap: Boolean(patch?.edgeSnap),
       preferredDisplayId: displayId,
     };
     preferences.patch(allowed);
+    if (allowed.updateChannel !== previousUpdateChannel) appUpdateStatus = null;
+    if (allowed.updateChecksEnabled && (!previousUpdateChecksEnabled || allowed.updateChannel !== previousUpdateChannel)) scheduleAppUpdateCheck();
+    if (!allowed.updateChecksEnabled) clearTimeout(appUpdateCheckTimer);
     const nextRealtimeSettings = characterTtsSettings(activeCharacterId);
     const realtimeSettingKeys = [
       "realtimeVoice", "realtimeVoiceConversion", "beatriceModelId", "beatriceVoiceId",
@@ -4323,6 +4405,17 @@ function registerIpc() {
     assertTrustedSender(event);
     preferences.patch({ onboardingComplete: Boolean(complete) });
     return publicAppState();
+  });
+  ipcMain.handle("updates:check", async (event) => {
+    assertTrustedSender(event);
+    return checkAppUpdate({ manual: true });
+  });
+  ipcMain.handle("updates:openRelease", async (event) => {
+    assertTrustedSender(event);
+    const update = publicAppUpdateStatus();
+    const url = update.releaseUrl.startsWith(`${RELEASES_PAGE_URL}/tag/`) ? update.releaseUrl : RELEASES_PAGE_URL;
+    await shell.openExternal(url, { activate: true });
+    return { opened: true, url };
   });
   ipcMain.handle("support:getDiagnostics", async (event) => {
     assertTrustedSender(event);
@@ -5833,6 +5926,7 @@ async function boot() {
   registerShortcuts();
   startCursorLoop();
   scheduleIrodoriPrewarm();
+  scheduleAppUpdateCheck();
   const syncDisplays = () => {
     if (!controlWindow || controlWindow.isDestroyed()) return;
     controlWindow.webContents.send("app:stateChanged", publicAppState());
@@ -5863,6 +5957,7 @@ else {
 app.on("window-all-closed", () => {});
 app.on("activate", showControlWindow);
 app.on("before-quit", () => {
+  clearTimeout(appUpdateCheckTimer);
   diagnosticLog?.write("info", "app-stop");
   quitting = true;
   clearInterval(cursorTimer);
