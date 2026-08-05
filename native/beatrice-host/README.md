@@ -32,10 +32,11 @@ cmake --install build/beatrice-host-macos-arm64 --prefix native/bin
 lipo -archs native/bin/charadock-beatrice-host
 ```
 
-The `CharaDock Beatrice macOS arm64 host` workflow performs the same build and
-publishes an unsigned `.tar.gz` workflow artifact. The archive preserves the
-executable bit; extract its executable into `native/bin/` for source execution.
-It is not Beatrice itself and does not include any model.
+The `CharaDock macOS arm64 experimental package` workflow performs the same
+build, places the helper inside CharaDock, and publishes unsigned `.dmg` and
+`.zip` workflow artifacts. People using that experimental app package do not
+need to install the host separately. The helper is not Beatrice itself and does
+not include Beatrice or any voice model.
 
 At runtime pass the installed official `.vst3` package and a compatible model TOML:
 

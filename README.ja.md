@@ -132,7 +132,7 @@ npm ci
 npm run desktop
 ```
 
-macOSでのソース起動は実験扱いで、Windows版のリリーステスト対象外です。Windowsコンピューター操作とWindows標準音声は利用できません。Beatriceホストには未署名のarm64ソースビルドを追加しています。別途ビルドして`native/bin/`へ配置してからCharaDockを起動してください。そのほかのローカル音声やWebGPU機能もMacの機種・OSバージョンによって動作が異なる可能性があります。ソース起動版は最新版を確認できますが、自動的な本体更新は行いません。
+macOS対応は未署名・実験用のarm64プレビューで、Windows版のリリーステスト対象外です。GitHub ReleaseからmacOS用DMGまたはZIPを取得してください。アプリにはBeatriceネイティブホストを同梱しているため、ホストの手動配置は不要です。Windowsコンピューター操作とWindows標準音声は利用できません。そのほかのローカル音声やWebGPU機能もMacの機種・OSバージョンによって動作が異なる可能性があります。ソース起動版は最新版を確認できますが、自動的な本体更新は行いません。
 
 初回ウィザードでAI接続、キャラクター、音声出力を設定します。Windows Store版Codexも自動検出します。`codex`が`PATH`にない場合は`CODEX_CLI_PATH`で実行ファイルを指定できます。
 
@@ -170,7 +170,7 @@ macOSでのソース起動は実験扱いで、Windows版のリリーステス�
 
 GPT-Live / Codex Voiceは実験機能です。利用可否はアカウントや上流実装に依存します。Realtimeセッションは新しい空のタスクとして、録音ボタンを押したときだけ開始します。作業モードでは選択フォルダー限定のworkspace-writeスレッドへ接続し、音声で依頼した作業も履歴へ残します。
 
-CharaDockのBeatrice 2声変換連携は、Windowsでは`charadock-beatrice-host.exe`、macOSでは拡張子なしのarm64ヘルパーという独自の小さなネイティブVST3ホストを利用します。macOS版ヘルパーは現在、署名済みアプリには含めていない未署名のソースビルド試用版です。CharaDockはBeatrice本体・推論ライブラリ・音声モデルを再配布しません。音声設定から別途展開した公式Beatriceフォルダーを選び、参照モデル一覧へモデルフォルダーを追加してください。CharaDockは外部モデルをコピー・削除しません。モデルごとの利用条件は別途確認が必要で、Beatrice 2.0.0-rc.2付属のJVSモデルは許可のない営利利用を禁止しています。macOSでの手順は[ネイティブホストのビルドガイド](./native/beatrice-host/README.md)を参照してください。
+CharaDockのBeatrice 2声変換連携は、Windowsでは`charadock-beatrice-host.exe`、macOSでは実験用アプリに同梱した拡張子なしのarm64ヘルパーという独自の小さなネイティブVST3ホストを利用します。CharaDockはBeatrice本体・推論ライブラリ・音声モデルを再配布しません。音声設定から別途展開した公式Beatriceフォルダーを選び、参照モデル一覧へモデルフォルダーを追加してください。CharaDockは外部モデルをコピー・削除しません。モデルごとの利用条件は別途確認が必要で、Beatrice 2.0.0-rc.2付属のJVSモデルは許可のない営利利用を禁止しています。ソースからホストを作る場合は[ネイティブホストのビルドガイド](./native/beatrice-host/README.md)を参照してください。
 
 ### OpenAI APIとローカル処理
 

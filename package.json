@@ -16,7 +16,8 @@
     "test": "node tests/js_runtime_checks.mjs && npm run test:desktop && uv run python -m unittest tests.test_project_static",
     "dist": "electron-builder --dir",
     "dist:win": "electron-builder --win --dir",
-    "dist:win:installer": "electron-builder --win nsis portable"
+    "dist:win:installer": "electron-builder --win nsis portable",
+    "dist:mac:arm64": "electron-builder --mac --arm64 dmg zip"
   },
   "devDependencies": {
     "electron": "43.1.1",
@@ -47,10 +48,7 @@
       "NOTICE",
       "MODIFICATIONS.md",
       "DISTRIBUTION_ASSET_LICENSE.md",
-      "THIRD_PARTY_NOTICES.md",
-      "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
-      "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
-      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**/*"
+      "THIRD_PARTY_NOTICES.md"
     ],
     "asarUnpack": [
       "node_modules/sherpa-onnx-*/**/*",
@@ -60,6 +58,11 @@
     ],
     "win": {
       "icon": "app-icon.ico",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**/*",
+        "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
+        "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**/*"
+      ],
       "extraResources": [
         {
           "from": "native/bin/charadock-beatrice-host.exe",
@@ -72,12 +75,24 @@
       ]
     },
     "mac": {
+      "icon": "app-icon.png",
+      "category": "public.app-category.entertainment",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v6/linux/**/*",
+        "!node_modules/onnxruntime-node/bin/napi-v6/win32/**/*",
+        "!node_modules/onnxruntime-node/bin/napi-v6/darwin/x64/**/*"
+      ],
       "extraResources": [
         {
           "from": "native/bin/charadock-beatrice-host",
           "to": "bin/charadock-beatrice-host"
         }
-      ]
+      ],
+      "artifactName": "CharaDock-${version}-mac-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

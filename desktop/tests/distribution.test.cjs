@@ -59,6 +59,12 @@ test("Beatrice integration packages only CharaDock's host helper", () => {
     from: "native/bin/charadock-beatrice-host",
     to: "bin/charadock-beatrice-host",
   }]);
+  assert.deepEqual(packageJson.build.mac.target, ["dmg", "zip"]);
+  assert.equal(packageJson.build.mac.icon, "app-icon.png");
+  assert.match(packageJson.scripts["dist:mac:arm64"], /--mac --arm64 dmg zip/);
+  assert.ok(packageJson.build.win.files.some((entry) => entry.includes("/darwin/")));
+  assert.ok(packageJson.build.mac.files.some((entry) => entry.includes("/win32/")));
+  assert.equal(packageJson.build.files.some((entry) => /onnxruntime-node\/bin\/napi-v6\/(?:darwin|linux|win32)/.test(entry)), false);
   assert.equal(packageJson.build.files.some((entry) => /beatrice.*(?:vst3|toml|bin)/i.test(entry)), false);
   assert.match(fs.readFileSync(path.join(projectRoot, "THIRD_PARTY_NOTICES.md"), "utf8"), /Steinberg VST 3 SDK/);
   const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");

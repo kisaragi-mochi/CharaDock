@@ -1,4 +1,4 @@
-name: CharaDock Beatrice macOS arm64 host
+name: CharaDock macOS arm64 experimental package
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    name: Build unsigned macOS arm64 host
+    name: Build unsigned macOS arm64 app with Beatrice host
     runs-on: macos-14
     timeout-minutes: 20
 
@@ -37,18 +37,39 @@ jobs:
         shell: bash
         run: |
           cmake --build "$RUNNER_TEMP/beatrice-host-build" --config Release --parallel 3
-          cmake --install "$RUNNER_TEMP/beatrice-host-build" --config Release --prefix "$RUNNER_TEMP/beatrice-host-artifact"
-          file "$RUNNER_TEMP/beatrice-host-artifact/charadock-beatrice-host"
-          lipo -archs "$RUNNER_TEMP/beatrice-host-artifact/charadock-beatrice-host" | grep -qw arm64
-          tar -C "$RUNNER_TEMP/beatrice-host-artifact" -czf "$RUNNER_TEMP/charadock-beatrice-host-macos-arm64.tar.gz" charadock-beatrice-host
-          shasum -a 256 "$RUNNER_TEMP/charadock-beatrice-host-macos-arm64.tar.gz" > "$RUNNER_TEMP/charadock-beatrice-host-macos-arm64.tar.gz.sha256"
+          cmake --install "$RUNNER_TEMP/beatrice-host-build" --config Release --prefix "$GITHUB_WORKSPACE/native/bin"
+          file native/bin/charadock-beatrice-host
+          lipo -archs native/bin/charadock-beatrice-host | grep -qw arm64
 
-      - name: Upload unsigned host
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Build unsigned macOS arm64 application
+        run: npm run dist:mac:arm64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify application and create checksums
+        shell: bash
+        run: |
+          bundled_host="dist/mac-arm64/CharaDock.app/Contents/Resources/bin/charadock-beatrice-host"
+          test -x "$bundled_host"
+          lipo -archs "$bundled_host" | grep -qw arm64
+          find dist -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' \) -print0 | sort -z | xargs -0 shasum -a 256 > dist/SHA256SUMS-macos-arm64.txt
+
+      - name: Upload unsigned experimental package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: charadock-beatrice-host-macos-arm64
+          name: charadock-macos-arm64-experimental
           path: |
-            ${{ runner.temp }}/charadock-beatrice-host-macos-arm64.tar.gz
-            ${{ runner.temp }}/charadock-beatrice-host-macos-arm64.tar.gz.sha256
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS-macos-arm64.txt
           if-no-files-found: error
           retention-days: 14

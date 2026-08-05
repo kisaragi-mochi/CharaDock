@@ -63,12 +63,22 @@ struct Arguments {
   std::uint32_t block_samples = kDefaultBlockSamples;
 };
 
+#ifdef _WIN32
 std::string utf8(const wchar_t* value) {
   return Steinberg::Vst::StringConvert::convert(Steinberg::wscast(value));
 }
+#endif
 
 std::string utf8(const char* value) {
   return value;
+}
+
+std::filesystem::path local_path(const std::string& value) {
+#ifdef _WIN32
+  return std::filesystem::u8path(value);
+#else
+  return std::filesystem::path(value);
+#endif
 }
 
 template <typename Character>
@@ -93,8 +103,8 @@ Arguments parse_arguments(int argc, Character** argv) {
     else throw std::runtime_error("unknown argument: " + key);
   }
   if (result.plugin.empty() || result.model.empty()) throw std::runtime_error("--plugin and --model are required");
-  if (!std::filesystem::exists(std::filesystem::u8path(result.plugin))) throw std::runtime_error("VST3 plugin was not found: " + result.plugin);
-  if (!std::filesystem::exists(std::filesystem::u8path(result.model))) throw std::runtime_error("Beatrice model TOML was not found: " + result.model);
+  if (!std::filesystem::exists(local_path(result.plugin))) throw std::runtime_error("VST3 plugin was not found: " + result.plugin);
+  if (!std::filesystem::exists(local_path(result.model))) throw std::runtime_error("Beatrice model TOML was not found: " + result.model);
   if (result.voice < 0 || result.voice > 999) throw std::runtime_error("voice must be between 0 and 999");
   if (!std::isfinite(result.pitch_shift) || result.pitch_shift < -24.0 || result.pitch_shift > 24.0) throw std::runtime_error("pitch shift must be between -24 and 24");
   if (!std::isfinite(result.formant_shift) || result.formant_shift < -2.0 || result.formant_shift > 2.0) throw std::runtime_error("formant shift must be between -2 and 2");
