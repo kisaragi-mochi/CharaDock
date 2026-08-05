@@ -14,6 +14,7 @@ const EXPRESSION_NAMES = Object.freeze([
   "eyes-closed-mouth-open.png",
 ]);
 const HAIR_NAME = "front-hair.png";
+const HAIR_REFERENCE_NAME = "hair-reference.png";
 const ALL_IMAGE_NAMES = Object.freeze([...EXPRESSION_NAMES, HAIR_NAME]);
 
 function isChromaGreen(red, green, blue) {
@@ -74,6 +75,8 @@ function ellipseContains(x, y, region) {
 
 function differenceMetrics(left, right, regions = []) {
   let changed = 0;
+  let regionChanged = 0;
+  let regionPixels = 0;
   let totalEnergy = 0;
   let regionEnergy = 0;
   for (let y = 0; y < left.height; y += 1) {
@@ -82,13 +85,21 @@ function differenceMetrics(left, right, regions = []) {
       const a = effectivePixel(left, index);
       const b = effectivePixel(right, index);
       const energy = Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]);
-      if (energy > 48) changed += 1;
+      const insideRegion = regions.some((region) => ellipseContains(x, y, region));
+      if (energy > 48) {
+        changed += 1;
+        if (insideRegion) regionChanged += 1;
+      }
       totalEnergy += energy;
-      if (regions.some((region) => ellipseContains(x, y, region))) regionEnergy += energy;
+      if (insideRegion) {
+        regionPixels += 1;
+        regionEnergy += energy;
+      }
     }
   }
   return {
     changedFraction: changed / (left.width * left.height),
+    regionalChangedFraction: regionPixels ? regionChanged / regionPixels : 0,
     localizedEnergy: totalEnergy > 0 ? regionEnergy / totalEnergy : 0,
   };
 }
@@ -106,6 +117,18 @@ function compositePixel(bottom, top, index) {
     Math.round(((upper[2] * topAlpha) + (lower[2] * bottomAlpha * (1 - topAlpha))) / outputAlpha),
     Math.round(outputAlpha * 255),
   ];
+}
+
+function compositeImage(bottom, top) {
+  const output = new PNG({ width: bottom.width, height: bottom.height });
+  for (let index = 0; index < output.data.length; index += 4) {
+    const pixel = compositePixel(bottom, top, index);
+    output.data[index] = pixel[0];
+    output.data[index + 1] = pixel[1];
+    output.data[index + 2] = pixel[2];
+    output.data[index + 3] = pixel[3];
+  }
+  return output;
 }
 
 function writeQaPreview(directory, images) {
@@ -141,9 +164,10 @@ function writeQaPreview(directory, images) {
   return previewPath;
 }
 
-function validateAvatarOutput(directory, { writePreview = false } = {}) {
+function validateAvatarOutput(directory, { writePreview = false, requireHairReference = false } = {}) {
   const root = path.resolve(directory || "output");
   const errors = [];
+  const qualityMetrics = {};
   const images = new Map();
   let expectedSize = null;
   for (const name of ALL_IMAGE_NAMES) {
@@ -163,6 +187,18 @@ function validateAvatarOutput(directory, { writePreview = false } = {}) {
     } catch (error) {
       errors.push(`${name} is not a readable PNG: ${error.message}`);
     }
+  }
+  const hairReferencePath = path.join(root, HAIR_REFERENCE_NAME);
+  if (fs.existsSync(hairReferencePath)) {
+    try {
+      const image = readPng(hairReferencePath);
+      if (expectedSize && (image.png.width !== expectedSize.width || image.png.height !== expectedSize.height)) errors.push(`${HAIR_REFERENCE_NAME} size differs from other images`);
+      images.set(HAIR_REFERENCE_NAME, image);
+    } catch (error) {
+      errors.push(`${HAIR_REFERENCE_NAME} is not a readable PNG: ${error.message}`);
+    }
+  } else if (requireHairReference) {
+    errors.push(`missing ${HAIR_REFERENCE_NAME}; generated avatars must prove that the extracted hair reconstructs the intact canonical reference`);
   }
 
   let character = null;
@@ -196,7 +232,7 @@ function validateAvatarOutput(directory, { writePreview = false } = {}) {
     }
   }
 
-  if (images.size === ALL_IMAGE_NAMES.length) {
+  if (ALL_IMAGE_NAMES.every((name) => images.has(name))) {
     for (const name of EXPRESSION_NAMES) {
       const { coverage, cornerCoverage } = images.get(name).visibility;
       if (coverage < .08) errors.push(`${name} contains too little visible character artwork`);
@@ -223,6 +259,40 @@ function validateAvatarOutput(directory, { writePreview = false } = {}) {
       compare(EXPRESSION_NAMES[0], EXPRESSION_NAMES[3], eyeRegions, "closed-eye difference", .00035);
       compare(EXPRESSION_NAMES[3], EXPRESSION_NAMES[4], mouthRegions, "closed-eye half-mouth difference", .00012);
       compare(EXPRESSION_NAMES[3], EXPRESSION_NAMES[5], mouthRegions, "closed-eye open-mouth difference", .0002);
+
+      const hair = images.get(HAIR_NAME).png;
+      const compositedOpen = compositeImage(images.get(EXPRESSION_NAMES[0]).png, hair);
+      const compositedClosed = compositeImage(images.get(EXPRESSION_NAMES[3]).png, hair);
+      const visibleBlink = differenceMetrics(compositedOpen, compositedClosed, eyeRegions);
+      qualityMetrics.compositedBlinkRegionalChangedFraction = visibleBlink.regionalChangedFraction;
+      if (visibleBlink.regionalChangedFraction < .22) {
+        errors.push("closed eyes remain visibly open after the front-hair overlay; repair both eyelids and remove copied eye pixels from front-hair.png");
+      }
+
+      let hairVisible = 0;
+      let lowerCenterVisible = 0;
+      const averageEyeY = (rig.eyes[0].y + rig.eyes[1].y) / 2;
+      for (let y = 0; y < hair.height; y += 1) {
+        for (let x = 0; x < hair.width; x += 1) {
+          const index = (y * hair.width + x) * 4;
+          if (effectivePixel(hair, index)[3] <= 16) continue;
+          hairVisible += 1;
+          if (y > averageEyeY + rig.eyeDistance * .42 && Math.abs(x - rig.faceCenter.x) < rig.eyeDistance * .78) lowerCenterVisible += 1;
+        }
+      }
+      if (hairVisible && lowerCenterVisible / hairVisible > .025) errors.push(`${HAIR_NAME} covers too much of the central lower face; it likely contains face or mouth pixels`);
+
+      if (images.has(HAIR_REFERENCE_NAME)) {
+        const reference = images.get(HAIR_REFERENCE_NAME).png;
+        const base = images.get(EXPRESSION_NAMES[0]).png;
+        const sourceDifference = differenceMetrics(reference, base);
+        if (sourceDifference.changedFraction < .0035) errors.push(`${HAIR_REFERENCE_NAME} barely differs from the hairless base; no useful movable hair was extracted`);
+        if (sourceDifference.changedFraction > .32) errors.push(`hair removal changes too much of the canonical reference; preserve the face, body, pose, and rigid hair`);
+        const reconstructed = compositeImage(base, hair);
+        const reconstruction = differenceMetrics(reference, reconstructed);
+        qualityMetrics.hairReconstructionChangedFraction = reconstruction.changedFraction;
+        if (reconstruction.changedFraction > .012) errors.push(`front-hair reconstruction does not match ${HAIR_REFERENCE_NAME}; the layer is shifted, redrawn, incomplete, or contains unrelated pixels`);
+      }
     }
   }
 
@@ -237,6 +307,7 @@ function validateAvatarOutput(directory, { writePreview = false } = {}) {
     files: images.size + (character ? 1 : 0),
     previewPath,
     errors,
+    qualityMetrics,
   };
   if (errors.length) {
     const error = new Error(`Avatar quality validation failed:\n- ${errors.join("\n- ")}`);
@@ -251,7 +322,10 @@ module.exports = { ALL_IMAGE_NAMES, EXPRESSION_NAMES, isChromaGreen, validateAva
 
 if (require.main === module) {
   try {
-    const report = validateAvatarOutput(process.argv[2] || "output", { writePreview: true });
+    const report = validateAvatarOutput(process.argv[2] || "output", {
+      writePreview: true,
+      requireHairReference: process.argv.includes("--require-hair-reference"),
+    });
     process.stdout.write(`${JSON.stringify(report)}\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

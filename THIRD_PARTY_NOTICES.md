@@ -26,6 +26,40 @@ remain governed by their separate asset terms in ASSET_LICENSE.md.
 The packaged Electron runtime also supplies `LICENSE.electron.txt` and
 `LICENSES.chromium.html` alongside the executable.
 
+### Steinberg VST 3 SDK (Beatrice 2 host helper)
+
+- Project: VST 3 Plug-in SDK
+- Copyright: Steinberg Media Technologies GmbH
+- Source: https://github.com/steinbergmedia/vst3sdk
+- License: MIT License
+
+CharaDock's optional Beatrice 2 integration includes a small, independently
+built VST3 host helper linked against the SDK's MIT-licensed hosting sources.
+The Beatrice VST3 plug-in and voice models are not redistributed by CharaDock.
+Users select their separately obtained Beatrice folder at runtime and remain
+responsible for the model's terms. In particular, the sample JVS model included
+with Beatrice 2.0.0-rc.2 prohibits unauthorized commercial use.
+
+MIT License — Copyright (c) 2025, Steinberg Media Technologies GmbH
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ### Lucide Icons
 
 - Project: Lucide

@@ -49,6 +49,49 @@ test("Windows package metadata identifies ochisamu as the publisher", () => {
   assert.match(packageJson.build.copyright, /ochisamu/);
 });
 
+test("Beatrice integration packages only CharaDock's host helper", () => {
+  assert.deepEqual(packageJson.build.extraResources, [{
+    from: "native/bin/charadock-beatrice-host.exe",
+    to: "bin/charadock-beatrice-host.exe",
+  }]);
+  const helper = path.join(projectRoot, packageJson.build.extraResources[0].from);
+  assert.equal(fs.readFileSync(helper).subarray(0, 2).toString("ascii"), "MZ");
+  assert.equal(packageJson.build.files.some((entry) => /beatrice.*(?:vst3|toml|bin)/i.test(entry)), false);
+  assert.match(fs.readFileSync(path.join(projectRoot, "THIRD_PARTY_NOTICES.md"), "utf8"), /Steinberg VST 3 SDK/);
+  const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
+  for (const id of [
+    "beatriceLibraryCard", "beatriceModelLibraryList", "beatriceModelAddButton", "beatriceModelSelect",
+    "beatricePitchShiftInput", "beatriceFormantShiftInput", "beatriceOutputGainInput", "beatriceAdvancedSettings",
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  const host = fs.readFileSync(path.join(projectRoot, "native", "beatrice-host", "src", "main.cpp"), "utf8");
+  for (const parameterId of [3, 4, 7, 8, 9, 10, 11]) assert.match(host, new RegExp(`inner, ${parameterId},`));
+  assert.match(host, /_setmode\(_fileno\(stdin\), _O_BINARY\)/);
+  assert.match(host, /_setmode\(_fileno\(stdout\), _O_BINARY\)/);
+  const worklet = fs.readFileSync(path.join(projectRoot, "desktop", "realtime-beatrice-worklet.js"), "utf8");
+  const realtime = fs.readFileSync(path.join(projectRoot, "desktop", "realtime-beatrice.js"), "utf8");
+  const mascot = fs.readFileSync(path.join(projectRoot, "desktop", "preload-mascot.cjs"), "utf8");
+  assert.match(worklet, /registerProcessor\("charadock-beatrice"/);
+  assert.match(realtime, /new MediaStreamTrackProcessor\(\{ track \}\)/);
+  assert.match(mascot, /new MediaStreamTrackProcessor\(\{ track \}\)/);
+  assert.doesNotMatch(realtime, /createMediaStreamSource|createMediaElementSource/);
+  assert.doesNotMatch(mascot, /createMediaStreamSource\(stream\)|createMediaElementSource\(remoteAudio\)/);
+  assert.doesNotMatch(realtime, /createObjectURL\(new Blob/);
+  assert.doesNotMatch(mascot, /BEATRICE_WORKLET_SOURCE|createObjectURL\(new Blob/);
+  const beatriceIpc = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8")
+    .match(/function registerIpc\(\) \{[\s\S]*?ipcMain\.on\("kokoro:ready"/)?.[0] || "";
+  const handlerFor = (channel) => {
+    const start = beatriceIpc.indexOf(`("${channel}"`);
+    const end = start < 0 ? -1 : beatriceIpc.indexOf("\n  });", start);
+    return start < 0 || end < 0 ? "" : beatriceIpc.slice(start, end + 6);
+  };
+  for (const channel of ["beatrice:audio", "beatrice:status", "beatrice:start", "beatrice:stop"]) {
+    assert.match(handlerFor(channel), /assertTrustedAppSender\(event\)/, `${channel} must accept both the control and mascot app pages`);
+  }
+  for (const channel of ["beatrice:chooseInstall", "beatrice:addModels", "beatrice:removeModel"]) {
+    assert.match(handlerFor(channel), /assertTrustedSender\(event\)/, `${channel} must remain restricted to the control page`);
+  }
+});
+
 test("voice input UI requires one explicit supported provider", () => {
   const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");
   const main = fs.readFileSync(path.join(projectRoot, "desktop", "main.cjs"), "utf8");

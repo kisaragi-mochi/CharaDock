@@ -18,7 +18,8 @@ Read the attached image as the sole identity/style reference and read `request.j
 5. `eyes-closed-mouth-half.png`
 6. `eyes-closed-mouth-open.png`
 7. `front-hair.png`
-8. `character.json`
+8. `hair-reference.png` (quality proof only; the app does not install it)
+9. `character.json`
 
 Keep all PNGs the same 512–4096 px canvas size and pixel registration. The six expression frames must contain the same character and outfit without the hair isolated into `front-hair.png`. `front-hair.png` must contain only movable front/side hair in its exact overlay position—never the face, body, accessory, costume, or whole source image.
 
@@ -30,14 +31,26 @@ Use `work/` for intermediate images. Do not create the six final frames by copyi
 
 1. Inspect the source and identify face, eye centers, mouth, chin, neck pivot, rigid costume, and hair that can move without exposing a hole.
 2. Establish one canonical composition at the source crop and angle. Preserve identity, skin tone, costume, accessories, palette, linework, and rendering style. Do not beautify, redesign, mirror, recrop, or change pose.
-3. Use the image-generation tool to create `work/canonical-base.png`: eyes open, natural closed mouth, flat `#00FF00`, full character/outfit, and the selected movable hair removed. Paint a plausible scalp/forehead behind the removed hair; retain all rigid or back hair.
-4. Derive each of these as an identity-preserving edit of that same canonical base and same canvas:
+3. Use an identity-preserving image edit to create `work/canonical-full.png`: eyes open, natural closed mouth, flat `#00FF00`, with the complete original hair intact. This is a background-removal/normalization edit, not a redraw. Both eyes, face angle, head silhouette, crop, costume, text, jewelry, and every rigid accessory must remain at the source positions.
+4. Derive `work/canonical-base.png` as a second edit of `work/canonical-full.png`: remove only a conservative movable front-hair/bang/side-lock section and paint the hidden scalp/forehead. Do not alter any other pixel intentionally; retain the ponytail, rigid/back hair, hair tie, pins, ears, jewelry, face, body, and costume.
+5. Derive each of these as an identity-preserving edit of that same canonical base and same canvas:
    - `work/mouth-half-edit.png`: only a small speaking mouth changes.
    - `work/mouth-open-edit.png`: only a clear open-vowel mouth changes.
    - `work/eyes-closed-edit.png`: only both eyes/eyelids change; mouth stays closed.
-5. Generate `work/front-hair-source.png` in the canonical registration, on flat `#00FF00`. Include only the removed movable hair. Regenerate it if it contains face, skin, jewelry, hood, clothing, a background, or a second copy of the character.
 6. Write `work/character.json` before assembly using the exact metadata contract below. Estimate coordinates from the canonical canvas, not the original image.
-7. Assemble localized variants deterministically. This freezes every pixel outside the eye/mouth regions and combines the closed-eye state with all mouth states:
+7. Never ask image generation to redraw the detached hair. Extract the exact original registered pixels by comparing the intact reference with the hairless edit:
+
+```bash
+node .agents/skills/build-purupuru-avatar/scripts/extract-hair-layer.cjs \
+  --full work/canonical-full.png \
+  --base work/canonical-base.png \
+  --metadata work/character.json \
+  --output work/front-hair-source.png
+```
+
+If this command reports that too much changed, regenerate `canonical-base.png` as a stricter local edit. Do not weaken or bypass extraction.
+
+8. Assemble localized variants deterministically. This freezes every pixel outside the eye/mouth regions and combines the closed-eye state with all mouth states:
 
 ```bash
 node .agents/skills/build-purupuru-avatar/scripts/compose-variants.cjs \
@@ -46,20 +59,21 @@ node .agents/skills/build-purupuru-avatar/scripts/compose-variants.cjs \
   --mouth-open work/mouth-open-edit.png \
   --eyes-closed work/eyes-closed-edit.png \
   --front-hair work/front-hair-source.png \
+  --hair-reference work/canonical-full.png \
   --metadata work/character.json \
   --output output
 ```
 
-8. Run the mandatory pixel-level validator:
+9. Run the mandatory pixel-level validator:
 
 ```bash
-node .agents/skills/build-purupuru-avatar/scripts/validate-output.cjs output
+node .agents/skills/build-purupuru-avatar/scripts/validate-output.cjs output --require-hair-reference
 ```
 
-It checks alpha/chroma background, unique hashes, visible character/hair coverage, localized eye/mouth differences, registration drift, metadata, and rig geometry. It also writes `output/qa-preview.png`, a 3×2 sheet with the hair overlaid.
+It checks alpha/chroma background, unique hashes, visible character/hair coverage, localized eye/mouth differences, registration drift, metadata, rig geometry, lower-face contamination, and pixel reconstruction against the intact hair reference. It also writes `output/qa-preview.png`, a 3×2 sheet with the hair overlaid.
 
-9. Inspect `output/qa-preview.png` with the image-viewing tool. Confirm all six complete characters are visible, hair meets the scalp, eyes close in the lower row, mouth progresses closed → half → open in both rows, and nothing jumps between cells.
-10. On any validator or visual failure, regenerate the defective working image and repeat assembly/validation. Do not bypass a failure by copying, renaming, editing hashes, weakening the validator, deleting hair, or claiming completion.
+10. Inspect `output/qa-preview.png` with the image-viewing tool. Confirm all six complete characters are visible, hair meets the scalp, both source eyes and the original face angle remain visible, eyes close in the lower row, mouth progresses closed → half → open in both rows, and nothing jumps between cells.
+11. On any validator or visual failure, regenerate the defective working image and repeat assembly/validation. Do not bypass a failure by copying, renaming, editing hashes, weakening the validator, deleting hair, or claiming completion.
 
 ## Metadata contract
 
@@ -91,8 +105,9 @@ Reject and repair all of the following:
 - fake checkerboard, opaque scenery, rectangular matte, or green fringe;
 - empty body, empty hair, full-character hair layer, or hair covering the composite;
 - costume/crop/pose drift or edits outside the eyes and mouth;
+- a face angle, eye count, hair silhouette, ponytail, hair pin, or accessory position that differs from the source;
 - unchanged half/open mouth or unchanged closed eyes;
-- seams, double hair, exposed forehead holes, text, or watermarks;
+- seams, double hair, shifted/redrawn hair, exposed forehead holes, newly added text, or watermarks;
 - incorrect rig positions or a preview that does not show six complete states.
 
 Return only a compact JSON summary with `status`, `name`, `personality`, and `outputDirectory` after the validator exits successfully and the preview passes visual inspection.

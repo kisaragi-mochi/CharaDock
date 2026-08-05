@@ -69,7 +69,7 @@ The input provider is always selected explicitly. CharaDock does not start Codex
 - **Local recognition:** Japanese Parakeet CTC, ReazonSpeech Zipformer, SenseVoice, and Whisper base / tiny
 - **VAD:** Silero VAD with automatic pause detection, optional auto-send, and three sensitivity levels
 - **Output:** Windows system speech, Style-Bert-VITS2, piper-plus, Supertonic 3, Kokoro, or Irodori TTS
-- **Realtime:** Select a Live voice per character. A session runs only while recording is enabled, and typed messages use the same Live voice
+- **Realtime:** Select a Live voice per character. A session runs only while recording is enabled, and typed messages use the same Live voice. Optionally route the 48 kHz stream through a separately installed Beatrice 2 VST3, manage multiple referenced models, and tune voice, pitch, formant, gain, intonation, and pitch correction per character
 - **Speech cleanup:** Skip URLs, email addresses, paths, code, long hashes, and Markdown symbols; override pronunciation with a user dictionary
 
 <details>
@@ -147,6 +147,8 @@ Browser actions run in a visible, dedicated window and support navigation, links
 CharaDock starts the local `codex app-server --stdio` process. Codex manages the ChatGPT authentication token; CharaDock never receives it. Models returned by app-server appear in a dropdown, and conversation and work can use separate models and reasoning-effort settings.
 
 GPT-Live / Codex Voice is experimental and its availability depends on the account and upstream implementation. Realtime starts as a new empty task only when recording is enabled. In Work mode it connects to a workspace-write task scoped to the selected folder, and voice-requested work is also saved to history.
+
+Beatrice 2 voice conversion is optional and Windows-only. CharaDock bundles its own small MIT-licensed VST3 host helper, but does not redistribute Beatrice, its inference library, or voice models. Select an extracted official Beatrice folder in Voice settings, then add model folders to the referenced-model library. CharaDock never copies or deletes those external model files. Review each model's terms separately; the JVS sample model shipped with Beatrice 2.0.0-rc.2 prohibits unauthorized commercial use.
 
 ### OpenAI API and local processing
 

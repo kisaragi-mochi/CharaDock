@@ -77,3 +77,5 @@ source/
 
 # Windows alternate data streams copied through WSL
 *:Zone.Identifier
+
+tmp/*

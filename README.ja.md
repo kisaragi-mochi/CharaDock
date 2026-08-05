@@ -69,7 +69,7 @@ CharaDockは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNG
 - **ローカル認識:** 日本語Parakeet CTC、ReazonSpeech Zipformer、SenseVoice、Whisper base / tiny
 - **VAD:** Silero VADによる無音区切り、自動送信、3段階の感度
 - **出力:** Windows標準音声、Style-Bert-VITS2、piper-plus、Supertonic 3、Kokoro、Irodori TTS
-- **Realtime:** キャラクターごとにLive音声を選択。録音ボタンを押した間だけ接続し、文字入力にも同じLive音声で応答
+- **Realtime:** キャラクターごとにLive音声を選択。録音ボタンを押した間だけ接続し、文字入力にも同じLive音声で応答。別途導入したBeatrice 2 VST3へ48 kHz音声を流し、複数の参照モデルと声・ピッチ・フォルマント・音量・イントネーション・ピッチ補正をキャラクターごとに設定可能
 - **読み上げ整形:** URL、メール、パス、コード、長いハッシュ、Markdown記号を除外。ユーザー辞書と英字語の日本語読みへ対応
 
 <details>
@@ -147,6 +147,8 @@ npm run desktop
 アプリはローカルの`codex app-server --stdio`を起動します。ChatGPTの認証トークンはCodexが管理し、CharaDockは受け取りません。app-serverから取得したモデル一覧をプルダウン表示し、会話と作業で別々にモデルとreasoning effortを設定できます。
 
 GPT-Live / Codex Voiceは実験機能です。利用可否はアカウントや上流実装に依存します。Realtimeセッションは新しい空のタスクとして、録音ボタンを押したときだけ開始します。作業モードでは選択フォルダー限定のworkspace-writeスレッドへ接続し、音声で依頼した作業も履歴へ残します。
+
+Beatrice 2声変換はWindows向けの任意機能です。CharaDockにはMITライセンスの小さなVST3ホストだけを同梱し、Beatrice本体・推論ライブラリ・音声モデルは再配布しません。音声設定から別途展開した公式Beatriceフォルダーを選び、参照モデル一覧へモデルフォルダーを追加してください。CharaDockは外部モデルをコピー・削除しません。モデルごとの利用条件は別途確認が必要で、Beatrice 2.0.0-rc.2付属のJVSモデルは許可のない営利利用を禁止しています。
 
 ### OpenAI APIとローカル処理
 

@@ -183,6 +183,22 @@
             <header><div><h2>音声入力</h2><p>マイクから話しかける方法と、自動送信のタイミングを設定します。</p></div></header>
             <div id="speechInputMount"></div>
           </section>
+          <section id="beatriceLibraryCard" class="card settings-card beatrice-library-card">
+            <header class="beatrice-library-header">
+              <div><p class="eyebrow">Realtime声変換</p><h2>Beatrice 2</h2><p>公式VST3とモデルは元の場所から参照します。キャラクターごとの声質は下の音声設定で選べます。</p></div>
+              <span id="beatriceLibraryBadge" class="setup-state-badge">未設定</span>
+            </header>
+            <div class="beatrice-install-summary">
+              <span class="beatrice-install-icon"><span class="ui-symbol ui-symbol-voice" aria-hidden="true"></span></span>
+              <div><small>Beatrice本体</small><strong id="beatriceInstallName">フォルダー未選択</strong><p id="beatriceLibraryStatus" class="hint">公式サイトから取得したBeatrice 2の展開フォルダーを選択してください。</p></div>
+              <button id="beatriceChooseButton" class="button button-secondary" type="button">フォルダーを選択</button>
+            </div>
+            <div class="beatrice-model-library">
+              <div class="section-row"><div><strong>参照モデル</strong><small>モデルファイルはコピー・削除しません</small></div><button id="beatriceModelAddButton" class="button button-secondary" type="button">モデルを追加</button></div>
+              <div id="beatriceModelLibraryList" class="beatrice-model-list"></div>
+            </div>
+            <p class="beatrice-license-note">モデルごとに利用条件が異なります。付属JVSモデルは許可のない営利利用が禁止されています。</p>
+          </section>
           <div id="characterVoiceMount"></div>
         </div>
       </section>
@@ -315,6 +331,30 @@
                 <h3>GPT-Live / Codex Voice</h3>
                 <label>Realtimeの声<select id="realtimeVoiceSelect"><option value="cove">Cove（標準）</option></select></label>
                 <p id="realtimeVoiceStatus" class="hint">Realtime用の音声一覧を確認しています…</p>
+                <div class="tts-provider-settings beatrice-settings">
+                  <label>Realtime声変換<select id="realtimeVoiceConversionSelect"><option value="none">変換しない</option><option value="beatrice-v2">Beatrice 2（ネイティブ）</option></select></label>
+                  <div id="beatriceCharacterSettings" class="beatrice-character-settings" hidden>
+                    <div class="beatrice-selection-grid">
+                      <label>モデル<select id="beatriceModelSelect"><option value="">モデル未追加</option></select></label>
+                      <label>声<select id="beatriceVoiceSelect"><option value="0">Voice 0</option></select></label>
+                    </div>
+                    <div class="beatrice-tuning" aria-label="Beatriceの声質調整">
+                      <label class="parameter-slider"><span><strong>ピッチ</strong><output id="beatricePitchShiftOutput">0 st</output></span><input id="beatricePitchShiftInput" type="range" min="-24" max="24" step="0.25" value="0" /></label>
+                      <label class="parameter-slider"><span><strong>フォルマント</strong><output id="beatriceFormantShiftOutput">0 st</output></span><input id="beatriceFormantShiftInput" type="range" min="-2" max="2" step="0.25" value="0" /></label>
+                      <label class="parameter-slider"><span><strong>出力音量</strong><output id="beatriceOutputGainOutput">0 dB</output></span><input id="beatriceOutputGainInput" type="range" min="-60" max="20" step="1" value="0" /></label>
+                    </div>
+                    <details id="beatriceAdvancedSettings" class="beatrice-advanced-settings">
+                      <summary>詳細設定</summary>
+                      <div>
+                        <label class="parameter-slider"><span><strong>入力音量</strong><output id="beatriceInputGainOutput">0 dB</output></span><input id="beatriceInputGainInput" type="range" min="-60" max="20" step="1" value="0" /></label>
+                        <label class="parameter-slider"><span><strong>イントネーション</strong><output id="beatriceIntonationOutput">1.0</output></span><input id="beatriceIntonationInput" type="range" min="-1" max="3" step="0.1" value="1" /></label>
+                        <label class="parameter-slider"><span><strong>ピッチ補正</strong><output id="beatricePitchCorrectionOutput">0%</output></span><input id="beatricePitchCorrectionInput" type="range" min="0" max="1" step="0.1" value="0" /></label>
+                        <label>補正方法<select id="beatricePitchCorrectionTypeSelect"><option value="0">Hard 0</option><option value="1">Hard 1</option></select></label>
+                      </div>
+                    </details>
+                    <div class="beatrice-character-footer"><p id="beatriceStatus" class="hint">Beatrice 2を確認しています…</p><button id="beatriceResetButton" class="button button-quiet" type="button">標準値に戻す</button></div>
+                  </div>
+                </div>
                 <p class="hint">男性寄り・女性寄り・中性的は聞こえ方の目安です。OpenAI公式の性別分類ではなく、言語や話し方でも印象は変わります。Realtimeセッションは録音ボタンからのみ開始し、キャラクタークリックは表情と吹き出しだけで反応します。</p>
               </div>
               <fieldset id="standardTtsSettings" class="voice-mode-panel standard-tts-settings">
@@ -653,6 +693,7 @@
   </section>
   <script src="./i18n.js"></script>
   <script src="./audio-envelope.js"></script>
+  <script src="./realtime-beatrice.js"></script>
   <script src="./control.js"></script>
 </body>
 </html>

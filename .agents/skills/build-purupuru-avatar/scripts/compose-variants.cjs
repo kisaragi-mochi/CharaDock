@@ -68,7 +68,7 @@ function writePng(directory, name, png) {
 
 function main() {
   const args = argumentsByName(process.argv);
-  for (const key of ["base", "mouth-half", "mouth-open", "eyes-closed", "front-hair", "metadata", "output"]) {
+  for (const key of ["base", "mouth-half", "mouth-open", "eyes-closed", "front-hair", "hair-reference", "metadata", "output"]) {
     if (!args[key]) throw new Error(`missing --${key}`);
   }
   const metadata = JSON.parse(fs.readFileSync(path.resolve(args.metadata), "utf8"));
@@ -77,7 +77,8 @@ function main() {
   const mouthOpenEdit = readNormalized(args["mouth-open"]);
   const eyesClosedEdit = readNormalized(args["eyes-closed"]);
   const frontHair = readNormalized(args["front-hair"]);
-  const images = [base, mouthHalfEdit, mouthOpenEdit, eyesClosedEdit, frontHair];
+  const hairReference = readNormalized(args["hair-reference"]);
+  const images = [base, mouthHalfEdit, mouthOpenEdit, eyesClosedEdit, frontHair, hairReference];
   if (!sameSize(images)) throw new Error("all generated source images must have exactly the same canvas size");
   const eyes = metadata.rig?.eyeCenters;
   const mouth = metadata.rig?.mouthCenter;
@@ -100,6 +101,7 @@ function main() {
   writePng(output, "eyes-closed-mouth-half.png", closedHalf);
   writePng(output, "eyes-closed-mouth-open.png", closedOpen);
   writePng(output, "front-hair.png", frontHair);
+  writePng(output, "hair-reference.png", hairReference);
   fs.copyFileSync(path.resolve(args.metadata), path.join(output, "character.json"));
   process.stdout.write(`${JSON.stringify({ ok: true, output, size: [base.width, base.height] })}\n`);
 }

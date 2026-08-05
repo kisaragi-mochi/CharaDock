@@ -5,13 +5,14 @@ const { DEFAULT_REALTIME_VOICE, normalizeRealtimeVoice } = require("./realtime-v
 const { normalizeCharacterMemories } = require("./character-memory.cjs");
 const { BUNDLED_IRODORI_VOICES } = require("./irodori-voices.cjs");
 const { normalizeIrodoriEmotionStrength } = require("./irodori-caption.cjs");
+const { describeBeatriceModel } = require("./beatrice-v2.cjs");
 
 const DEFAULT_IRODORI_VOICES = Object.freeze(BUNDLED_IRODORI_VOICES.map(({ sourceFileName: _sourceFileName, ...voice }) => Object.freeze({ ...voice })));
 const DEFAULT_CHARACTER_TTS_PROFILES = Object.freeze({
-  "amber-avatar": Object.freeze({ provider: "irodori-webgpu", realtimeVoice: "maple", irodoriVoiceId: "builtin-kohaku", irodoriVersion: "500m-v3", supertonicVoice: "F5", kokoroVoice: "jf_alpha", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
-  "bronze-avatar": Object.freeze({ provider: "supertonic-3", realtimeVoice: "juniper", irodoriVoiceId: "builtin-kohaku", irodoriVersion: "500m-v3", supertonicVoice: "F2", kokoroVoice: "jf_alpha", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
-  "towa-avatar": Object.freeze({ provider: "irodori-webgpu", realtimeVoice: "spruce", irodoriVoiceId: "builtin-hiro", irodoriVersion: "500m-v3", supertonicVoice: "M4", kokoroVoice: "jf_alpha", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
-  "sage-avatar": Object.freeze({ provider: "supertonic-3", realtimeVoice: "ember", irodoriVoiceId: "builtin-hiro", irodoriVersion: "500m-v3", supertonicVoice: "M2", kokoroVoice: "jf_gongitsune", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
+  "amber-avatar": Object.freeze({ provider: "irodori-webgpu", realtimeVoice: "maple", realtimeVoiceConversion: "none", beatriceModelId: "", beatriceVoiceId: 0, beatricePitchShift: 0, beatriceFormantShift: 0, beatriceInputGain: 0, beatriceOutputGain: 0, beatriceIntonation: 1, beatricePitchCorrection: 0, beatricePitchCorrectionType: 0, irodoriVoiceId: "builtin-kohaku", irodoriVersion: "500m-v3", supertonicVoice: "F5", kokoroVoice: "jf_alpha", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
+  "bronze-avatar": Object.freeze({ provider: "supertonic-3", realtimeVoice: "juniper", realtimeVoiceConversion: "none", beatriceModelId: "", beatriceVoiceId: 0, beatricePitchShift: 0, beatriceFormantShift: 0, beatriceInputGain: 0, beatriceOutputGain: 0, beatriceIntonation: 1, beatricePitchCorrection: 0, beatricePitchCorrectionType: 0, irodoriVoiceId: "builtin-kohaku", irodoriVersion: "500m-v3", supertonicVoice: "F2", kokoroVoice: "jf_alpha", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
+  "towa-avatar": Object.freeze({ provider: "irodori-webgpu", realtimeVoice: "spruce", realtimeVoiceConversion: "none", beatriceModelId: "", beatriceVoiceId: 0, beatricePitchShift: 0, beatriceFormantShift: 0, beatriceInputGain: 0, beatriceOutputGain: 0, beatriceIntonation: 1, beatricePitchCorrection: 0, beatricePitchCorrectionType: 0, irodoriVoiceId: "builtin-hiro", irodoriVersion: "500m-v3", supertonicVoice: "M4", kokoroVoice: "jf_alpha", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
+  "sage-avatar": Object.freeze({ provider: "supertonic-3", realtimeVoice: "ember", realtimeVoiceConversion: "none", beatriceModelId: "", beatriceVoiceId: 0, beatricePitchShift: 0, beatriceFormantShift: 0, beatriceInputGain: 0, beatriceOutputGain: 0, beatriceIntonation: 1, beatricePitchCorrection: 0, beatricePitchCorrectionType: 0, irodoriVoiceId: "builtin-hiro", irodoriVersion: "500m-v3", supertonicVoice: "M2", kokoroVoice: "jf_gongitsune", sbv2ModelId: "", sbv2SpeakerId: 0, sbv2StyleId: 0, sbv2StyleWeight: 1 }),
 });
 
 const DEFAULTS = Object.freeze({
@@ -70,6 +71,9 @@ const DEFAULTS = Object.freeze({
   sbv2Device: "auto",
   characterTtsProfiles: DEFAULT_CHARACTER_TTS_PROFILES,
   realtimeVoice: DEFAULT_REALTIME_VOICE,
+  beatriceVstPath: "",
+  beatriceModelPath: "",
+  beatriceModels: [],
   englishPronunciationEnabled: true,
   englishPronunciationDictionary: "",
   speechInputProvider: "browser",
@@ -332,6 +336,21 @@ class Preferences {
       if (!this.data.characterTtsProfiles || typeof this.data.characterTtsProfiles !== "object" || Array.isArray(this.data.characterTtsProfiles)) {
         this.data.characterTtsProfiles = {};
       }
+      this.data.beatriceVstPath = String(this.data.beatriceVstPath || "").slice(0, 1000);
+      this.data.beatriceModelPath = String(this.data.beatriceModelPath || "").slice(0, 1000);
+      this.data.beatriceModels = (Array.isArray(this.data.beatriceModels) ? this.data.beatriceModels : []).slice(0, 40).flatMap((model) => {
+        if (!model || typeof model !== "object") return [];
+        const id = String(model.id || "").slice(0, 100);
+        const modelPath = String(model.modelPath || "").slice(0, 1000);
+        if (!id || !modelPath) return [];
+        return [{ id, name: String(model.name || "Beatrice model").slice(0, 100), version: String(model.version || "").slice(0, 40), modelPath }];
+      });
+      if (!this.data.beatriceModels.length && this.data.beatriceModelPath) {
+        try {
+          const legacy = describeBeatriceModel(this.data.beatriceModelPath);
+          if (legacy) this.data.beatriceModels = [{ id: legacy.id, name: legacy.name, version: legacy.version, modelPath: legacy.modelPath }];
+        } catch {}
+      }
       this.data.characterTtsProfiles = Object.fromEntries(Object.entries(this.data.characterTtsProfiles).slice(0, 100).flatMap(([characterId, profile]) => {
         const id = String(characterId || "").slice(0, 120);
         if (!id || !profile || typeof profile !== "object" || Array.isArray(profile)) return [];
@@ -341,6 +360,16 @@ class Preferences {
         return [[id, {
           provider,
           realtimeVoice: normalizeRealtimeVoice(profile.realtimeVoice, normalizeRealtimeVoice(this.data.realtimeVoice)),
+          realtimeVoiceConversion: profile.realtimeVoiceConversion === "beatrice-v2" ? "beatrice-v2" : "none",
+          beatriceModelId: String(profile.beatriceModelId || "").slice(0, 100),
+          beatriceVoiceId: Math.max(0, Math.min(999, Math.round(Number(profile.beatriceVoiceId) || 0))),
+          beatricePitchShift: Math.max(-24, Math.min(24, Number(profile.beatricePitchShift) || 0)),
+          beatriceFormantShift: Math.max(-2, Math.min(2, Number(profile.beatriceFormantShift) || 0)),
+          beatriceInputGain: Math.max(-60, Math.min(20, Number(profile.beatriceInputGain) || 0)),
+          beatriceOutputGain: Math.max(-60, Math.min(20, Number(profile.beatriceOutputGain) || 0)),
+          beatriceIntonation: Math.max(-1, Math.min(3, Number.isFinite(Number(profile.beatriceIntonation)) ? Number(profile.beatriceIntonation) : 1)),
+          beatricePitchCorrection: Math.max(0, Math.min(1, Number(profile.beatricePitchCorrection) || 0)),
+          beatricePitchCorrectionType: Number(profile.beatricePitchCorrectionType) === 1 ? 1 : 0,
           irodoriVoiceId: String(profile.irodoriVoiceId || "").slice(0, 80),
           irodoriVersion: ["500m-v3", "v4-small"].includes(profile.irodoriVersion)
             ? profile.irodoriVersion
@@ -386,7 +415,7 @@ class Preferences {
   publicState() {
     const state = {};
     for (const key of PUBLIC_KEYS) {
-      if (!["customCharacters", "workDirectory", "piperPlusExecutablePath", "piperPlusModelPath", "supertonicModelDirectory", "irodoriModelDirectory", "irodoriV4ModelDirectory", "irodoriReferenceAudioPath", "irodoriVoices", "kokoroModelDirectory", "sbv2Models", "characterTtsProfiles", "conversationHistories", "characterMemories", "workHistory"].includes(key)) state[key] = this.data[key];
+      if (!["customCharacters", "workDirectory", "piperPlusExecutablePath", "piperPlusModelPath", "supertonicModelDirectory", "irodoriModelDirectory", "irodoriV4ModelDirectory", "irodoriReferenceAudioPath", "irodoriVoices", "kokoroModelDirectory", "sbv2Models", "beatriceVstPath", "beatriceModelPath", "beatriceModels", "characterTtsProfiles", "conversationHistories", "characterMemories", "workHistory"].includes(key)) state[key] = this.data[key];
     }
     state.hasWorkDirectory = Boolean(this.data.workDirectory);
     state.workDirectoryName = this.data.workDirectory ? path.basename(this.data.workDirectory) : "";

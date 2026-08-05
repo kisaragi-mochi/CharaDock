@@ -59,6 +59,13 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   startCodexRealtime: (payload) => ipcRenderer.invoke("audio:realtimeStart", payload),
   appendCodexRealtimeSpeech: (text) => ipcRenderer.invoke("audio:realtimeAppendSpeech", text),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
+  getBeatriceStatus: () => ipcRenderer.invoke("beatrice:status"),
+  chooseBeatriceInstallation: () => ipcRenderer.invoke("beatrice:chooseInstall"),
+  addBeatriceModels: () => ipcRenderer.invoke("beatrice:addModels"),
+  removeBeatriceModel: (modelId) => ipcRenderer.invoke("beatrice:removeModel", modelId),
+  startBeatrice: () => ipcRenderer.invoke("beatrice:start"),
+  pushBeatriceAudio: (audio) => ipcRenderer.send("beatrice:audio", audio),
+  stopBeatrice: () => ipcRenderer.invoke("beatrice:stop"),
   onChatStream: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("chat:stream", listener);
@@ -88,6 +95,21 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("audio:realtimeEvent", listener);
     return () => ipcRenderer.removeListener("audio:realtimeEvent", listener);
+  },
+  onBeatriceAudio: (callback) => {
+    const listener = (_event, audio) => callback(audio);
+    ipcRenderer.on("beatrice:audioOut", listener);
+    return () => ipcRenderer.removeListener("beatrice:audioOut", listener);
+  },
+  onBeatriceError: (callback) => {
+    const listener = (_event, message) => callback(message);
+    ipcRenderer.on("beatrice:error", listener);
+    return () => ipcRenderer.removeListener("beatrice:error", listener);
+  },
+  onBeatriceSettingsChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("beatrice:settingsChanged", listener);
+    return () => ipcRenderer.removeListener("beatrice:settingsChanged", listener);
   },
   onSherpaModelProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);

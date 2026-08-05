@@ -11,6 +11,8 @@ Material changes include:
 - Codex app-server and OpenAI API chat connections.
 - Character-specific desktop motion, expressions, speech and interaction.
 - User-supplied single-image character generation workflow.
+- Pixel-registered hair extraction and reconstruction validation for generated characters.
+- Optional native VST3 host helper for streaming Realtime audio through a separately installed Beatrice 2 plug-in.
 - Desktop settings, onboarding, multi-monitor positioning and accessibility UI.
 - Changes to `app.js` for desktop rendering integration.
 

@@ -21,6 +21,7 @@
   let realtimePeerConnection = null;
   let realtimeDataChannel = null;
   let realtimeRemoteAudio = null;
+  let realtimeBeatriceConverter = null;
   let realtimeStarting = false;
   let realtimeUserTranscript = "";
   let realtimeAssistantMessage = null;
@@ -348,6 +349,152 @@
     else setStatus(status, "保存済みの声を表示しています。接続時に音声一覧を更新します。");
   }
 
+  function updateRangeProgress(input) {
+    const value = Number(input.value) || 0;
+    const min = Number(input.min) || 0;
+    const max = Number(input.max) || 100;
+    input.style.setProperty("--range-progress", `${Math.max(0, Math.min(100, ((value - min) / Math.max(1, max - min)) * 100))}%`);
+  }
+
+  function syncBeatriceReadouts() {
+    const values = [
+      ["beatricePitchShift", (value) => `${value > 0 ? "+" : ""}${value.toFixed(2).replace(/\.00$/, "")} st`],
+      ["beatriceFormantShift", (value) => `${value > 0 ? "+" : ""}${value.toFixed(2).replace(/\.00$/, "")} st`],
+      ["beatriceOutputGain", (value) => `${value > 0 ? "+" : ""}${Math.round(value)} dB`],
+      ["beatriceInputGain", (value) => `${value > 0 ? "+" : ""}${Math.round(value)} dB`],
+      ["beatriceIntonation", (value) => value.toFixed(1)],
+      ["beatricePitchCorrection", (value) => `${Math.round(value * 100)}%`],
+    ];
+    for (const [key, format] of values) {
+      const input = $(`#${key}Input`);
+      if (!input) continue;
+      updateRangeProgress(input);
+      $(`#${key}Output`).textContent = format(Number(input.value) || 0);
+    }
+  }
+
+  function populateBeatriceVoices(modelId, preferredVoiceId) {
+    const voiceSelect = $("#beatriceVoiceSelect");
+    const model = (state.beatrice?.models || []).find((item) => item.id === modelId);
+    voiceSelect.replaceChildren();
+    for (const voice of model?.voices || []) voiceSelect.appendChild(new Option(`${voice.id} · ${voice.name}`, String(voice.id)));
+    if (!voiceSelect.options.length) voiceSelect.appendChild(new Option(localized("声がありません", "No voices"), "0"));
+    const selected = String(preferredVoiceId ?? 0);
+    voiceSelect.value = [...voiceSelect.options].some((option) => option.value === selected)
+      ? selected : voiceSelect.options[0].value;
+    return model;
+  }
+
+  function renderBeatriceModelLibrary(selectedModelId) {
+    const list = $("#beatriceModelLibraryList");
+    const models = state.beatrice?.models || [];
+    list.replaceChildren();
+    if (!models.length) {
+      const empty = document.createElement("p");
+      empty.className = "beatrice-model-empty";
+      empty.textContent = localized("まだモデルがありません。Beatriceのモデルフォルダーを追加してください。", "No models yet. Add a Beatrice model folder.");
+      list.appendChild(empty);
+      return;
+    }
+    for (const model of models) {
+      const row = document.createElement("div");
+      row.className = "beatrice-model-row";
+      row.classList.toggle("is-selected", model.id === selectedModelId);
+      const copy = document.createElement("div");
+      copy.className = "beatrice-model-copy";
+      const title = document.createElement("strong");
+      title.textContent = model.name || "Beatrice model";
+      const detail = document.createElement("small");
+      detail.textContent = [model.version, `${model.voices?.length || 0} voices`, model.ready ? "" : localized("参照切れ", "Missing")].filter(Boolean).join(" · ");
+      copy.append(title, detail);
+      const remove = document.createElement("button");
+      remove.className = "beatrice-model-remove";
+      remove.type = "button";
+      const removeIcon = document.createElement("span");
+      removeIcon.className = "ui-symbol ui-symbol-close";
+      removeIcon.setAttribute("aria-hidden", "true");
+      remove.appendChild(removeIcon);
+      remove.title = localized("一覧から外す（元ファイルは削除しません）", "Remove reference (does not delete files)");
+      remove.setAttribute("aria-label", `${title.textContent}${localized("を一覧から外す", ": remove reference")}`);
+      remove.addEventListener("click", async () => {
+        remove.disabled = true;
+        try {
+          if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+          state = await api.removeBeatriceModel(model.id);
+          syncUi();
+          setStatus($("#beatriceLibraryStatus"), localized("モデルの参照を一覧から外しました。元ファイルは残っています。", "The model reference was removed. Its files remain untouched."));
+        } catch (error) {
+          remove.disabled = false;
+          setStatus($("#beatriceLibraryStatus"), error.message, true);
+        }
+      });
+      row.append(copy, remove);
+      list.appendChild(row);
+    }
+  }
+
+  function syncBeatriceUi() {
+    const beatrice = state.beatrice || {};
+    const models = beatrice.models || [];
+    const conversion = state.realtimeVoiceConversion || state.characterTts?.realtimeVoiceConversion || "none";
+    const live = state.backend === "codex" && state.speechInputProvider === "realtime";
+    const selectedModelId = models.some((model) => model.id === state.beatriceModelId)
+      ? state.beatriceModelId : beatrice.selectedModelId || models[0]?.id || "";
+    const conversionSelect = $("#realtimeVoiceConversionSelect");
+    const modelSelect = $("#beatriceModelSelect");
+    const badge = $("#beatriceLibraryBadge");
+    conversionSelect.value = conversion;
+    conversionSelect.disabled = !live;
+    $("#beatriceCharacterSettings").hidden = conversion !== "beatrice-v2";
+
+    badge.classList.remove("is-ready", "is-warning");
+    if (beatrice.ready) {
+      badge.textContent = localized("利用可能", "Ready");
+      badge.classList.add("is-ready");
+    } else if (beatrice.installed || models.length) {
+      badge.textContent = localized("要確認", "Needs attention");
+      badge.classList.add("is-warning");
+    } else badge.textContent = localized("未設定", "Not set");
+    $("#beatriceInstallName").textContent = beatrice.installName || localized("フォルダー未選択", "No folder selected");
+    if (!beatrice.installed) setStatus($("#beatriceLibraryStatus"), localized("公式サイトから取得したBeatrice 2の展開フォルダーを選択してください。", "Select the extracted Beatrice 2 folder downloaded from the official site."));
+    else if (!beatrice.vstReady) setStatus($("#beatriceLibraryStatus"), localized("VST3が見つかりません。展開フォルダーを選び直してください。", "The VST3 is missing. Choose the extracted folder again."), true);
+    else if (!models.length) setStatus($("#beatriceLibraryStatus"), localized("本体を確認しました。次にモデルを追加してください。", "Beatrice is ready. Add a model next."));
+    else setStatus($("#beatriceLibraryStatus"), localized(`${models.length}件のモデルを参照しています。`, `${models.length} model${models.length === 1 ? "" : "s"} referenced.`));
+
+    renderBeatriceModelLibrary(selectedModelId);
+    modelSelect.replaceChildren();
+    for (const model of models) modelSelect.appendChild(new Option(`${model.name}${model.version ? ` · ${model.version}` : ""}`, model.id));
+    if (!modelSelect.options.length) modelSelect.appendChild(new Option(localized("モデル未追加", "No models added"), ""));
+    modelSelect.value = selectedModelId;
+    const selectedModel = populateBeatriceVoices(selectedModelId, state.beatriceVoiceId ?? state.characterTts?.beatriceVoiceId ?? 0);
+
+    const tuning = {
+      beatricePitchShift: 0,
+      beatriceFormantShift: 0,
+      beatriceInputGain: 0,
+      beatriceOutputGain: 0,
+      beatriceIntonation: 1,
+      beatricePitchCorrection: 0,
+    };
+    for (const [key, fallback] of Object.entries(tuning)) {
+      $(`#${key}Input`).value = Number.isFinite(Number(state[key])) ? Number(state[key]) : fallback;
+    }
+    $("#beatricePitchCorrectionTypeSelect").value = Number(state.beatricePitchCorrectionType) === 1 ? "1" : "0";
+    syncBeatriceReadouts();
+
+    const controlsEnabled = live && conversion === "beatrice-v2" && Boolean(selectedModel?.ready) && beatrice.vstReady;
+    modelSelect.disabled = !live || conversion !== "beatrice-v2" || !models.length;
+    $("#beatriceVoiceSelect").disabled = !controlsEnabled || !(selectedModel?.voices?.length);
+    $$("#beatriceCharacterSettings input, #beatriceCharacterSettings select, #beatriceCharacterSettings button")
+      .filter((element) => element !== modelSelect && element !== $("#beatriceVoiceSelect"))
+      .forEach((element) => { element.disabled = !controlsEnabled; });
+    if (beatrice.ready && selectedModel) setStatus($("#beatriceStatus"), localized(`${selectedModel.name} · ${selectedModel.voices?.length || 0} voices`, `${selectedModel.name} · ${selectedModel.voices?.length || 0} voices`));
+    else if (conversion === "beatrice-v2" && !beatrice.vstReady) setStatus($("#beatriceStatus"), localized("上のBeatrice本体を設定してください。", "Set up Beatrice above first."), true);
+    else if (conversion === "beatrice-v2" && !models.length) setStatus($("#beatriceStatus"), localized("上の一覧へモデルを追加してください。", "Add a model to the library above."), true);
+    else if (conversion === "beatrice-v2") setStatus($("#beatriceStatus"), localized("選択したモデルを確認できません。", "The selected model is unavailable."), true);
+    else setStatus($("#beatriceStatus"), localized("必要な場合だけBeatrice 2でRealtime音声を変換できます。", "Use Beatrice 2 only when you want to convert Realtime audio."));
+  }
+
   function syncVoiceRoutingUi() {
     const live = state.backend === "codex" && state.speechInputProvider === "realtime";
     const realtimePanel = $("#realtimeVoiceSettings");
@@ -363,7 +510,7 @@
     };
     $("#voiceRoutingBadge").textContent = live ? "LIVE" : "通常TTS";
     $("#voiceRoutingTitle").textContent = live
-      ? `GPT-Live · ${(state.realtimeVoice || "cove").replace(/^./, (value) => value.toUpperCase())}`
+      ? `GPT-Live · ${(state.realtimeVoice || "cove").replace(/^./, (value) => value.toUpperCase())}${state.realtimeVoiceConversion === "beatrice-v2" ? " → Beatrice 2" : ""}`
       : `${providerNames[state.ttsProvider] || "通常TTS"}${state.ttsEnabled ? " · 読み上げON" : " · 読み上げOFF"}`;
     $("#voiceRoutingDescription").textContent = live
       ? "録音ボタンでLive接続中は、音声入力も文字入力もこの声で返します。通常TTSは使いません。"
@@ -1074,6 +1221,7 @@
     $("#ttsToggle").checked = Boolean(state.ttsEnabled);
     $("#characterTtsLabel").textContent = state.characterTts?.characterName || "このキャラクター";
     syncRealtimeVoiceUi();
+    syncBeatriceUi();
     $("#ttsProviderSelect").value = state.ttsProvider || "system";
     $("#styleBertVits2UrlInput").value = state.styleBertVits2Url || "http://localhost:5000";
     $("#styleBertVits2ModelIdInput").value = Number(state.styleBertVits2ModelId) || 0;
@@ -1230,6 +1378,16 @@
       ttsEnabled: $("#ttsToggle").checked,
       ttsProvider: $("#ttsProviderSelect").value,
       realtimeVoice: $("#realtimeVoiceSelect").value,
+      realtimeVoiceConversion: $("#realtimeVoiceConversionSelect").value,
+      beatriceModelId: $("#beatriceModelSelect").value,
+      beatriceVoiceId: Number($("#beatriceVoiceSelect").value) || 0,
+      beatricePitchShift: Number($("#beatricePitchShiftInput").value),
+      beatriceFormantShift: Number($("#beatriceFormantShiftInput").value),
+      beatriceInputGain: Number($("#beatriceInputGainInput").value),
+      beatriceOutputGain: Number($("#beatriceOutputGainInput").value),
+      beatriceIntonation: Number($("#beatriceIntonationInput").value),
+      beatricePitchCorrection: Number($("#beatricePitchCorrectionInput").value),
+      beatricePitchCorrectionType: Number($("#beatricePitchCorrectionTypeSelect").value),
       styleBertVits2Url: $("#styleBertVits2UrlInput").value.trim(),
       styleBertVits2ModelId: Number($("#styleBertVits2ModelIdInput").value),
       styleBertVits2Speed: Number($("#styleBertVits2SpeedInput").value),
@@ -1403,6 +1561,8 @@
     realtimeDataChannel = null;
     realtimePeerConnection = null;
     realtimeRemoteAudio = null;
+    realtimeBeatriceConverter?.stop().catch(() => {});
+    realtimeBeatriceConverter = null;
     realtimeStarting = false;
     realtimeUserTranscript = "";
     realtimeAssistantText = "";
@@ -1423,6 +1583,14 @@
     return true;
   }
 
+  function playRealtimeRemoteStream(stream) {
+    realtimeRemoteAudio?.pause();
+    realtimeRemoteAudio = new Audio();
+    realtimeRemoteAudio.autoplay = true;
+    realtimeRemoteAudio.srcObject = stream;
+    realtimeRemoteAudio.play().catch(() => {});
+  }
+
   async function startCodexRealtimeVoice() {
     stopSpeechPlayback();
     const stream = await ensureAudioStream();
@@ -1434,11 +1602,27 @@
     realtimeAssistantText = "";
     realtimeAssistantActive = false;
     for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
-    realtimeRemoteAudio = new Audio();
-    realtimeRemoteAudio.autoplay = true;
-    peer.addEventListener("track", (event) => {
-      realtimeRemoteAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
-      realtimeRemoteAudio.play().catch(() => {});
+    peer.addEventListener("track", async (event) => {
+      const remoteStream = event.streams[0] || new MediaStream([event.track]);
+      if (state.realtimeVoiceConversion === "beatrice-v2") {
+        try {
+          const converter = new window.RealtimeBeatriceConverter(api, (error) => {
+            if (realtimeBeatriceConverter !== converter || !realtimePeerConnection) return;
+            setStatus($("#chatStatus"), `Beatrice 2の変換を継続できないため元の声へ戻しました: ${error.message}`, true);
+            realtimeBeatriceConverter = null;
+            converter.stop().finally(() => { if (realtimePeerConnection) playRealtimeRemoteStream(remoteStream); });
+          });
+          realtimeBeatriceConverter = converter;
+          await converter.start(remoteStream);
+          setStatus($("#chatStatus"), "Beatrice 2でRealtime音声を変換中です。");
+          return;
+        } catch (error) {
+          realtimeBeatriceConverter?.stop().catch(() => {});
+          realtimeBeatriceConverter = null;
+          setStatus($("#chatStatus"), `Beatrice 2を開始できないため元の声で再生します: ${error.message}`, true);
+        }
+      }
+      playRealtimeRemoteStream(remoteStream);
     });
     realtimeDataChannel = peer.createDataChannel("oai-events");
     peer.addEventListener("connectionstatechange", () => {
@@ -1831,6 +2015,12 @@
       state = nextState;
       syncUi();
     });
+    api.onBeatriceSettingsChanged?.((payload) => {
+      closeRealtimeAudio();
+      const message = payload?.message || "Beatrice 2の設定変更を反映するためLive接続を終了しました。";
+      setStatus($("#chatStatus"), message);
+      setStatus($("#beatriceStatus"), message);
+    });
     api.onChatStream?.((payload) => {
       if (!streamingMessage) return;
       const paragraph = streamingMessage.querySelector("p");
@@ -2080,6 +2270,105 @@
           : "このキャラクターのRealtime音声を保存しました。");
       } catch (error) {
         setStatus($("#realtimeVoiceStatus"), error.message, true);
+      }
+    });
+    $("#realtimeVoiceConversionSelect").addEventListener("change", async () => {
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        await saveSettings();
+        syncBeatriceUi();
+        setStatus($("#realtimeVoiceStatus"), "このキャラクターのRealtime声変換を保存しました。");
+      } catch (error) {
+        setStatus($("#beatriceStatus"), error.message, true);
+      }
+    });
+    $("#beatriceVoiceSelect").addEventListener("change", async () => {
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        await saveSettings();
+        syncBeatriceUi();
+        setStatus($("#beatriceStatus"), localized("このキャラクターのBeatrice音声を保存しました。", "Saved the Beatrice voice for this character."));
+      } catch (error) {
+        setStatus($("#beatriceStatus"), error.message, true);
+      }
+    });
+    $("#beatriceModelSelect").addEventListener("change", async () => {
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        populateBeatriceVoices($("#beatriceModelSelect").value, 0);
+        await saveSettings();
+        syncBeatriceUi();
+        setStatus($("#beatriceStatus"), localized("このキャラクターのBeatriceモデルを保存しました。", "Saved the Beatrice model for this character."));
+      } catch (error) {
+        setStatus($("#beatriceStatus"), error.message, true);
+      }
+    });
+    [
+      "#beatricePitchShiftInput", "#beatriceFormantShiftInput", "#beatriceInputGainInput",
+      "#beatriceOutputGainInput", "#beatriceIntonationInput", "#beatricePitchCorrectionInput",
+    ].forEach((selector) => {
+      $(selector).addEventListener("input", syncBeatriceReadouts);
+      $(selector).addEventListener("change", async () => {
+        try {
+          if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+          await saveSettings();
+          syncBeatriceReadouts();
+          setStatus($("#beatriceStatus"), localized("声質調整を保存しました。次の接続から反映します。", "Voice tuning saved. It will apply to the next session."));
+        } catch (error) {
+          setStatus($("#beatriceStatus"), error.message, true);
+        }
+      });
+    });
+    $("#beatricePitchCorrectionTypeSelect").addEventListener("change", async () => {
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        await saveSettings();
+        setStatus($("#beatriceStatus"), localized("ピッチ補正方法を保存しました。", "Pitch correction type saved."));
+      } catch (error) {
+        setStatus($("#beatriceStatus"), error.message, true);
+      }
+    });
+    $("#beatriceResetButton").addEventListener("click", async () => {
+      const defaults = {
+        beatricePitchShift: 0,
+        beatriceFormantShift: 0,
+        beatriceInputGain: 0,
+        beatriceOutputGain: 0,
+        beatriceIntonation: 1,
+        beatricePitchCorrection: 0,
+      };
+      for (const [key, value] of Object.entries(defaults)) $(`#${key}Input`).value = value;
+      $("#beatricePitchCorrectionTypeSelect").value = "0";
+      syncBeatriceReadouts();
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        await saveSettings();
+        setStatus($("#beatriceStatus"), localized("Beatriceの声質を標準値へ戻しました。", "Reset Beatrice voice tuning to defaults."));
+      } catch (error) {
+        setStatus($("#beatriceStatus"), error.message, true);
+      }
+    });
+    $("#beatriceChooseButton").addEventListener("click", async () => {
+      try {
+        if (realtimePeerConnection || realtimeStarting) await stopCodexRealtimeVoice({ quiet: true });
+        const result = await api.chooseBeatriceInstallation();
+        if (result.canceled) return;
+        state = await api.getState();
+        syncUi();
+        setStatus($("#beatriceLibraryStatus"), localized("Beatrice 2のVST3を設定しました。", "Beatrice 2 VST3 configured."));
+      } catch (error) {
+        setStatus($("#beatriceLibraryStatus"), error.message, true);
+      }
+    });
+    $("#beatriceModelAddButton").addEventListener("click", async () => {
+      try {
+        const result = await api.addBeatriceModels();
+        if (result.canceled) return;
+        state = await api.getState();
+        syncUi();
+        setStatus($("#beatriceLibraryStatus"), localized(`${result.added || 0}件のモデルを追加しました。`, `Added ${result.added || 0} model${result.added === 1 ? "" : "s"}.`));
+      } catch (error) {
+        setStatus($("#beatriceLibraryStatus"), error.message, true);
       }
     });
     $("#piperPlusExecutableButton").addEventListener("click", async () => {

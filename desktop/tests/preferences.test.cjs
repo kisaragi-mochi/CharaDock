@@ -165,6 +165,41 @@ test("preferences store a separate realtime voice for each character", () => {
   assert.equal(preferences.data.characterTtsProfiles["sage-avatar"].realtimeVoice, "sol");
 });
 
+test("preferences keep Beatrice 2 conversion and voice per character", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
+  const file = path.join(directory, "preferences.json");
+  const modelPath = path.join(directory, "voice.toml");
+  fs.writeFileSync(modelPath, '[model]\nname = "Test voice"\nversion = "2.0"\n[voice.0]\nname = "Alice"\n');
+  fs.writeFileSync(file, JSON.stringify({
+    beatriceVstPath: "C:\\Beatrice\\beatrice.vst3",
+    beatriceModelPath: modelPath,
+    characterTtsProfiles: {
+      "amber-avatar": {
+        provider: "system", realtimeVoiceConversion: "beatrice-v2", beatriceVoiceId: 42,
+        beatricePitchShift: 99, beatriceFormantShift: -9, beatriceInputGain: -80,
+        beatriceOutputGain: 30, beatriceIntonation: 9, beatricePitchCorrection: 4,
+        beatricePitchCorrectionType: 1,
+      },
+      "sage-avatar": { provider: "system", realtimeVoiceConversion: "invalid", beatriceVoiceId: 9000 },
+    },
+  }));
+  const preferences = new Preferences(file);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].realtimeVoiceConversion, "beatrice-v2");
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatriceVoiceId, 42);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatricePitchShift, 24);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatriceFormantShift, -2);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatriceInputGain, -60);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatriceOutputGain, 20);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatriceIntonation, 3);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatricePitchCorrection, 1);
+  assert.equal(preferences.data.characterTtsProfiles["amber-avatar"].beatricePitchCorrectionType, 1);
+  assert.equal(preferences.data.characterTtsProfiles["sage-avatar"].realtimeVoiceConversion, "none");
+  assert.equal(preferences.data.characterTtsProfiles["sage-avatar"].beatriceVoiceId, 999);
+  assert.equal(preferences.data.beatriceModels[0].name, "Test voice");
+  assert.equal(Object.prototype.hasOwnProperty.call(preferences.publicState(), "beatriceVstPath"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(preferences.publicState(), "beatriceModels"), false);
+});
+
 test("preferences retain a character-scoped JP-Extra model and style without exposing the raw model catalog", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "charadock-prefs-"));
   const file = path.join(directory, "preferences.json");
