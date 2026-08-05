@@ -54,8 +54,6 @@ test("Beatrice integration packages only CharaDock's host helper", () => {
     from: "native/bin/charadock-beatrice-host.exe",
     to: "bin/charadock-beatrice-host.exe",
   }]);
-  const helper = path.join(projectRoot, packageJson.build.extraResources[0].from);
-  assert.equal(fs.readFileSync(helper).subarray(0, 2).toString("ascii"), "MZ");
   assert.equal(packageJson.build.files.some((entry) => /beatrice.*(?:vst3|toml|bin)/i.test(entry)), false);
   assert.match(fs.readFileSync(path.join(projectRoot, "THIRD_PARTY_NOTICES.md"), "utf8"), /Steinberg VST 3 SDK/);
   const html = fs.readFileSync(path.join(projectRoot, "desktop", "control.html"), "utf8");

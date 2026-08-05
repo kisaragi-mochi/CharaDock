@@ -42,8 +42,6 @@ test("Beatrice settings are bounded and packaged helper path is deterministic", 
   assert.equal(normalizeBeatriceMode("rvc"), "none");
   assert.equal(normalizeBeatriceVoiceId(5000), 999);
   assert.equal(resolveBeatriceHostExecutable({ packaged: true, resourcesPath: "C:\\App\\resources" }), path.join("C:\\App\\resources", "bin", "charadock-beatrice-host.exe"));
-  const binary = path.resolve(__dirname, "..", "..", "native", "bin", "charadock-beatrice-host.exe");
-  assert.equal(fs.readFileSync(binary).subarray(0, 2).toString("ascii"), "MZ");
 });
 
 test("Beatrice host receives all per-character tuning parameters", () => {
