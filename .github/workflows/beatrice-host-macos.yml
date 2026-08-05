@@ -61,7 +61,9 @@ jobs:
           bundled_host="dist/mac-arm64/CharaDock.app/Contents/Resources/bin/charadock-beatrice-host"
           test -x "$bundled_host"
           lipo -archs "$bundled_host" | grep -qw arm64
-          find dist -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' \) -print0 | sort -z | xargs -0 shasum -a 256 > dist/SHA256SUMS-macos-arm64.txt
+          for artifact in dist/*.dmg dist/*.zip; do
+            shasum -a 256 "$artifact" | sed 's#  dist/#  #'
+          done > dist/SHA256SUMS-macos-arm64.txt
 
       - name: Upload unsigned experimental package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
