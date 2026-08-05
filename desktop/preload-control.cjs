@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld("mascotDesktop", {
   appendCodexRealtimeSpeech: (text) => ipcRenderer.invoke("audio:realtimeAppendSpeech", text),
   stopCodexRealtime: () => ipcRenderer.invoke("audio:realtimeStop"),
   getBeatriceStatus: () => ipcRenderer.invoke("beatrice:status"),
+  openBeatriceOfficialSite: () => ipcRenderer.invoke("beatrice:openOfficialSite"),
   chooseBeatriceInstallation: () => ipcRenderer.invoke("beatrice:chooseInstall"),
   addBeatriceModels: () => ipcRenderer.invoke("beatrice:addModels"),
   removeBeatriceModel: (modelId) => ipcRenderer.invoke("beatrice:removeModel", modelId),

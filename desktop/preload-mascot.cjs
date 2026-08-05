@@ -17,6 +17,15 @@ window.addEventListener("DOMContentLoaded", () => {
   const bubble = document.createElement("div");
   bubble.id = "desktopMascotBubble";
   bubble.setAttribute("role", "status");
+  const bubbleHeader = document.createElement("div");
+  bubbleHeader.id = "desktopMascotBubbleHeader";
+  const bubbleCharacterName = document.createElement("strong");
+  bubbleCharacterName.id = "desktopMascotBubbleCharacterName";
+  bubbleCharacterName.textContent = "キャラクター";
+  const bubbleVoiceMode = document.createElement("span");
+  bubbleVoiceMode.id = "desktopMascotBubbleVoiceMode";
+  bubbleVoiceMode.textContent = "TTS";
+  bubbleHeader.append(bubbleCharacterName, bubbleVoiceMode);
   const bubbleText = document.createElement("span");
   bubbleText.id = "desktopMascotBubbleText";
   const workActivity = document.createElement("span");
@@ -36,13 +45,14 @@ window.addEventListener("DOMContentLoaded", () => {
   bubbleMore.hidden = true;
   bubbleMore.textContent = "全文";
   bubbleMore.setAttribute("aria-expanded", "false");
-  bubble.append(bubbleText, workActivity, permissionActions, artifactActions, bubbleMore);
+  bubble.append(bubbleHeader, bubbleText, workActivity, permissionActions, artifactActions, bubbleMore);
   document.body.appendChild(bubble);
 
   const dock = document.createElement("div");
   dock.id = "desktopMascotDock";
   dock.innerHTML = `
     <span id="desktopMascotHint" role="status"></span>
+    <span id="desktopMascotVoiceBadge" role="status" aria-live="polite">会話 · TTS</span>
     <div id="desktopMascotAutoSendCountdown" role="status" hidden>
       <span id="desktopMascotAutoSendCountdownLabel"></span>
       <button type="button" data-countdown-action="send">今すぐ送信</button>
@@ -92,6 +102,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const workPanelSummary = workPanel.querySelector("#desktopMascotWorkPanelSummary");
   const historyTitle = workPanel.querySelector("#desktopMascotHistoryTitle");
   const hint = dock.querySelector("#desktopMascotHint");
+  const voiceBadge = dock.querySelector("#desktopMascotVoiceBadge");
   const autoSendCountdown = dock.querySelector("#desktopMascotAutoSendCountdown");
   const autoSendCountdownLabel = dock.querySelector("#desktopMascotAutoSendCountdownLabel");
   let statusTimer;
@@ -106,6 +117,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let appState;
   let realtimePeer = null;
   let realtimeDataChannel = null;
+  let realtimeSessionState = "idle";
   let realtimeRemoteAudio = null;
   let realtimeBeatriceContext = null;
   let realtimeBeatriceOutput = null;
@@ -357,6 +369,36 @@ window.addEventListener("DOMContentLoaded", () => {
     input.style.overflowY = input.scrollHeight > maxHeight ? "auto" : "hidden";
   };
 
+  const updateVoiceContext = () => {
+    const english = appState?.language === "en";
+    const workMode = appState?.interactionMode === "work";
+    const liveConfigured = appState?.speechInputProvider === "realtime" && appState?.backend === "codex";
+    const live = realtimeSessionState === "live";
+    const connecting = realtimeSessionState === "connecting";
+    const voiceMode = live ? "LIVE" : connecting ? (english ? "CONNECTING" : "LIVE接続中") : appState?.ttsEnabled ? "TTS" : "TEXT";
+    const mode = workMode ? (english ? "Work" : "作業") : (english ? "Chat" : "会話");
+    voiceBadge.textContent = `${mode} · ${voiceMode}`;
+    voiceBadge.classList.toggle("is-live", live);
+    voiceBadge.classList.toggle("is-connecting", connecting);
+    voiceBadge.classList.toggle("is-muted", !live && !connecting && !appState?.ttsEnabled);
+    voiceBadge.setAttribute("aria-label", english
+      ? `${mode} mode, ${live ? "Realtime voice active" : connecting ? "connecting to Realtime voice" : appState?.ttsEnabled ? "standard text to speech active" : "text only"}`
+      : `${mode}モード、${live ? "Realtime音声を使用中" : connecting ? "Realtime音声へ接続中" : appState?.ttsEnabled ? "通常TTSを使用中" : "文字のみ"}`);
+    bubbleVoiceMode.textContent = voiceMode;
+    bubbleVoiceMode.classList.toggle("is-live", live);
+    bubbleVoiceMode.classList.toggle("is-connecting", connecting);
+    micButton.dataset.liveState = live ? "active" : connecting ? "connecting" : liveConfigured ? "ready" : "off";
+    const micLabel = live
+      ? (english ? "Stop LIVE voice" : "LIVE音声を終了")
+      : connecting
+        ? (english ? "Connecting to LIVE voice" : "LIVE音声へ接続中")
+        : liveConfigured
+          ? (english ? "Start LIVE voice" : "LIVE音声を開始")
+          : (english ? "Voice input" : "音声入力");
+    micButton.setAttribute("aria-label", micLabel);
+    micButton.title = micLabel;
+  };
+
   const applyInteractionMode = (state = {}) => {
     const workMode = state.interactionMode === "work";
     document.body.classList.toggle("is-work-mode", workMode);
@@ -374,11 +416,13 @@ window.addEventListener("DOMContentLoaded", () => {
       if (workMode) renderWorkHistory(workHistoryState);
       else renderConversationHistory(chatHistoryState);
     }
+    updateVoiceContext();
     resizeInput();
   };
 
   const applyCharacter = (character) => {
     document.documentElement.dataset.character = character?.id || "amber-avatar";
+    bubbleCharacterName.textContent = character?.name || "キャラクター";
     const ui = character?.ui || {};
     const root = document.documentElement.style;
     const percent = (name, value, fallback) => root.setProperty(name, `${Number(value) || fallback}%`);
@@ -1699,11 +1743,15 @@ window.addEventListener("DOMContentLoaded", () => {
     realtimeRemoteAudio = null;
     stopRealtimeBeatrice().catch(() => {});
     realtimeStream = null;
+    realtimeSessionState = "idle";
     micButton.setAttribute("aria-pressed", "false");
+    updateVoiceContext();
   };
 
   const startRealtime = async () => {
     stopTtsPlayback();
+    realtimeSessionState = "connecting";
+    updateVoiceContext();
     realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
     realtimePeer = new RTCPeerConnection();
     for (const track of realtimeStream.getAudioTracks()) realtimePeer.addTrack(track, realtimeStream);
@@ -1908,6 +1956,8 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (method === "thread/realtime/started") {
+      realtimeSessionState = "live";
+      updateVoiceContext();
       setStatus("話してください…もう一度押すと終了", 30_000);
       return;
     }
@@ -1948,6 +1998,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   ipcRenderer.on("mascot:tts", (_event, payload) => {
     appState = { ...appState, ttsEnabled: Boolean(payload?.enabled), ttsProvider: payload?.provider || "system" };
+    updateVoiceContext();
     if (!payload?.enabled) {
       stopTtsPlayback();
     }
@@ -1957,6 +2008,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const previousMode = appState?.voiceActivationMode;
     const previousSensitivity = appState?.vadSensitivity;
     appState = { ...appState, ...payload };
+    updateVoiceContext();
     if (appState.voiceAutoSend === false) clearAutoSendCountdown();
     if (vadActive && (previousProvider !== appState.speechInputProvider
       || previousMode !== appState.voiceActivationMode

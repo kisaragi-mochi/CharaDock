@@ -3567,6 +3567,11 @@ function registerIpc() {
     assertTrustedAppSender(event);
     return publicBeatriceStatus();
   });
+  ipcMain.handle("beatrice:openOfficialSite", async (event) => {
+    assertTrustedSender(event);
+    await shell.openExternal("https://prj-beatrice.com/");
+    return { opened: true };
+  });
   ipcMain.handle("beatrice:chooseInstall", async (event) => {
     assertTrustedSender(event);
     return chooseBeatriceInstallation(BrowserWindow.fromWebContents(event.sender) || controlWindow);

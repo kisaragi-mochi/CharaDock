@@ -82,7 +82,7 @@ body.is-position-locked, body.is-position-locked #stage { -webkit-app-region: no
   top: var(--mascot-bubble-top, 24%);
   width: min(var(--mascot-bubble-width, 68%), 350px);
   overflow: visible;
-  padding: 12px 14px;
+  padding: 11px 14px 13px;
   color: var(--pet-text);
   background: var(--pet-surface);
   border: 1px solid var(--pet-border-strong);
@@ -97,6 +97,20 @@ body.is-position-locked, body.is-position-locked #stage { -webkit-app-region: no
   transition: opacity 180ms ease, transform 240ms cubic-bezier(.2,.8,.2,1);
   pointer-events: none;
 }
+#desktopMascotBubbleHeader {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+  font: 750 9px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+#desktopMascotBubbleCharacterName { min-width: 0; overflow: hidden; color: color-mix(in srgb, var(--pet-accent) 74%, white); text-overflow: ellipsis; white-space: nowrap; }
+#desktopMascotBubbleVoiceMode { flex: 0 0 auto; padding: 3px 6px; color: var(--pet-text-muted); background: var(--pet-control-subtle); border-radius: 999px; font-size: 8px; letter-spacing: .04em; }
+#desktopMascotBubbleVoiceMode.is-live { color: var(--pet-accent-ink); background: var(--pet-accent); }
+#desktopMascotBubbleVoiceMode.is-connecting { color: var(--pet-accent); background: var(--pet-accent-soft); }
 #desktopMascotBubble::before {
   content: "";
   position: absolute;
@@ -254,10 +268,34 @@ body.is-work-panel-open #desktopMascotBubble.is-visible { opacity: 0; transform:
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   pointer-events: none;
   transition: opacity 180ms ease;
 }
+#desktopMascotVoiceBadge {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  right: 0;
+  bottom: 50px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 5px 8px;
+  color: var(--pet-text-secondary);
+  background: var(--pet-surface-solid);
+  border: 1px solid var(--pet-border);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  font: 750 8.5px/1 system-ui, sans-serif;
+  letter-spacing: .035em;
+  pointer-events: none;
+  transition: color 160ms ease, background 160ms ease, opacity 160ms ease, transform 180ms cubic-bezier(.2,.8,.2,1);
+}
+#desktopMascotVoiceBadge.is-live { color: var(--pet-accent-ink); background: var(--pet-accent); border-color: var(--pet-accent-line); }
+#desktopMascotVoiceBadge.is-connecting { color: var(--pet-accent); background: var(--pet-surface-solid); border-color: var(--pet-accent-line); }
+#desktopMascotVoiceBadge.is-connecting::before { content: ""; width: 5px; height: 5px; margin-right: 1px; background: var(--pet-accent); border-radius: 50%; animation: mascot-work-pulse 1.2s ease-in-out infinite; }
+#desktopMascotVoiceBadge.is-muted { color: var(--pet-text-muted); }
+#desktopMascotDock.is-open #desktopMascotVoiceBadge { opacity: .82; transform: translateY(-2px); }
 #desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton, #desktopMascotSendButton, #desktopMascotStopButton, #desktopMascotModeButton, #desktopMascotWorkTarget, #desktopMascotWorkOpenButton, #desktopMascotWorkHistoryButton {
   -webkit-app-region: no-drag;
   display: grid;
@@ -271,17 +309,18 @@ body.is-work-panel-open #desktopMascotBubble.is-visible { opacity: 0; transform:
   backdrop-filter: blur(16px) saturate(1.12);
   font: 800 15px/1 system-ui, sans-serif;
 }
-#desktopMascotChatButton, #desktopMascotSettingsButton { width: 38px; height: 38px; border-radius: 50%; transition: opacity .18s, transform .18s, background .18s, width .18s, margin .18s; }
-#desktopMascotChatButton .ui-symbol { width: 21px; height: 21px; }
-#desktopMascotSettingsButton .ui-symbol { width: 19px; height: 19px; }
-#desktopMascotChatButton { opacity: .62; }
+#desktopMascotChatButton, #desktopMascotSettingsButton { width: 44px; height: 44px; border-radius: 50%; transition: opacity .18s, transform .18s, background .18s, width .18s, margin .18s; }
+#desktopMascotChatButton .ui-symbol { width: 23px; height: 23px; }
+#desktopMascotSettingsButton .ui-symbol { width: 20px; height: 20px; }
+#desktopMascotChatButton { opacity: .74; }
 #desktopMascotDock:hover #desktopMascotChatButton, #desktopMascotChatButton:focus-visible { opacity: 1; transform: translateY(-1px); background: var(--pet-control-hover); }
-#desktopMascotSettingsButton { font-size: 12px; opacity: 0; transform: scale(.85); transition: .16s ease; }
+#desktopMascotSettingsButton { font-size: 12px; opacity: .48; transform: scale(.94); transition: .16s ease; }
 #desktopMascotDock:hover #desktopMascotSettingsButton, #desktopMascotDock.is-open #desktopMascotSettingsButton, #desktopMascotSettingsButton:focus-visible { opacity: 1; transform: scale(1); }
+#desktopMascotSettingsButton:hover, #desktopMascotSettingsButton:focus-visible { background: var(--pet-control-hover); }
 #desktopMascotComposer {
   -webkit-app-region: no-drag;
   position: absolute;
-  right: 44px;
+  right: 50px;
   bottom: 0;
   pointer-events: auto;
   display: grid;
@@ -289,8 +328,8 @@ body.is-work-panel-open #desktopMascotBubble.is-visible { opacity: 0; transform:
   grid-template-areas: "mode history mic input stop send";
   align-items: center;
   gap: 6px;
-  width: min(calc(100% - 44px), 460px);
-  padding: 6px;
+  width: min(calc(100% - 50px), 472px);
+  padding: 7px;
   border: 1px solid var(--pet-border);
   border-radius: 16px;
   background: var(--pet-surface);
@@ -381,8 +420,8 @@ body.is-work-mode #desktopMascotWorkHistoryButton { display: flex; }
 #desktopMascotAutoSendCountdown {
   -webkit-app-region: no-drag;
   position: absolute;
-  right: 44px;
-  bottom: 49px;
+  right: 50px;
+  bottom: 53px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -419,13 +458,15 @@ body.is-work-mode #desktopMascotWorkHistoryButton { display: flex; }
 }
 body.is-work-mode #desktopMascotInput { min-height: 42px; max-height: 78px; padding: 9px 5px; font-size: 12.5px; }
 #desktopMascotInput::placeholder { color: var(--pet-placeholder); }
-#desktopMascotMicButton, #desktopMascotSendButton, #desktopMascotStopButton { width: 34px; height: 34px; border-radius: 10px; box-shadow: none; font-size: 12px; background: var(--pet-control-subtle); }
-#desktopMascotMicButton .ui-symbol, #desktopMascotSendButton .ui-symbol, #desktopMascotStopButton .ui-symbol { width: 19px; height: 19px; }
+#desktopMascotMicButton, #desktopMascotSendButton, #desktopMascotStopButton { width: 38px; height: 38px; border-radius: 11px; box-shadow: none; font-size: 12px; background: var(--pet-control-subtle); }
+#desktopMascotMicButton .ui-symbol, #desktopMascotSendButton .ui-symbol, #desktopMascotStopButton .ui-symbol { width: 20px; height: 20px; }
 #desktopMascotMicButton { grid-area: mic; }
 #desktopMascotSendButton { grid-area: send; }
 #desktopMascotStopButton { grid-area: stop; }
 #desktopMascotStopButton[hidden], #desktopMascotSendButton[hidden] { display: none; }
 #desktopMascotMicButton[aria-pressed="true"] { color: var(--pet-accent-ink); background: var(--pet-accent); }
+#desktopMascotMicButton[data-live-state="ready"] { color: var(--pet-accent); border-color: var(--pet-accent-line); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pet-accent) 13%, transparent); }
+#desktopMascotMicButton[data-live-state="connecting"] { color: var(--pet-accent); border-color: var(--pet-accent-line); }
 #desktopMascotMicButton.is-vad-waiting { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pet-accent-ink) 28%, transparent); }
 #desktopMascotMicButton.is-vad-speaking { animation: mascot-mic-listening .72s ease-in-out infinite; }
 #desktopMascotMicButton.is-vad-processing { cursor: wait; opacity: .78; }
@@ -540,7 +581,7 @@ body.is-work-mode #desktopMascotInput { min-height: 42px; max-height: 78px; padd
 #desktopMascotHint {
   position: absolute;
   right: 0;
-  bottom: 44px;
+  bottom: 50px;
   padding: 5px 8px;
   border-radius: 8px;
   color: var(--pet-text);
@@ -552,6 +593,7 @@ body.is-work-mode #desktopMascotInput { min-height: 42px; max-height: 78px; padd
   pointer-events: none;
 }
 #desktopMascotDock.is-status #desktopMascotHint { opacity: 1; transform: none; }
+#desktopMascotDock.is-status #desktopMascotVoiceBadge { opacity: 0; transform: translateY(4px); }
 #desktopMascotBubble.is-speaking::after {
   content: "";
   display: inline-block;
@@ -647,7 +689,8 @@ body.is-position-locked #desktopMascotPetZone { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   #stage, #desktopMascotBubble, #desktopMascotComposer, #desktopMascotWorkPanel,
   #desktopMascotHint, #desktopMascotChatButton, #desktopMascotSettingsButton,
-  #desktopMascotBubbleMore, #desktopMascotPermissionActions button, #desktopMascotAutoSendCountdown {
+  #desktopMascotBubbleMore, #desktopMascotPermissionActions button, #desktopMascotAutoSendCountdown,
+  #desktopMascotVoiceBadge {
     transition-duration: 140ms !important;
     animation: none !important;
   }
@@ -658,7 +701,7 @@ body.is-position-locked #desktopMascotPetZone { cursor: pointer; }
   #desktopMascotBubble, #desktopMascotComposer, #desktopMascotWorkPanel,
   #desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton,
   #desktopMascotStopButton, #desktopMascotWorkTarget, #desktopMascotWorkOpenButton, #desktopMascotWorkHistoryButton,
-  #desktopMascotAutoSendCountdown {
+  #desktopMascotAutoSendCountdown, #desktopMascotVoiceBadge {
     backdrop-filter: none;
     background: var(--pet-reduced-surface);
   }
@@ -670,6 +713,6 @@ body.is-position-locked #desktopMascotPetZone { cursor: pointer; }
   #desktopMascotBubble, #desktopMascotComposer, #desktopMascotWorkPanel,
   #desktopMascotChatButton, #desktopMascotSettingsButton, #desktopMascotMicButton,
   #desktopMascotSendButton, #desktopMascotStopButton, #desktopMascotModeButton, #desktopMascotWorkTarget, #desktopMascotWorkOpenButton,
-  #desktopMascotWorkHistoryButton { border-color: var(--pet-contrast-border); }
+  #desktopMascotWorkHistoryButton, #desktopMascotVoiceBadge { border-color: var(--pet-contrast-border); }
   #desktopMascotInput::placeholder { color: var(--pet-text-secondary); }
 }

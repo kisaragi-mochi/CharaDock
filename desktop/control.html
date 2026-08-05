@@ -15,6 +15,13 @@
         <span><strong>CharaDock</strong><small>Desktop Companion</small></span>
       </header>
 
+      <div class="settings-search" role="search">
+        <span class="ui-symbol ui-symbol-search" aria-hidden="true"></span>
+        <input id="settingsSearchInput" type="search" autocomplete="off" placeholder="設定を検索" aria-label="設定を検索" aria-controls="settingsSearchResults" aria-expanded="false" />
+        <kbd aria-hidden="true">Ctrl K</kbd>
+        <div id="settingsSearchResults" class="settings-search-results" role="listbox" aria-label="検索結果" hidden></div>
+      </div>
+
       <nav class="nav-tabs" aria-label="設定カテゴリ">
         <p class="nav-section-label">コンパニオン</p>
         <button class="nav-tab is-active" type="button" data-page="chat"><span class="ui-symbol ui-symbol-chat" aria-hidden="true"></span>会話</button>
@@ -89,6 +96,11 @@
       <section class="page" data-page-panel="character">
         <header class="page-header"><div><p class="eyebrow">キャラクター</p><h1>見た目と振る舞い</h1></div></header>
         <p class="page-lead">クリックすると透明ウィンドウのキャラクターがすぐ切り替わります。</p>
+        <nav class="page-section-nav" aria-label="キャラクター設定内を移動">
+          <button type="button" data-settings-jump="#characterLibraryTitle"><span class="ui-symbol ui-symbol-character" aria-hidden="true"></span>一覧と設定</button>
+          <button type="button" data-settings-jump="#motionEditorTitle"><span class="ui-symbol ui-symbol-desktop" aria-hidden="true"></span>動き</button>
+          <button type="button" data-settings-jump="#characterAddTitle"><span class="ui-symbol ui-symbol-sparkle" aria-hidden="true"></span>キャラを追加</button>
+        </nav>
         <section class="character-add-group" aria-labelledby="characterAddTitle">
           <header class="character-section-heading"><div><p class="eyebrow">Add Character</p><h2 id="characterAddTitle">キャラクターを追加</h2></div><p>完成済みのパッケージを読み込むか、一枚の画像から新しく作成できます。</p></header>
         <section id="purupuruImportDrop" class="card avatar-import-card">
@@ -124,9 +136,9 @@
           <div id="generatorUnavailable" class="generator-unavailable">AI接続を「Codex app-server」にすると利用できます。</div>
         </section>
         </section>
-        <header class="character-section-heading is-list-heading"><div><p class="eyebrow">Library</p><h2>キャラクター一覧</h2></div></header>
+        <header class="character-section-heading is-list-heading"><div><p class="eyebrow">Library</p><h2 id="characterLibraryTitle">キャラクター一覧</h2></div></header>
         <div id="characterGrid" class="character-grid"></div>
-        <section class="card profile-editor">
+        <section id="characterProfileCard" class="card profile-editor">
           <header><div><h2>キャラクター設定</h2><p>名前と性格は会話にも反映されます。吹き出しはキャラクターに重なる位置へ調整できます。</p></div></header>
           <div class="profile-fields">
             <label>名前<input id="characterNameInput" type="text" maxlength="40" /></label>
@@ -169,7 +181,7 @@
             <p id="characterProfileStatus" class="inline-status" role="status"></p>
           </div>
         </section>
-        <div class="card feature-card">
+        <div id="characterReactionCard" class="card feature-card">
           <div><span class="card-icon">◌</span><div><h2>動きと反応</h2><p>自動まばたき、呼吸、髪揺れ、アプリ上のマウス追従、音量リップシンクを利用します。</p></div></div>
           <label class="switch-row"><span><strong>マウスを目で追う</strong><small>カーソルがキャラクター上にある間だけ追従</small></span><input id="mouseFollowToggle" type="checkbox" /><i></i></label>
         </div>
@@ -178,8 +190,13 @@
       <section class="page" data-page-panel="voice">
         <header class="page-header"><div><p class="eyebrow">音声</p><h1>聞く・話す</h1></div></header>
         <p class="page-lead">音声入力は全体へ、読み上げる声は選択中のキャラクターへ適用されます。</p>
+        <nav class="page-section-nav" aria-label="音声設定内を移動">
+          <button type="button" data-settings-jump="#voiceInputCard"><span class="ui-symbol ui-symbol-microphone" aria-hidden="true"></span>音声入力</button>
+          <button type="button" data-settings-jump="#characterVoiceCard"><span class="ui-symbol ui-symbol-voice" aria-hidden="true"></span>キャラの声</button>
+          <button type="button" data-settings-jump="#beatriceLibraryCard"><span class="ui-symbol ui-symbol-settings" aria-hidden="true"></span>追加ランタイム</button>
+        </nav>
         <div class="voice-settings-stack">
-          <section class="card settings-card voice-input-card">
+          <section id="voiceInputCard" class="card settings-card voice-input-card">
             <header><div><h2>音声入力</h2><p>マイクから話しかける方法と、自動送信のタイミングを設定します。</p></div></header>
             <div id="speechInputMount"></div>
           </section>
@@ -188,6 +205,11 @@
               <div><p class="eyebrow">Realtime声変換</p><h2>Beatrice 2</h2><p>公式VST3とモデルは元の場所から参照します。キャラクターごとの声質は下の音声設定で選べます。</p></div>
               <span id="beatriceLibraryBadge" class="setup-state-badge">未設定</span>
             </header>
+            <div class="beatrice-download-guide">
+              <span class="beatrice-download-icon"><span class="ui-symbol ui-symbol-external" aria-hidden="true"></span></span>
+              <div><strong>最初にBeatrice 2をダウンロード</strong><p>CharaDockにはBeatrice本体とモデルを同梱していません。公式サイトから取得・展開してから、下のフォルダーを選択してください。</p><small>prj-beatrice.com</small></div>
+              <button id="beatriceOfficialSiteButton" class="button button-secondary" type="button">公式サイトを開く <span class="ui-symbol ui-symbol-external" aria-hidden="true"></span></button>
+            </div>
             <div class="beatrice-install-summary">
               <span class="beatrice-install-icon"><span class="ui-symbol ui-symbol-voice" aria-hidden="true"></span></span>
               <div><small>Beatrice本体</small><strong id="beatriceInstallName">フォルダー未選択</strong><p id="beatriceLibraryStatus" class="hint">公式サイトから取得したBeatrice 2の展開フォルダーを選択してください。</p></div>
@@ -205,6 +227,12 @@
 
       <section class="page" data-page-panel="connection">
         <header class="page-header"><div><p class="eyebrow">AI接続</p><h1>応答エンジン</h1></div><button id="testBackendButton" class="button button-secondary" type="button">接続を確認</button></header>
+        <p class="page-lead">会話と作業を動かすAIを選びます。変更前に右上から接続を確認できます。</p>
+        <nav class="page-section-nav" aria-label="AI接続設定内を移動">
+          <button type="button" data-settings-jump=".backend-grid"><span class="ui-symbol ui-symbol-connection" aria-hidden="true"></span>接続方式</button>
+          <button type="button" data-settings-jump="#codexSettings"><span class="ui-symbol ui-symbol-chat" aria-hidden="true"></span>Codex</button>
+          <button type="button" data-settings-jump="#openaiSettings"><span class="ui-symbol ui-symbol-sparkle" aria-hidden="true"></span>OpenAI API</button>
+        </nav>
         <div class="backend-grid">
           <label class="backend-card">
             <input type="radio" name="backend" value="codex" />
@@ -260,7 +288,13 @@
 
       <section class="page" data-page-panel="desktop">
         <header class="page-header"><div><p class="eyebrow">デスクトップ</p><h1>常駐と表示</h1></div></header>
-        <section class="card settings-card language-card">
+        <p class="page-lead">表示言語、キャラクターの操作方法、ウィンドウの位置をまとめて設定します。</p>
+        <nav class="page-section-nav" aria-label="デスクトップ設定内を移動">
+          <button type="button" data-settings-jump="#languageSettingsCard"><span class="ui-symbol ui-symbol-settings" aria-hidden="true"></span>言語</button>
+          <button type="button" data-settings-jump="#windowSettingsCard"><span class="ui-symbol ui-symbol-desktop" aria-hidden="true"></span>操作と表示</button>
+          <button type="button" data-settings-jump="#mascotWindowCard"><span class="ui-symbol ui-symbol-character" aria-hidden="true"></span>ウィンドウ位置</button>
+        </nav>
+        <section id="languageSettingsCard" class="card settings-card language-card">
           <header><div><h2>表示言語</h2><p>画面表示と組み込みキャラクターの名前・性格に適用します。音声認識と日本語TTS処理は変更しません。</p></div></header>
           <label class="field-row">言語
             <select id="languageSelect">
@@ -270,7 +304,7 @@
           </label>
         </section>
         <div class="desktop-grid">
-          <section class="card settings-card">
+          <section id="windowSettingsCard" class="card settings-card">
             <h2>ウィンドウ</h2>
             <label class="switch-row"><span><strong>常に最前面</strong><small>他のアプリより手前に表示</small></span><input id="alwaysOnTopToggle" type="checkbox" /><i></i></label>
             <fieldset class="pointer-mode-picker">
@@ -519,13 +553,16 @@
                   </div>
                   <p id="irodoriReferenceHint" class="hint">WAV / MP3 / M4A / AAC / OGG / FLAC / WebMを48kHz WAVへ変換し、アプリ内へコピーします。元ファイルを削除しても使えます。v4は最大120秒まで利用します。</p>
                 </div>
-                <div class="size-actions">
-                  <label>再生速度（0.5–2.0×）<input id="irodoriSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
-                  <label>生成方式<select id="irodoriSamplingModeSelect"><option value="sway">高速（Sway）</option><option value="linear">互換（Linear）</option></select></label>
-                  <label>生成ステップ（4–40）<input id="irodoriStepsInput" type="number" min="4" max="40" step="1" /></label>
-                </div>
-                <p class="hint">高速設定はSway 8ステップです。音質が合わない場合は10～12ステップ、またはLinearへ戻せます。</p>
-                <label>シード<input id="irodoriSeedInput" type="number" min="0" max="2147483647" step="1" /></label>
+                <details class="tts-advanced">
+                  <summary>速度と品質を詳しく調整</summary>
+                  <div class="size-actions">
+                    <label>再生速度（0.5–2.0×）<input id="irodoriSpeedInput" type="number" min="0.5" max="2" step="0.05" /></label>
+                    <label>生成方式<select id="irodoriSamplingModeSelect"><option value="sway">高速（Sway）</option><option value="linear">互換（Linear）</option></select></label>
+                    <label>生成ステップ（4–40）<input id="irodoriStepsInput" type="number" min="4" max="40" step="1" /></label>
+                  </div>
+                  <p class="hint">高速設定はSway 8ステップです。音質が合わない場合は10～12ステップ、またはLinearへ戻せます。</p>
+                  <label>シード<input id="irodoriSeedInput" type="number" min="0" max="2147483647" step="1" /></label>
+                </details>
                 <p id="irodoriStatus" class="hint">Irodori TTSの準備状況を確認しています…</p>
                 <p class="hint">テキストと参照音声は端末内で処理されます。本人の許可がある声、または利用権を持つ音声だけを使用してください。</p>
                 <div class="model-terms">
@@ -548,7 +585,7 @@
               </fieldset>
             </section>
           </section>
-          <section class="card settings-card">
+          <section id="mascotWindowCard" class="card settings-card">
             <h2>キャラクターウィンドウ</h2>
             <label>表示するモニター<select id="displaySelect"><option value="">メインモニター</option></select></label>
             <div class="stack-actions">

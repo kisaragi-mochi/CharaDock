@@ -72,6 +72,30 @@
     "avatarSize", "rangeLeft", "rangeRight", "rangeUp", "rangeDown",
     "followSpeed", "breathStrength", "rollStrength", "pyokoStrength", "hairSpring", "hairWarp",
   ];
+  const settingsSearchItems = Object.freeze([
+    { page: "chat", target: "#chatLog", ja: "会話履歴", en: "Conversation history", detailJa: "過去の会話と作業を見る", detailEn: "Review past chats and work", keywords: "chat conversation history work 作業" , popular: true },
+    { page: "chat", target: "#chatWorkDirectoryName", ja: "作業フォルダー", en: "Work folder", detailJa: "作業先を選択して開く", detailEn: "Choose and open the work location", keywords: "directory folder output 成果物" },
+    { page: "character", target: "#characterLibraryTitle", ja: "キャラクター一覧", en: "Character library", detailJa: "使うキャラクターを切り替える", detailEn: "Switch the active character", keywords: "avatar select library キャラ", popular: true },
+    { page: "character", target: "#characterProfileCard", ja: "名前・性格・メモリ", en: "Name, personality, and memory", detailJa: "選択中のキャラクターを編集", detailEn: "Edit the selected character", keywords: "profile persona memory bubble 名前 性格 記憶 吹き出し" },
+    { page: "character", target: "#motionEditorTitle", ja: "キャラクターの動き", en: "Character motion", detailJa: "サイズ、追従、呼吸、髪揺れ", detailEn: "Size, tracking, breathing, and hair motion", keywords: "motion animation lip sync hair blink マウス リップシンク", popular: true },
+    { page: "character", target: "#characterAddTitle", ja: "キャラクターを追加", en: "Add a character", detailJa: ".purupuruまたは画像から作成", detailEn: "Import .purupuru or create from an image", keywords: "import image generator purupuru 画像 追加" },
+    { page: "voice", target: "#voiceInputCard", ja: "音声入力", en: "Voice input", detailJa: "認識方式、VAD、自動送信", detailEn: "Recognition, VAD, and auto-send", keywords: "microphone stt sherpa vad realtime マイク 音声認識", popular: true },
+    { page: "voice", target: "#characterVoiceCard", ja: "キャラクターの声", en: "Character voice", detailJa: "Liveまたは通常TTSの声を選ぶ", detailEn: "Choose a Live or standard TTS voice", keywords: "tts live realtime speaker voice 読み上げ", popular: true },
+    { page: "voice", target: "#realtimeVoiceSettings", ja: "Realtimeの声", en: "Realtime voice", detailJa: "GPT-Liveの声と声変換", detailEn: "GPT-Live voice and conversion", keywords: "codex live openai beatrice" },
+    { page: "voice", target: "#beatriceLibraryCard", ja: "Beatrice 2", en: "Beatrice 2", detailJa: "公式本体と変換モデルを参照", detailEn: "Link the official runtime and models", keywords: "vst voice conversion 声変換 model" },
+    { page: "voice", target: "#standardTtsSettings", ja: "通常TTSと音声モデル", en: "Standard TTS and voice models", detailJa: "Irodori、SBV2、Kokoroなど", detailEn: "Irodori, SBV2, Kokoro, and more", keywords: "irodori sbv2 kokoro piper supertonic style bert model" },
+    { page: "connection", target: ".backend-grid", ja: "AI接続方式", en: "AI connection method", detailJa: "CodexまたはOpenAI APIを選択", detailEn: "Choose Codex or OpenAI API", keywords: "backend provider login api", popular: true },
+    { page: "connection", target: "#codexSettings", ja: "Codexのモデルと推論", en: "Codex model and reasoning", detailJa: "会話・作業ごとに設定", detailEn: "Configure chat and work separately", keywords: "app server model effort thinking 推論" },
+    { page: "connection", target: "#openaiSettings", ja: "OpenAI API", en: "OpenAI API", detailJa: "APIキーと応答モデル", detailEn: "API key and response model", keywords: "key responses transcription" },
+    { page: "desktop", target: "#languageSettingsCard", ja: "表示言語", en: "Display language", detailJa: "日本語とEnglishを切り替える", detailEn: "Switch between Japanese and English", keywords: "language english japanese 日本語 英語" },
+    { page: "desktop", target: "#windowSettingsCard", ja: "キャラクターの操作", en: "Character interaction", detailJa: "自動退避、クリック透過、最前面", detailEn: "Auto-hide, click-through, and always-on-top", keywords: "auto hide pointer click through lock window 透過 固定", popular: true },
+    { page: "desktop", target: "#mascotWindowCard", ja: "ウィンドウの位置とサイズ", en: "Window position and size", detailJa: "モニター、表示、位置を調整", detailEn: "Adjust display, visibility, and position", keywords: "monitor display size position モニター" },
+    { page: "desktop", target: ".shortcut-card", ja: "キーボードショートカット", en: "Keyboard shortcuts", detailJa: "すばやく表示と操作を切り替える", detailEn: "Quickly toggle display and interaction", keywords: "keyboard hotkey ctrl key" },
+    { page: "support", target: "#reopenOnboardingButton", ja: "初回セットアップ", en: "Initial setup", detailJa: "セットアップをもう一度行う", detailEn: "Run guided setup again", keywords: "onboarding wizard reset setup", popular: true },
+    { page: "support", target: ".support-diagnostics-card", ja: "診断とログ", en: "Diagnostics and logs", detailJa: "不具合調査用の情報をまとめる", detailEn: "Collect troubleshooting information", keywords: "support log zip gpu error サポート" },
+  ]);
+  let settingsSearchMatches = [];
+  let settingsSearchActiveIndex = -1;
 
   function setStatus(element, message, error = false) {
     element.textContent = String(message || "");
@@ -538,7 +562,121 @@
     }
   }
 
+  function settingsPageLabel(page) {
+    const labels = {
+      chat: ["会話", "Chat"],
+      character: ["キャラクター", "Character"],
+      voice: ["音声", "Voice"],
+      connection: ["AI接続", "AI Connection"],
+      desktop: ["デスクトップ", "Desktop"],
+      support: ["サポート", "Support"],
+    };
+    const label = labels[page] || [page, page];
+    return localized(label[0], label[1]);
+  }
+
+  function closeSettingsSearch({ clear = false } = {}) {
+    const input = $("#settingsSearchInput");
+    const results = $("#settingsSearchResults");
+    if (clear) input.value = "";
+    results.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    settingsSearchMatches = [];
+    settingsSearchActiveIndex = -1;
+  }
+
+  function setSettingsSearchActive(index) {
+    const buttons = $$("#settingsSearchResults .settings-search-result");
+    if (!buttons.length) return;
+    settingsSearchActiveIndex = (index + buttons.length) % buttons.length;
+    buttons.forEach((button, buttonIndex) => {
+      const active = buttonIndex === settingsSearchActiveIndex;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", String(active));
+      if (active) button.scrollIntoView({ block: "nearest" });
+    });
+  }
+
+  function jumpToSettingsTarget(selector, { highlight = true } = {}) {
+    const source = document.querySelector(selector);
+    if (!source) return;
+    const target = source.matches(".card, section, .backend-grid, .character-section-heading")
+      ? source
+      : source.closest(".card, section, .backend-grid, .character-section-heading") || source;
+    target.setAttribute("data-settings-search-target", "");
+    target.scrollIntoView({
+      block: "start",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+    if (!highlight) return;
+    target.classList.remove("settings-focus-flash");
+    requestAnimationFrame(() => {
+      target.classList.add("settings-focus-flash");
+      setTimeout(() => target.classList.remove("settings-focus-flash"), 1100);
+    });
+  }
+
+  function navigateToSetting(item) {
+    showPage(item.page);
+    closeSettingsSearch({ clear: true });
+    $("#settingsSearchInput").blur();
+    requestAnimationFrame(() => jumpToSettingsTarget(item.target));
+  }
+
+  function renderSettingsSearch(query = "") {
+    const results = $("#settingsSearchResults");
+    const input = $("#settingsSearchInput");
+    const normalized = String(query).trim().toLocaleLowerCase(state?.language === "en" ? "en-US" : "ja-JP");
+    settingsSearchMatches = settingsSearchItems.filter((item) => {
+      if (!normalized) return item.popular;
+      const haystack = [item.ja, item.en, item.detailJa, item.detailEn, item.keywords, settingsPageLabel(item.page)].join(" ").toLocaleLowerCase();
+      return haystack.includes(normalized);
+    }).slice(0, 8);
+    settingsSearchActiveIndex = -1;
+    results.replaceChildren();
+    if (!settingsSearchMatches.length) {
+      const empty = document.createElement("p");
+      empty.className = "settings-search-empty";
+      empty.textContent = localized("一致する設定がありません", "No matching settings");
+      results.appendChild(empty);
+    } else {
+      settingsSearchMatches.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "settings-search-result";
+        button.setAttribute("role", "option");
+        button.setAttribute("aria-selected", "false");
+        const title = document.createElement("strong");
+        title.textContent = localized(item.ja, item.en);
+        const detail = document.createElement("small");
+        detail.textContent = localized(item.detailJa, item.detailEn);
+        const page = document.createElement("em");
+        page.textContent = settingsPageLabel(item.page);
+        button.append(title, detail, page);
+        button.addEventListener("pointerenter", () => setSettingsSearchActive(index));
+        button.addEventListener("click", () => navigateToSetting(item));
+        results.appendChild(button);
+      });
+    }
+    results.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function organizeSettingsLayout() {
+    const characterPage = $('[data-page-panel="character"]');
+    const addGroup = characterPage?.querySelector(".character-add-group");
+    if (characterPage && addGroup) characterPage.appendChild(addGroup);
+    const voiceStack = $(".voice-settings-stack");
+    const beatriceLibrary = $("#beatriceLibraryCard");
+    if (voiceStack && beatriceLibrary) voiceStack.appendChild(beatriceLibrary);
+    for (const item of settingsSearchItems) document.querySelector(item.target)?.setAttribute("data-settings-search-target", "");
+  }
+
   function showPage(name) {
+    const scroller = $(".main-panel");
+    const activePanel = $('[data-page-panel].is-active');
+    const previousName = activePanel?.dataset.pagePanel;
+    if (previousName && previousName !== name) sessionStorage.setItem(`charadock.pageScroll.${previousName}`, String(scroller.scrollTop));
     sessionStorage.setItem("charadock.activePage", name);
     $$(".nav-tab").forEach((button) => {
       const active = button.dataset.page === name;
@@ -550,6 +688,9 @@
       const active = panel.dataset.pagePanel === name;
       panel.classList.toggle("is-active", active);
       panel.setAttribute("aria-hidden", String(!active));
+    });
+    if (previousName !== name) requestAnimationFrame(() => {
+      scroller.scrollTop = Number(sessionStorage.getItem(`charadock.pageScroll.${name}`)) || 0;
     });
   }
 
@@ -2103,6 +2244,36 @@
         tabs[index].click();
       });
     });
+    $$('[data-settings-jump]').forEach((button) => button.addEventListener("click", () => jumpToSettingsTarget(button.dataset.settingsJump)));
+    const settingsSearchInput = $("#settingsSearchInput");
+    settingsSearchInput.addEventListener("focus", () => renderSettingsSearch(settingsSearchInput.value));
+    settingsSearchInput.addEventListener("input", () => renderSettingsSearch(settingsSearchInput.value));
+    settingsSearchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSettingsSearch({ clear: true });
+        settingsSearchInput.blur();
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === "Enter") {
+        const item = settingsSearchMatches[settingsSearchActiveIndex >= 0 ? settingsSearchActiveIndex : 0];
+        if (item) navigateToSetting(item);
+        return;
+      }
+      setSettingsSearchActive(settingsSearchActiveIndex + (event.key === "ArrowDown" ? 1 : -1));
+    });
+    document.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        settingsSearchInput.focus();
+        settingsSearchInput.select();
+      }
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!event.target.closest(".settings-search")) closeSettingsSearch();
+    });
     $("#chatForm").addEventListener("submit", (event) => { event.preventDefault(); sendChat(); });
     $("#chatAttachmentButton").addEventListener("click", () => $("#chatAttachmentInput").click());
     $("#chatAttachmentInput").addEventListener("change", (event) => {
@@ -2360,6 +2531,18 @@
         setStatus($("#beatriceLibraryStatus"), error.message, true);
       }
     });
+    $("#beatriceOfficialSiteButton").addEventListener("click", async () => {
+      const button = $("#beatriceOfficialSiteButton");
+      button.disabled = true;
+      try {
+        await api.openBeatriceOfficialSite();
+        setStatus($("#beatriceLibraryStatus"), localized("Beatrice 2公式サイトをブラウザで開きました。", "Opened the official Beatrice 2 website in your browser."));
+      } catch (error) {
+        setStatus($("#beatriceLibraryStatus"), error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
     $("#beatriceModelAddButton").addEventListener("click", async () => {
       try {
         const result = await api.addBeatriceModels();
@@ -2579,7 +2762,6 @@
     });
     $("#mouseFollowToggle").addEventListener("change", () => {
       sessionStorage.setItem("charadock.activePage", "character");
-      sessionStorage.setItem("charadock.characterScroll", String(document.scrollingElement?.scrollTop || 0));
       saveSettings().catch((error) => setStatus($("#characterProfileStatus"), error.message, true));
     });
     ["#openaiModelInput", "#transcriptionModelInput", "#codexChatModelInput", "#codexChatReasoningEffortSelect", "#codexWorkModelInput", "#codexWorkReasoningEffortSelect"]
@@ -2796,6 +2978,7 @@
     const characterVoiceCard = $("#characterVoiceCard");
     $("#characterVoiceMount").appendChild(characterVoiceCard);
     $("#speechInputMount").appendChild($(".speech-input-settings"));
+    organizeSettingsLayout();
     state = await api.getState();
     api.onSherpaModelProgress((model) => {
       state.sherpaModel = model;
@@ -2824,9 +3007,6 @@
     const page = sessionStorage.getItem("charadock.activePage") || "chat";
     showPage(["chat", "character", "voice", "connection", "desktop", "support"].includes(page) ? page : "chat");
     if (page === "support") refreshSupportDiagnostics();
-    if (page === "character") requestAnimationFrame(() => {
-      document.scrollingElement.scrollTop = Number(sessionStorage.getItem("charadock.characterScroll")) || 0;
-    });
     refreshCodexAccount();
     refreshCodexModels();
     refreshRealtimeVoices();
