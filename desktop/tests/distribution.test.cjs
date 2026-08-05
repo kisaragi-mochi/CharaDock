@@ -64,6 +64,10 @@ test("Beatrice integration packages only CharaDock's host helper", () => {
   assert.match(packageJson.scripts["dist:mac:arm64"], /--mac dmg zip --arm64 --publish never/);
   assert.ok(packageJson.build.win.files.some((entry) => entry.includes("/darwin/")));
   assert.ok(packageJson.build.mac.files.some((entry) => entry.includes("/win32/")));
+  for (const required of packageJson.build.files) {
+    assert.equal(packageJson.build.win.files.includes(required), true, `Windows files must retain ${required}`);
+    assert.equal(packageJson.build.mac.files.includes(required), true, `macOS files must retain ${required}`);
+  }
   assert.equal(packageJson.build.files.some((entry) => /onnxruntime-node\/bin\/napi-v6\/(?:darwin|linux|win32)/.test(entry)), false);
   assert.equal(packageJson.build.files.some((entry) => /beatrice.*(?:vst3|toml|bin)/i.test(entry)), false);
   assert.match(fs.readFileSync(path.join(projectRoot, "THIRD_PARTY_NOTICES.md"), "utf8"), /Steinberg VST 3 SDK/);
