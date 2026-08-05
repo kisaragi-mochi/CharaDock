@@ -13,7 +13,7 @@
 
 <p align="center">
   <img alt="Code: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-20201f?style=flat-square">
-  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-20201f?style=flat-square">
+  <img alt="Platform: Windows; macOS source preview" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20source-20201f?style=flat-square">
   <img alt="Electron 43" src="https://img.shields.io/badge/Electron-43-20201f?style=flat-square">
   <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-df9848?style=flat-square">
 </p>
@@ -69,7 +69,7 @@ CharaDockは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNG
 - **ローカル認識:** 日本語Parakeet CTC、ReazonSpeech Zipformer、SenseVoice、Whisper base / tiny
 - **VAD:** Silero VADによる無音区切り、自動送信、3段階の感度
 - **出力:** Windows標準音声、Style-Bert-VITS2、piper-plus、Supertonic 3、Kokoro、Irodori TTS
-- **Realtime:** キャラクターごとにLive音声を選択。録音ボタンを押した間だけ接続し、文字入力にも同じLive音声で応答。別途導入したBeatrice 2 VST3へ48 kHz音声を流し、複数の参照モデルと声・ピッチ・フォルマント・音量・イントネーション・ピッチ補正をキャラクターごとに設定可能
+- **Realtime:** キャラクターごとにLive音声を選択。録音ボタンを押した間だけ接続し、文字入力にも同じLive音声で応答。Windowsでは、別途導入したBeatrice 2 VST3へ48 kHz音声を流し、複数の参照モデルと声・ピッチ・フォルマント・音量・イントネーション・ピッチ補正をキャラクターごとに設定可能
 - **読み上げ整形:** URL、メール、パス、コード、長いハッシュ、Markdown記号を除外。ユーザー辞書と英字語の日本語読みへ対応
 
 <details>
@@ -98,10 +98,19 @@ CharaDockは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNG
 
 ## クイックスタート
 
-### 必要環境
+### Windows — リリース版をダウンロード
+
+[GitHub Releases](https://github.com/ochisamu/CharaDock/releases)から最新版のインストーラーまたはポータブル版をダウンロードできます。
+
+- **インストーラー版:** `CharaDock.Setup.*.exe`をダウンロードしてセットアップを実行
+- **ポータブル版:** `CharaDock.*.exe`をダウンロードし、任意のフォルダーから直接起動
+
+現在のプレリリース版はコード署名されていないため、Windows SmartScreenの警告が表示される場合があります。アプリは起動時にGitHub Releasesを確認し、インストーラー版・ポータブル版それぞれに合った最新版への更新方法を案内します。
+
+### ソースから起動する場合の必要環境
 
 - Windows 10 / 11 x64
-- Node.js 22以降
+- Node.js 22以降（Node.js 24推奨）
 - Codex機能を使う場合は、ログイン可能な[Codex CLI](https://github.com/openai/codex)
 - Python検査を行う場合のみPython 3.11と[uv](https://docs.astral.sh/uv/)
 
@@ -111,6 +120,19 @@ CharaDockは、[rotejin/PuruPuruPNGTuber](https://github.com/rotejin/PuruPuruPNG
 npm ci
 npm run desktop
 ```
+
+### macOS — 実験的なソース起動
+
+現時点では署名済みmacOSアプリ、DMG、ZIPを配布していません。macOSで試す場合はNode.js 24を用意し、リポジトリをcloneしてElectron開発版を起動してください。
+
+```bash
+git clone https://github.com/ochisamu/CharaDock.git
+cd CharaDock
+npm ci
+npm run desktop
+```
+
+macOSでのソース起動は実験扱いで、Windows版のリリーステスト対象外です。Windowsコンピューター操作、Windows標準音声、CharaDockのBeatriceホストは利用できません。そのほかのローカル音声やWebGPU機能もMacの機種・OSバージョンによって動作が異なる可能性があります。ソース起動版は最新版を確認できますが、自動的な本体更新は行いません。
 
 初回ウィザードでAI接続、キャラクター、音声出力を設定します。Windows Store版Codexも自動検出します。`codex`が`PATH`にない場合は`CODEX_CLI_PATH`で実行ファイルを指定できます。
 
@@ -148,7 +170,7 @@ npm run desktop
 
 GPT-Live / Codex Voiceは実験機能です。利用可否はアカウントや上流実装に依存します。Realtimeセッションは新しい空のタスクとして、録音ボタンを押したときだけ開始します。作業モードでは選択フォルダー限定のworkspace-writeスレッドへ接続し、音声で依頼した作業も履歴へ残します。
 
-Beatrice 2声変換はWindows向けの任意機能です。CharaDockにはMITライセンスの小さなVST3ホストだけを同梱し、Beatrice本体・推論ライブラリ・音声モデルは再配布しません。音声設定から別途展開した公式Beatriceフォルダーを選び、参照モデル一覧へモデルフォルダーを追加してください。CharaDockは外部モデルをコピー・削除しません。モデルごとの利用条件は別途確認が必要で、Beatrice 2.0.0-rc.2付属のJVSモデルは許可のない営利利用を禁止しています。
+CharaDockのBeatrice 2声変換連携は現在Windows専用です。Beatrice本体にはMac版もありますが、CharaDockのRealtime音声経路では独自のWindowsネイティブVST3ホスト`charadock-beatrice-host.exe`を起動しており、macOS用ホストはまだ実装していません。CharaDockはBeatrice本体・推論ライブラリ・音声モデルを再配布しません。Windowsでは音声設定から別途展開した公式Beatriceフォルダーを選び、参照モデル一覧へモデルフォルダーを追加してください。CharaDockは外部モデルをコピー・削除しません。モデルごとの利用条件は別途確認が必要で、Beatrice 2.0.0-rc.2付属のJVSモデルは許可のない営利利用を禁止しています。
 
 ### OpenAI APIとローカル処理
 
@@ -169,6 +191,8 @@ Codex app-server接続時は、設定の`Codex Avatar Studio`からPNG・JPEG・
 既存の`.purupuru`もキャラクター設定から追加・削除できます。調整したキャラクターは、画像込みのポータブルな `.purupuru` アバターパッケージとして保存できます。元のPNG素材フォルダに依存しないため、バックアップや別PCへの移行に利用できます。
 
 ## WindowsバイナリとGitHub Pages
+
+通常のWindows利用者は[GitHub Releases](https://github.com/ochisamu/CharaDock/releases)からインストーラー版またはポータブル版をダウンロードしてください。以下はメンテナーがローカルで配布物を生成する場合の手順です。
 
 ローカルでNSISインストーラーとportable版を生成します。
 

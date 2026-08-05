@@ -13,7 +13,7 @@
 
 <p align="center">
   <img alt="Code: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-20201f?style=flat-square">
-  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-20201f?style=flat-square">
+  <img alt="Platform: Windows; macOS source preview" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20source-20201f?style=flat-square">
   <img alt="Electron 43" src="https://img.shields.io/badge/Electron-43-20201f?style=flat-square">
   <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-df9848?style=flat-square">
 </p>
@@ -69,7 +69,7 @@ The input provider is always selected explicitly. CharaDock does not start Codex
 - **Local recognition:** Japanese Parakeet CTC, ReazonSpeech Zipformer, SenseVoice, and Whisper base / tiny
 - **VAD:** Silero VAD with automatic pause detection, optional auto-send, and three sensitivity levels
 - **Output:** Windows system speech, Style-Bert-VITS2, piper-plus, Supertonic 3, Kokoro, or Irodori TTS
-- **Realtime:** Select a Live voice per character. A session runs only while recording is enabled, and typed messages use the same Live voice. Optionally route the 48 kHz stream through a separately installed Beatrice 2 VST3, manage multiple referenced models, and tune voice, pitch, formant, gain, intonation, and pitch correction per character
+- **Realtime:** Select a Live voice per character. A session runs only while recording is enabled, and typed messages use the same Live voice. On Windows, optionally route the 48 kHz stream through a separately installed Beatrice 2 VST3, manage multiple referenced models, and tune voice, pitch, formant, gain, intonation, and pitch correction per character
 - **Speech cleanup:** Skip URLs, email addresses, paths, code, long hashes, and Markdown symbols; override pronunciation with a user dictionary
 
 <details>
@@ -98,10 +98,19 @@ Each character includes standard eye and mouth states plus happy, surprised, and
 
 ## Quick start
 
-### Requirements
+### Windows — download a release
+
+Download the newest installer or portable executable from [GitHub Releases](https://github.com/ochisamu/CharaDock/releases):
+
+- **Installer:** download `CharaDock.Setup.*.exe` and follow the setup flow
+- **Portable:** download `CharaDock.*.exe` and run it from any folder
+
+Current pre-release builds are unsigned, so Windows may display a SmartScreen warning. The app can check GitHub Releases at startup and guide both installed and portable editions to a newer version.
+
+### Requirements for running from source
 
 - Windows 10 / 11 x64
-- Node.js 22 or later
+- Node.js 22 or later; Node.js 24 is recommended
 - A sign-in-capable [Codex CLI](https://github.com/openai/codex) installation for Codex features
 - Python 3.11 and [uv](https://docs.astral.sh/uv/) only when running Python validation
 
@@ -111,6 +120,19 @@ Each character includes standard eye and mouth states plus happy, surprised, and
 npm ci
 npm run desktop
 ```
+
+### macOS — experimental source preview
+
+CharaDock does not currently provide a signed macOS application, DMG, or ZIP. To try it on macOS, clone the repository and run the Electron development build with Node.js 24:
+
+```bash
+git clone https://github.com/ochisamu/CharaDock.git
+cd CharaDock
+npm ci
+npm run desktop
+```
+
+macOS source execution is experimental and is not covered by the Windows release tests. Windows computer control, Windows system speech, and CharaDock's Beatrice host are unavailable. Other local speech and WebGPU features may depend on the Mac model and OS version. Source builds can check for newer releases but do not update themselves.
 
 The first-run guide configures the AI connection, character, and speech provider. CharaDock also detects the Windows Store Codex installation. If `codex` is not on `PATH`, set `CODEX_CLI_PATH` to the executable.
 
@@ -148,7 +170,7 @@ CharaDock starts the local `codex app-server --stdio` process. Codex manages the
 
 GPT-Live / Codex Voice is experimental and its availability depends on the account and upstream implementation. Realtime starts as a new empty task only when recording is enabled. In Work mode it connects to a workspace-write task scoped to the selected folder, and voice-requested work is also saved to history.
 
-Beatrice 2 voice conversion is optional and Windows-only. CharaDock bundles its own small MIT-licensed VST3 host helper, but does not redistribute Beatrice, its inference library, or voice models. Select an extracted official Beatrice folder in Voice settings, then add model folders to the referenced-model library. CharaDock never copies or deletes those external model files. Review each model's terms separately; the JVS sample model shipped with Beatrice 2.0.0-rc.2 prohibits unauthorized commercial use.
+CharaDock's Beatrice 2 voice-conversion integration is currently Windows-only. Beatrice itself now has a macOS version, but CharaDock's Realtime audio path launches `charadock-beatrice-host.exe`, its own native Windows VST3 host; a macOS host helper has not been implemented yet. CharaDock does not redistribute Beatrice, its inference library, or voice models. On Windows, select an extracted official Beatrice folder in Voice settings, then add model folders to the referenced-model library. CharaDock never copies or deletes those external model files. Review each model's terms separately; the JVS sample model shipped with Beatrice 2.0.0-rc.2 prohibits unauthorized commercial use.
 
 ### OpenAI API and local processing
 
@@ -169,6 +191,8 @@ Only upload images for which you have all rights required to upload, modify, and
 Existing `.purupuru` packages can also be added or deleted in character settings. Edited characters can be exported as a portable, self-contained `.purupuru` avatar package containing their images. It does not depend on the original PNG asset folder, so it can be backed up or moved to another PC.
 
 ## Windows binaries and GitHub Pages
+
+Most Windows users should download the installer or portable executable from [GitHub Releases](https://github.com/ochisamu/CharaDock/releases). The following command is for maintainers building the packages locally.
 
 Build the NSIS installer and portable executable locally:
 
