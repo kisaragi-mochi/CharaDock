@@ -50,9 +50,14 @@ test("Windows package metadata identifies ochisamu as the publisher", () => {
 });
 
 test("Beatrice integration packages only CharaDock's host helper", () => {
-  assert.deepEqual(packageJson.build.extraResources, [{
+  assert.equal(packageJson.build.extraResources, undefined);
+  assert.deepEqual(packageJson.build.win.extraResources, [{
     from: "native/bin/charadock-beatrice-host.exe",
     to: "bin/charadock-beatrice-host.exe",
+  }]);
+  assert.deepEqual(packageJson.build.mac.extraResources, [{
+    from: "native/bin/charadock-beatrice-host",
+    to: "bin/charadock-beatrice-host",
   }]);
   assert.equal(packageJson.build.files.some((entry) => /beatrice.*(?:vst3|toml|bin)/i.test(entry)), false);
   assert.match(fs.readFileSync(path.join(projectRoot, "THIRD_PARTY_NOTICES.md"), "utf8"), /Steinberg VST 3 SDK/);
@@ -65,6 +70,11 @@ test("Beatrice integration packages only CharaDock's host helper", () => {
   for (const parameterId of [3, 4, 7, 8, 9, 10, 11]) assert.match(host, new RegExp(`inner, ${parameterId},`));
   assert.match(host, /_setmode\(_fileno\(stdin\), _O_BINARY\)/);
   assert.match(host, /_setmode\(_fileno\(stdout\), _O_BINARY\)/);
+  assert.match(host, /int main\(int argc, char\*\* argv\)/);
+  const hostCmake = fs.readFileSync(path.join(projectRoot, "native", "beatrice-host", "CMakeLists.txt"), "utf8");
+  assert.match(hostCmake, /module_win32\.cpp/);
+  assert.match(hostCmake, /module_mac\.mm/);
+  assert.match(hostCmake, /CMAKE_OSX_ARCHITECTURES "arm64"/);
   const worklet = fs.readFileSync(path.join(projectRoot, "desktop", "realtime-beatrice-worklet.js"), "utf8");
   const realtime = fs.readFileSync(path.join(projectRoot, "desktop", "realtime-beatrice.js"), "utf8");
   const mascot = fs.readFileSync(path.join(projectRoot, "desktop", "preload-mascot.cjs"), "utf8");

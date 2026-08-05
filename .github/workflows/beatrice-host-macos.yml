@@ -1,0 +1,54 @@
+name: CharaDock Beatrice macOS arm64 host
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build unsigned macOS arm64 host
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout CharaDock
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Checkout Steinberg VST3 SDK
+        shell: bash
+        run: |
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout --detach 9fad9770f2ae8542ab1a548a68c1ad1ac690abe0
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Configure arm64 host
+        shell: bash
+        run: |
+          cmake -S native/beatrice-host -B "$RUNNER_TEMP/beatrice-host-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk"
+
+      - name: Build and verify arm64 host
+        shell: bash
+        run: |
+          cmake --build "$RUNNER_TEMP/beatrice-host-build" --config Release --parallel 3
+          cmake --install "$RUNNER_TEMP/beatrice-host-build" --config Release --prefix "$RUNNER_TEMP/beatrice-host-artifact"
+          file "$RUNNER_TEMP/beatrice-host-artifact/charadock-beatrice-host"
+          lipo -archs "$RUNNER_TEMP/beatrice-host-artifact/charadock-beatrice-host" | grep -qw arm64
+          tar -C "$RUNNER_TEMP/beatrice-host-artifact" -czf "$RUNNER_TEMP/charadock-beatrice-host-macos-arm64.tar.gz" charadock-beatrice-host
+          shasum -a 256 "$RUNNER_TEMP/charadock-beatrice-host-macos-arm64.tar.gz" > "$RUNNER_TEMP/charadock-beatrice-host-macos-arm64.tar.gz.sha256"
+
+      - name: Upload unsigned host
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: charadock-beatrice-host-macos-arm64
+          path: |
+            ${{ runner.temp }}/charadock-beatrice-host-macos-arm64.tar.gz
+            ${{ runner.temp }}/charadock-beatrice-host-macos-arm64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14

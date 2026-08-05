@@ -58,17 +58,25 @@
       "node_modules/onnxruntime-node/**/*",
       "node_modules/piper-plus/dist/**/*.wasm"
     ],
-    "extraResources": [
-      {
-        "from": "native/bin/charadock-beatrice-host.exe",
-        "to": "bin/charadock-beatrice-host.exe"
-      }
-    ],
     "win": {
       "icon": "app-icon.ico",
+      "extraResources": [
+        {
+          "from": "native/bin/charadock-beatrice-host.exe",
+          "to": "bin/charadock-beatrice-host.exe"
+        }
+      ],
       "target": [
         "nsis",
         "portable"
+      ]
+    },
+    "mac": {
+      "extraResources": [
+        {
+          "from": "native/bin/charadock-beatrice-host",
+          "to": "bin/charadock-beatrice-host"
+        }
       ]
     },
     "nsis": {

@@ -17,9 +17,13 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#ifdef _WIN32
 #include <fcntl.h>
+#endif
 #include <iostream>
+#ifdef _WIN32
 #include <io.h>
+#endif
 #include <memory>
 #include <string>
 #include <vector>
@@ -63,7 +67,12 @@ std::string utf8(const wchar_t* value) {
   return Steinberg::Vst::StringConvert::convert(Steinberg::wscast(value));
 }
 
-Arguments parse_arguments(int argc, wchar_t** argv) {
+std::string utf8(const char* value) {
+  return value;
+}
+
+template <typename Character>
+Arguments parse_arguments(int argc, Character** argv) {
   Arguments result;
   for (int index = 1; index < argc; ++index) {
     const auto key = utf8(argv[index]);
@@ -241,7 +250,9 @@ class BeatriceHost {
 };
 }  // namespace
 
-int wmain(int argc, wchar_t** argv) {
+template <typename Character>
+int run_host(int argc, Character** argv) {
+#ifdef _WIN32
   // Windows CRT text mode rewrites CR/LF bytes. Float32 PCM and frame headers
   // are a binary protocol, so text mode corrupts real audio after a few blocks.
   if (_setmode(_fileno(stdin), _O_BINARY) == -1 ||
@@ -249,6 +260,7 @@ int wmain(int argc, wchar_t** argv) {
     std::cerr << "ERROR could not enable binary standard I/O\n";
     return 1;
   }
+#endif
   std::ios::sync_with_stdio(false);
   std::cin.tie(nullptr);
   try {
@@ -271,3 +283,13 @@ int wmain(int argc, wchar_t** argv) {
     return 1;
   }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+  return run_host(argc, argv);
+}
+#else
+int main(int argc, char** argv) {
+  return run_host(argc, argv);
+}
+#endif

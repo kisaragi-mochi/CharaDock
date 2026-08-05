@@ -41,7 +41,11 @@ test("Beatrice settings are bounded and packaged helper path is deterministic", 
   assert.equal(normalizeBeatriceMode("beatrice-v2"), "beatrice-v2");
   assert.equal(normalizeBeatriceMode("rvc"), "none");
   assert.equal(normalizeBeatriceVoiceId(5000), 999);
-  assert.equal(resolveBeatriceHostExecutable({ packaged: true, resourcesPath: "C:\\App\\resources" }), path.join("C:\\App\\resources", "bin", "charadock-beatrice-host.exe"));
+  assert.equal(resolveBeatriceHostExecutable({ packaged: true, resourcesPath: "C:\\App\\resources", platform: "win32", arch: "x64" }), path.join("C:\\App\\resources", "bin", "charadock-beatrice-host.exe"));
+  assert.equal(resolveBeatriceHostExecutable({ packaged: true, resourcesPath: "/Applications/CharaDock.app/Contents/Resources", platform: "darwin", arch: "arm64" }), path.join("/Applications/CharaDock.app/Contents/Resources", "bin", "charadock-beatrice-host"));
+  assert.equal(resolveBeatriceHostExecutable({ packaged: false, appPath: "/src/CharaDock", platform: "darwin", arch: "arm64" }), path.join("/src/CharaDock", "native", "bin", "charadock-beatrice-host"));
+  assert.equal(resolveBeatriceHostExecutable({ packaged: false, appPath: "/src/CharaDock", platform: "darwin", arch: "x64" }), "");
+  assert.equal(resolveBeatriceHostExecutable({ packaged: false, appPath: "/src/CharaDock", platform: "linux", arch: "arm64" }), "");
 });
 
 test("Beatrice host receives all per-character tuning parameters", () => {

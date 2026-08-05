@@ -90,10 +90,14 @@ function findBeatriceModels(directory) {
     .filter((model) => model?.voices?.length);
 }
 
-function resolveBeatriceHostExecutable({ appPath, resourcesPath, packaged = false } = {}) {
+function resolveBeatriceHostExecutable({ appPath, resourcesPath, packaged = false, platform = process.platform, arch = process.arch } = {}) {
+  let executableName = "";
+  if (platform === "win32") executableName = "charadock-beatrice-host.exe";
+  else if (platform === "darwin" && arch === "arm64") executableName = "charadock-beatrice-host";
+  if (!executableName) return "";
   return packaged
-    ? path.join(resourcesPath, "bin", "charadock-beatrice-host.exe")
-    : path.join(appPath, "native", "bin", "charadock-beatrice-host.exe");
+    ? path.join(resourcesPath, "bin", executableName)
+    : path.join(appPath, "native", "bin", executableName);
 }
 
 function beatriceStatus({ hostPath, vstPath, modelPath, voiceId = 0 } = {}) {

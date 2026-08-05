@@ -79,3 +79,4 @@ source/
 *:Zone.Identifier
 
 tmp/*
+native/bin/charadock-beatrice-host

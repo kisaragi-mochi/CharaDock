@@ -132,7 +132,7 @@ npm ci
 npm run desktop
 ```
 
-macOS source execution is experimental and is not covered by the Windows release tests. Windows computer control, Windows system speech, and CharaDock's Beatrice host are unavailable. Other local speech and WebGPU features may depend on the Mac model and OS version. Source builds can check for newer releases but do not update themselves.
+macOS source execution is experimental and is not covered by the Windows release tests. Windows computer control and Windows system speech are unavailable. The Beatrice host now has an unsigned arm64 source build; build it separately and place it in `native/bin/` before starting CharaDock. Other local speech and WebGPU features may depend on the Mac model and OS version. Source builds can check for newer releases but do not update themselves.
 
 The first-run guide configures the AI connection, character, and speech provider. CharaDock also detects the Windows Store Codex installation. If `codex` is not on `PATH`, set `CODEX_CLI_PATH` to the executable.
 
@@ -170,7 +170,7 @@ CharaDock starts the local `codex app-server --stdio` process. Codex manages the
 
 GPT-Live / Codex Voice is experimental and its availability depends on the account and upstream implementation. Realtime starts as a new empty task only when recording is enabled. In Work mode it connects to a workspace-write task scoped to the selected folder, and voice-requested work is also saved to history.
 
-CharaDock's Beatrice 2 voice-conversion integration is currently Windows-only. Beatrice itself now has a macOS version, but CharaDock's Realtime audio path launches `charadock-beatrice-host.exe`, its own native Windows VST3 host; a macOS host helper has not been implemented yet. CharaDock does not redistribute Beatrice, its inference library, or voice models. On Windows, select an extracted official Beatrice folder in Voice settings, then add model folders to the referenced-model library. CharaDock never copies or deletes those external model files. Review each model's terms separately; the JVS sample model shipped with Beatrice 2.0.0-rc.2 prohibits unauthorized commercial use.
+CharaDock's Beatrice 2 voice-conversion integration uses its own small native VST3 host: `charadock-beatrice-host.exe` on Windows and an extensionless arm64 helper on macOS. The macOS helper is currently an unsigned source-build preview and is not included in a signed app package. CharaDock does not redistribute Beatrice, its inference library, or voice models. Select an extracted official Beatrice folder in Voice settings, then add model folders to the referenced-model library. CharaDock never copies or deletes those external model files. Review each model's terms separately; the JVS sample model shipped with Beatrice 2.0.0-rc.2 prohibits unauthorized commercial use. See the [native host build guide](./native/beatrice-host/README.md) for macOS instructions.
 
 ### OpenAI API and local processing
 
