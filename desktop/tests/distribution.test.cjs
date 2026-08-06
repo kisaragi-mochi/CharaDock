@@ -118,6 +118,8 @@ test("macOS computer control delegates to the bundled Codex Computer Use skill",
   const macComputerUse = main.slice(macStart, macEnd);
   assert.match(macComputerUse, /skills\.find\(isOfficialComputerUseSkill\)/);
   assert.match(macComputerUse, /setTurnStartSkillItems\(\[computerUseSkill\]\)/);
+  assert.match(macComputerUse, /approvalPolicy: "on-request"/);
+  assert.match(macComputerUse, /rejectInteractiveRequests: true/);
   assert.doesNotMatch(macComputerUse, /dynamicTools: COMPUTER_DYNAMIC_TOOLS/);
 });
 

@@ -5581,7 +5581,7 @@ async function sendChatMessage(message, { localImagePath = "", localAttachments 
             "You are the user's friendly desktop character companion. Carry out only the explicitly approved foreground task on the active desktop and report the result concisely in English.",
           ),
           sandbox: "read-only",
-          approvalPolicy: "never",
+          approvalPolicy: "on-request",
           serviceName: "charadock_computer",
           personality: "friendly",
           webSearchMode: "disabled",
