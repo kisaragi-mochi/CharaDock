@@ -26,7 +26,7 @@
   "build": {
     "appId": "jp.ochisamu.charadock.desktop",
     "productName": "CharaDock",
-    "copyright": "Copyright © 2026 ochisamu",
+    "copyright": "Copyright \u00a9 2026 ochisamu",
     "asar": true,
     "files": [
       "app.js",
@@ -152,6 +152,9 @@
     "sherpa-onnx-node": "^1.13.4"
   },
   "overrides": {
-    "adm-zip": "0.6.0"
+    "adm-zip": "0.6.1"
+  },
+  "engines": {
+    "node": ">=22.12"
   }
 }
